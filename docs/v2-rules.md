@@ -34,10 +34,12 @@ registrados, ordem ativa, direção, cor ativa, carta comprada no turno, pendên
 cor, revision e colocações. Não há ponteiros de jogador em anel, mutex, timer,
 configuração global, Telegram, SQL ou rede no estado.
 
-O serviço futuro autenticará o autor e autorizará início/cancelamento/gestão.
-A engine verifica participação, fase, turno, posse e regras. Não interpreta IDs
-como credenciais. Snapshot nunca deve ser aceito de um jogador ou enviado inteiro
-para um renderer público: a Milestone 2 construirá views específicas por usuário.
+O serviço M2 autoriza início/cancelamento com Actor de um adapter confiável.
+A engine verifica participação nas ações de jogador, fase, turno, posse e regras.
+Start/Cancel aceitam solicitante positivo não participante; Start mantém dealer
+ativo e mínimo de jogadores. IDs não são credenciais. Snapshot nunca deve ser
+aceito de um jogador ou enviado inteiro a renderer: internal/game fornece views
+públicas e privadas autorizadas. Ver [contrato M2](v2-application.md).
 
 ### Atomicidade e concorrência
 
@@ -49,7 +51,7 @@ substitui o estado. RNG é dependência runtime: sua sequência interna não é
 revertida numa falha nem serializada. Deck/pilhas já materializados são preservados.
 
 A mesma instância de `Game` requer acesso serializado, inclusive para consultas.
-A Milestone 2 adicionará mutex privado por partida no manager. Engines distintas
+A Milestone 2 fornece mutex privado por partida no manager. Engines distintas
 não compartilham estado de jogo. Não há promessa de persistência durável nesta
 entrega; snapshots demonstram que recuperação futura é possível.
 
@@ -102,8 +104,9 @@ terminar com Wild e proibição de Wild sobre Wild não foram portados.
   sair; se sair o alvo do +4, o próximo ativo assume o alvo. Se só restar o autor,
   encerra-se por saída e limpa-se a pendência.
 - Último Wild aguarda escolha de cor antes de confirmar colocação e efeito.
-- Cancelamento é permitido a um participante pela engine, sujeito à autorização
-  externa da aplicação. Termina sem atribuir nova vitória e limpa a pendência.
+- Cancelamento aceita solicitante positivo, inclusive não participante, sujeito
+  à autorização do responsável na aplicação M2. Termina sem atribuir nova vitória
+  e limpa a pendência; também funciona em lobby vazio.
 - UNO é anunciado automaticamente quando uma jogada deixa uma carta, conforme
   escolha do usuário; denúncia e penalidade por esquecimento ficam fora da engine inicial.
 
@@ -133,7 +136,9 @@ Challenge não foi implementado, por escolha do usuário. +4 ilegal é bloqueado
 pode ser reutilizada. Challenge real exigirá uma fase de contestação e captura de
 evidência **no momento da jogada**, além das penalidades; nunca durante uma query.
 
-M2: manager/serviço, views privadas, locks e MemoryRepository. M3: Telegram seguro,
+M2 entregue: manager/serviço, views privadas, locks e histórico público limitado.
+MemoryRepository adiado para evitar segunda fonte de verdade; ver contrato M2.
+M3: Telegram seguro,
 seleção multigrupo, tokens opacos, configuração, logs, shutdown, README e Docker.
 M4: refinamento inline/filtros. M5: Match, ranking, modos e administração.
 M6: persistência durável se necessária. Match/MD e pontuação acumulada não pertencem
@@ -152,4 +157,4 @@ go vet ./...
 Testes determinísticos cobrem regras, abertura, efeitos finais, erros sem mutação,
 IDs físicos, descarte, políticas de participação/colocação, snapshots e recuperação.
 Incluem 40 partidas completas com seeds fixas. Testes concorrentes da mesma partida
-serão responsabilidade do manager na M2. Nenhum teste conecta Telegram ou PostgreSQL.
+estão em internal/game na M2. Nenhum teste conecta Telegram ou PostgreSQL.
