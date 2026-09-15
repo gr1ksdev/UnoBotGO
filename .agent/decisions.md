@@ -92,3 +92,29 @@ Engine permanece independente; V1 e dependências/configuração permanecem inta
 ## Documentação
 - docs/v2-application.md: API, autorização, lifecycle, locking, privacidade e limites.
 - docs/v2-rules.md: contrato administrativo mínimo atualizado da M1.
+
+# Decisão — M3: Playable Telegram MVP, concorrência e tokens de uso único
+
+## Data
+2026-09-15
+
+## Contexto
+A Milestone 3 conecta a aplicação V2 ao Telegram sem acoplamento de engines ou banco de dados externo. O V1 sofria com descompasso de cache (`omitempty` omitindo `cache_time:0`), concorrência não serializada por chat, locks retidos em I/O de rede e identificação frágil de partidas inline.
+
+## Decisão tomada
+1. Executável V2 em `cmd/bot/main.go` consumindo `internal/game.Service`.
+2. Dispatcher com 8 filas particionadas por `ChatID` (buffer 32) para mensagens e jogadas, e 4 workers separados (buffer 64) para consultas inline.
+3. Tokens criptográficos de 128 bits (`TokenStore`) para vincular cada resultado inline a uma ação de revisão estrita, consumidos atomicamente e invalidados por evento ou tempo.
+4. `InlineRequestConstructor` para contornar `omitempty` na serialização de `answerInlineQuery`, emitindo `cache_time:0` e `is_personal:true`.
+5. `SafeAPICaller` com sanitização de logs (nunca expor tokens ou URLs autenticadas) e retry limitado exclusivo para HTTP 429.
+6. Isolamento total entre V1 e V2: nenhum código legado é alterado.
+
+## Motivo
+Garantir concorrência estritamente ordenada por grupo, respostas inline imediatas e não bloqueantes, segurança contra anti-cheat/repetição e conformidade com as regras de confidencialidade e integridade do bot.
+
+## Impacto
+O V2 torna-se jogável de ponta a ponta no Telegram. A engine e o serviço mantêm zero dependência de transporte. Sem persistência externa, ranking ou Match nesta milestone.
+
+## Documentação
+- docs/v2-telegram.md: arquitetura detalhada e roteiro de homologação manual.
+- README.md: visão geral e comandos.

@@ -1,6 +1,22 @@
-# Contexto atual — V2 Milestone 2 (2026-09-15)
+# Contexto atual — V2 Milestone 3 (2026-09-15)
 
-- M2 implementada em `internal/game`; Service é a API do futuro adapter M3.
+- M3 implementada: Playable Telegram MVP em `cmd/bot`, `internal/config` e `internal/telegram`.
+- Executável independente `./cmd/bot`, consumindo `internal/game.Service` sem tocar no executável V1.
+- Dispatcher com 8 filas particionadas por ChatID para processar mensagens, comandos e confirmações em ordem estrita.
+- 4 workers dedicados para responder consultas inline de forma não bloqueante.
+- Bounded queues (32 por chat, 64 inline) provendo backpressure seguro.
+- TokenStore privado em memória: tokens imprevisíveis de 128 bits (base64url) de uso único para ações e cursores opacos para paginação (> 45 cartas).
+- Custom `telegoapi.RequestConstructor` (`InlineRequestConstructor`) para serializar explicitamente `cache_time:0`, `is_personal:true` e `next_offset:""` contornando o `omitempty` da telego v1.10.0.
+- Custom `telegoapi.Caller` (`SafeAPICaller`) com retry limitado para HTTP 429 (até 5s) e sanitização estrita de URLs para não vazar bot token nos logs.
+- Comandos em grupos: `/novo`, `/entrar`, `/iniciar`, `/cancelar` (`/kill`), `/sair`, `/estado`, `/ajuda`.
+- Sem ranking, Match, persistência externa, modos extras ou filtros avançados nesta milestone.
+- Documentação técnica e roteiro de homologação manual em `docs/v2-telegram.md` e `README.md`.
+
+---
+
+## Registro histórico da M2 (2026-09-15)
+
+- M2 implementada em `internal/game`; Service é a API do adapter M3.
 - Manager privado possui runtime UNO e mutex por partida; lock global só protege índices/resumos.
 - Create não inscreve responsável. Owner observador pode Start/Cancel; dealer é participante ativo.
 - Engine só recebeu exceção de participação para Start/Cancel, preservando solicitante verdadeiro.

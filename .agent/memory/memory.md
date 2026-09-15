@@ -1,4 +1,20 @@
-# Memória atual — 2026-09-15 — M2
+# Memória atual — 2026-09-15 — M3
+
+- Aprovação explícita: “Aprovado. Implemente a Milestone 3 conforme este plano.”
+- Plano: telegram-mvp-v2_2026-09-15_14-05.md.
+- Entry point V2 criado em `cmd/bot/main.go`, totalmente desacoplado do `main.go` legado.
+- Concorrência de chat: 8 filas particionadas por ChatID (`hash(ChatID) % 8`) com 32 slots de capacidade para serializar comandos e jogadas da mesma partida.
+- Concorrência inline: 4 workers dedicados lendo de fila com capacidade 64 para responder queries inline sem bloquear nem ser bloqueados por operações de chat.
+- Backpressure seguro: tarefas descartadas sem mutação quando canais saturam.
+- TokenStore privado: tokens aleatórios de 128 bits base64url gerados por `crypto/rand`. Consumo atômico sob mutex, TTL de 2 minutos (configurável), limite global (20.000) e por usuário (512) com evicção FIFO e limpeza oportunista. Invalidação imediata em caso de cancelamento/saída.
+- Bypass omitempty telego v1.10.0: `InlineRequestConstructor` emitindo explicitamente `cache_time:0`, `is_personal:true` e `next_offset:""` para `answerInlineQuery`.
+- `SafeAPICaller`: retry estrito de apenas 1 vez para HTTP 429 se `retry_after <= 5s`; timeouts e erros de rede não têm retry automático; URLs sanitizadas para nunca vazar tokens nos logs.
+- Comandos suportados: `/novo`, `/entrar`, `/iniciar`, `/cancelar` (alias `/kill`), `/sair`, `/estado`, `/ajuda` (alias `/start` em grupos/privado).
+- Aceite manual do Telegram: testes automatizados 100% aprovados; roteiro de homologação manual detalhado em `docs/v2-telegram.md`.
+
+---
+
+## Memória histórica da M2 (2026-09-15)
 
 - Aprovação explícita: “Aprovado. Implemente a Milestone 2 conforme este plano revisado.”
 - Plano vigente: camada-aplicacao-v2_2026-09-15_13-30.md; anterior preservado como histórico.
