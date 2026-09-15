@@ -1,0 +1,6 @@
+.env
+.agent/
+.opencode/
+.reports/
+AGENTS.md
+*.prompt
