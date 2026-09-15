@@ -1,3 +1,23 @@
+# Memória atual — 2026-09-15 — M2
+
+- Aprovação explícita: “Aprovado. Implemente a Milestone 2 conforme este plano revisado.”
+- Plano vigente: camada-aplicacao-v2_2026-09-15_13-30.md; anterior preservado como histórico.
+- Owner é metadata administrativa independente de inscrição; somente owner inicia/cancela na M2.
+- Owner que sai/obtém colocação transfere ao turno resultante ou primeiro ativo no lobby.
+- Lobby sem sucessor conserva owner observador e permanece aberto até cancelamento explícito.
+- Último Wild mantém participação ativa até escolher cor; WentOut/Left não recebem mão privada.
+- Service aceita Actor autenticado pelo adapter; nunca confiar em Actor vindo diretamente de payload.
+- Ordem de locks: entry -> índices; lookup solta índices antes de esperar entry. Nenhum I/O externo sob locks.
+- Publicação de índices sempre termina após Apply aceito, mesmo com cancelamento de contexto.
+- Histórico final público FIFO: padrão100, zero desativa; sem mãos/runtime, perdido ao reiniciar.
+- Sem MemoryRepository nesta milestone; future recovery deve validar State+metadata e reconstruir índices.
+- M1 preserva proibição de reentrada e compra não jogável passa turno automaticamente.
+- Ver docs/v2-application.md antes de implementar M3. Escopo M2 não inclui adapter/tokens.
+
+---
+
+## Memória histórica anterior
+
 # Memória atual — 2026-09-14
 
 ## V2 Milestone 1

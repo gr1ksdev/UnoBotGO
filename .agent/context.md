@@ -1,3 +1,20 @@
+# Contexto atual — V2 Milestone 2 (2026-09-15)
+
+- M2 implementada em `internal/game`; Service é a API do futuro adapter M3.
+- Manager privado possui runtime UNO e mutex por partida; lock global só protege índices/resumos.
+- Create não inscreve responsável. Owner observador pode Start/Cancel; dealer é participante ativo.
+- Engine só recebeu exceção de participação para Start/Cancel, preservando solicitante verdadeiro.
+- Índices chat/jogador são de sessões abertas/participação ativa, sem current game global.
+- PlayerView só expõe mão do próprio Actor confiável; PublicView não contém snapshots/mãos.
+- Encerramento descarta runtime e mantém somente resumos públicos FIFO (100 por padrão, configurável).
+- MemoryRepository adiado: snapshots transitórios, sem segunda fonte de verdade ou recovery implementado.
+- Sem Telegram V2, tokens, ranking, Match, timers ou backend persistente nesta entrega; V1 intacto.
+- Contrato atual: `docs/v2-application.md`; regras: `docs/v2-rules.md`; auditoria histórica: `docs/v2-audit.md`.
+
+---
+
+## Registro histórico da M1 (decisões futuras abaixo foram atualizadas pela M2)
+
 # Contexto atual — V2 Milestone 1 (2026-09-14)
 
 - O executável V1 permanece na raiz, em `package main`, com telego v1.10.0.

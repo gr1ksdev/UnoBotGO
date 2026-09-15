@@ -58,3 +58,37 @@ Ranking/Match não entram na engine. PostgreSQL do V1 permanece intacto.
 ## Documentação
 - docs/v2-rules.md: API, diferenças de regras, atomicidade e limites.
 - docs/v2-audit.md: arquitetura V1, riscos e fatos verificados na Bot API.
+
+
+# Decisão — M2: aplicação, administração independente e ownership único
+
+## Data
+2026-09-15
+
+## Contexto
+M1 possui engine de dono único e snapshots privados completos. Usuário aprovou
+M2 com criador não participante, gestão independente, múltiplos chats por jogador
+e retenção de somente resumos públicos dos últimos 100 jogos encerrados.
+
+## Decisão tomada
+Service exportado e manager privado em internal/game. Runtime único por partida,
+mutex privado e índices publicados em seção curta sob lock global. Não criar
+MemoryRepository: não há responsabilidade distinta sem persistência real.
+Start/Cancel usam solicitante real, autorizado pelo OwnerID no serviço; exceção
+mínima da guarda de participação na M1, mantendo dealer ativo e validações de regras.
+Views não expõem snapshots. PlayerView não recebe target: somente mão do Actor.
+Encerramento libera índices/runtime e arquiva só view pública com FIFO configurável.
+
+## Motivo
+Evitar duas fontes de verdade, falsificação do autor administrativo, inscrição
+implícita, vazamento de mãos e serialização desnecessária entre partidas.
+
+## Impacto
+M3 consumirá Service e fará autenticação/seleção multigrupo. Sem tokens ou Telegram
+nesta entrega. Context cancelado após aceitação não interrompe publicação. Recovery
+futuro exige envelope State+metadata e reconstrução de índices, fora de I/O sob locks.
+Engine permanece independente; V1 e dependências/configuração permanecem intactos.
+
+## Documentação
+- docs/v2-application.md: API, autorização, lifecycle, locking, privacidade e limites.
+- docs/v2-rules.md: contrato administrativo mínimo atualizado da M1.
