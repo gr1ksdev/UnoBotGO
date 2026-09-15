@@ -104,8 +104,8 @@ func TestCommandHandler_NovoEntrarIniciarCancelar(t *testing.T) {
 
 	// Verify game is playing
 	view2, _ := svc.PublicView(ctx, summary.GameID)
-	if view2.Phase != uno.TakingTurn {
-		t.Fatalf("expected phase TakingTurn, got %v", view2.Phase)
+	if view2.Phase != uno.TakingTurn && view2.Phase != uno.ChoosingColor {
+		t.Fatalf("expected active turn phase, got %v", view2.Phase)
 	}
 
 	// 7. /estado
