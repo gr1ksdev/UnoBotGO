@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -229,5 +230,43 @@ func TestCommandHandler_FiltersAndAliases(t *testing.T) {
 	})
 	if !strings.Contains(mockAPI.LastSentMessage(), "Partida cancelada") {
 		t.Fatalf("expected /kill to act as cancel alias, got: %s", mockAPI.LastSentMessage())
+	}
+}
+
+func TestCommandHandler_ReplyMarkup_OmitsNull(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, err := game.NewService()
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	renderer := NewRenderer(NewUserCache(100))
+	tokens := NewTokenStore(1000, 100, time.Now, nil)
+	cmdHandler := NewCommandHandler(mockAPI, svc, renderer, tokens, "unobot", nil)
+
+	ctx := context.Background()
+	// Trigger a message without markup (e.g., /ajuda)
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: 100, Type: "private"},
+		From: &telego.User{ID: 100, FirstName: "User"},
+		Text: "/ajuda",
+	})
+
+	if len(mockAPI.SentMessages) == 0 {
+		t.Fatalf("expected a message to be sent")
+	}
+
+	lastParams := mockAPI.SentMessages[len(mockAPI.SentMessages)-1]
+	if lastParams.ReplyMarkup != nil {
+		t.Errorf("expected ReplyMarkup to be nil, got: %#v", lastParams.ReplyMarkup)
+	}
+
+	data, err := json.Marshal(lastParams)
+	if err != nil {
+		t.Fatalf("failed to marshal params to JSON: %v", err)
+	}
+
+	if strings.Contains(string(data), "reply_markup") {
+		t.Errorf("expected JSON to omit reply_markup, but got: %s", string(data))
 	}
 }

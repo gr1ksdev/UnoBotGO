@@ -64,12 +64,15 @@ func makeGameButtons(gameID uno.GameID) *telego.InlineKeyboardMarkup {
 }
 
 func (h *CommandHandler) reply(ctx context.Context, chatID int64, text string, markup *telego.InlineKeyboardMarkup) {
-	_, err := h.bot.SendMessage(ctx, &telego.SendMessageParams{
-		ChatID:      telego.ChatID{ID: chatID},
-		Text:        text,
-		ParseMode:   "HTML",
-		ReplyMarkup: markup,
-	})
+	params := &telego.SendMessageParams{
+		ChatID:    telego.ChatID{ID: chatID},
+		Text:      text,
+		ParseMode: "HTML",
+	}
+	if markup != nil {
+		params.ReplyMarkup = markup
+	}
+	_, err := h.bot.SendMessage(ctx, params)
 	if err != nil {
 		h.logger.WarnContext(ctx, "failed to send reply message", "chat_id", chatID, "error", err.Error())
 	}
