@@ -14,7 +14,9 @@ const (
 )
 
 // Action uses only domain IDs. The application authenticates PlayerID and
-// authorizes management actions; the engine validates membership and rules.
+// authorizes management actions. PlayerID is the real requester, not proof of
+// participation. StartGame and CancelGame do not require requester membership;
+// player actions still require an active participant. The engine checks rules.
 // DealerID is required by StartGame and must identify an active player.
 // Revision is mandatory for every action, including lobby mutations.
 type Action struct {

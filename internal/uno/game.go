@@ -80,7 +80,7 @@ func (g *Game) Apply(a Action) (Result, error) {
 		return Result{}, ErrInvalidAction
 	}
 	s := g.state.clone()
-	if a.Type != JoinGame {
+	if a.Type != JoinGame && a.Type != StartGame && a.Type != CancelGame {
 		p := s.player(a.PlayerID)
 		if p == nil || p.Status != Playing {
 			return Result{}, ErrUnknownPlayer

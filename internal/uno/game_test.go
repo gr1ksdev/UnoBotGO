@@ -511,3 +511,39 @@ func TestSnapshotsAndSerialization(t *testing.T) {
 		t.Fatal("restored game mutated original")
 	}
 }
+
+func TestAdministrativeRequesterWithoutParticipation(t *testing.T) {
+	g, err := NewGame("administration", ClassicRules(), WithShuffler(noShuffle))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rejected(t, g, Action{Type: StartGame, PlayerID: 99, DealerID: 1}, ErrNotEnoughPlayers)
+	for _, id := range []PlayerID{1, 2} {
+		apply(t, g, Action{Type: JoinGame, PlayerID: id})
+	}
+	for _, dealer := range []PlayerID{0, 99} {
+		rejected(t, g, Action{Type: StartGame, PlayerID: 99, DealerID: dealer, Revision: 2}, ErrUnknownPlayer)
+	}
+	for _, requester := range []PlayerID{0, -1} {
+		rejected(t, g, Action{Type: StartGame, PlayerID: requester, DealerID: 1, Revision: 2}, ErrInvalidAction)
+	}
+	apply(t, g, Action{Type: StartGame, PlayerID: 99, DealerID: 1})
+	s := g.Snapshot()
+	if s.player(99) != nil || len(s.Players) != 2 {
+		t.Fatal("administrative requester enrolled")
+	}
+	for _, kind := range []ActionType{LeaveGame, PlayCard, DrawCard, PassTurn, ChooseColor} {
+		rejected(t, g, Action{Type: kind, PlayerID: 99, Revision: s.Revision}, ErrUnknownPlayer)
+	}
+	rejected(t, g, Action{Type: CancelGame, PlayerID: 99, Revision: s.Revision - 1}, ErrStaleRevision)
+	apply(t, g, Action{Type: CancelGame, PlayerID: 99})
+	rejected(t, g, Action{Type: CancelGame, PlayerID: 99, Revision: g.Snapshot().Revision}, ErrGameFinished)
+	g, err = NewGame("empty", ClassicRules())
+	if err != nil {
+		t.Fatal(err)
+	}
+	apply(t, g, Action{Type: CancelGame, PlayerID: 99})
+	if s = g.Snapshot(); s.Phase != Finished || len(s.Players) != 0 || s.Revision != 1 {
+		t.Fatal("empty cancellation")
+	}
+}
