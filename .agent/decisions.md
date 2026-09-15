@@ -24,3 +24,37 @@ Garante a integridade do estado e evita o descompasso na sincronização do inli
 
 ## Impacto
 O bot agora é estável em cenários com múltiplos jogos paralelos e limpa totalmente a memória ao cancelar lobbies, sem deixar resíduos de cartas ou sessões fantasma para os usuários. A carta reverse agora muda de fato a rotação do jogo e não causa travamentos concorrentes.
+
+# Decisão: fronteira da engine V2 e políticas de rodada
+
+## Data
+2026-09-14
+
+## Contexto
+O usuário aprovou a implementação da Milestone 1 após auditoria do V1. Escolheu
+bloquear +4 ilegal inicialmente, manter UNO automático e preservar continuidade
+por colocação/entrada tardia. Inline multigrupo usará seleção explícita futuramente.
+
+## Decisão tomada
+Criar internal/uno sem Telegram, SQL ou estado global. Game encapsula State, ações
+são aplicadas numa cópia e só confirmadas após validação; revision incrementa uma
+vez por ação aceita. Snapshot/Restore fazem cópia profunda, e cartas físicas têm
+IDs. Regras Classic são independentes das políticas FirstWinner/Placements e
+AllowLateJoin. Dez registrados por jogo, sem reentrada; falta de cartas falha
+atomicamente. Cor ativa não modifica a carta Wild. Challenge fica para depois.
+
+## Motivo
+Permitir testes determinísticos e futura troca de interface, eliminar acoplamento
+e corrupção parcial, e preservar a dinâmica desejada sem chamar as adaptações de
+regras oficiais. A implementação V1 não é substituída durante construção da engine.
+
+## Impacto
+Nova engine com biblioteca padrão apenas. M2 adicionará serviço, índices,
+MemoryRepository e mutex privado por jogo. A engine requer acesso serializado;
+Estado não serializa locks/RNG. M3 conectará Telegram, snapshots privados serão
+convertidos em views autorizadas, tokens vincularão resultados a usuário e partida.
+Ranking/Match não entram na engine. PostgreSQL do V1 permanece intacto.
+
+## Documentação
+- docs/v2-rules.md: API, diferenças de regras, atomicidade e limites.
+- docs/v2-audit.md: arquitetura V1, riscos e fatos verificados na Bot API.

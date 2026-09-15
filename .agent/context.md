@@ -1,3 +1,20 @@
+# Contexto atual — V2 Milestone 1 (2026-09-14)
+
+- O executável V1 permanece na raiz, em `package main`, com telego v1.10.0.
+- V1 exige PostgreSQL para ranking/configuração; somente partidas são efêmeras em RAM.
+- `internal/uno` é a nova engine independente de Telegram, SQL, ambiente e relógio.
+- Actions transacionais por cópia, revision estrita, cartas físicas com IDs, snapshots serializáveis.
+- `ClassicRules`: primeiro vencedor, sem entrada tardia. `BotRules`: colocações e entrada tardia.
+- Ambos usam regras Classic das cartas, UNO automático e bloqueio de +4 ilegal.
+- Manager/locks por partida, MemoryRepository e serviço serão Milestone 2; adapter V2 será M3.
+- Engine é de dono único: chamadas ao mesmo Game devem ser serializadas pelo futuro manager.
+- Documentação autoritativa: docs/v2-rules.md e docs/v2-audit.md.
+- O módulo Go continua github.com/malbs/UnoGoBot; V1 não foi migrado nem removido.
+
+---
+
+## Contexto histórico do V1 (pode conter informações superadas)
+
 # Contexto do Projeto - UnoGoBot
 
 ## Stack e Ferramentas

@@ -1,3 +1,35 @@
+# Memória atual — 2026-09-14
+
+## V2 Milestone 1
+
+- Usuário aprovou o plano com "Implement the plan.".
+- Decisões confirmadas: +4 ilegal bloqueado inicialmente; UNO automático;
+  múltiplos grupos com seleção explícita futura; preservar colocações e entrada tardia.
+- Engine nova em internal/uno; V1 permanece executável na raiz.
+- IDs físicos, snapshot com cópia profunda, Restore validado, Apply atômico por cópia,
+  revision estrita e erros via errors.Is. Snapshots contêm mãos privadas e ficam no servidor.
+- Injeção de deck/shuffler permite testes determinísticos; runtime RNG não é persistido.
+- Sem empilhamento Classic; somente carta comprada pode ser jogada após compra.
+- Policy FirstWinner ou Placements; dez participantes registrados, sem reentrada;
+  entrada tardia opcional; cancelamento/saída distinguem motivo de término.
+- Falta de cartas retorna ErrDeckEmpty sem mutação parcial; nenhuma carta é fabricada.
+- Game não é thread-safe: manager da M2 será responsável pelo mutex privado por partida.
+- Testes incluem 40 partidas determinísticas completas e regras/segurança/inventário/recovery.
+- Conferir docs/v2-rules.md e docs/v2-audit.md antes das próximas milestones.
+
+## Correções de contexto V1
+
+- PostgreSQL já é obrigatório no startup V1 e guarda ranking/modo por grupo.
+- Inline atual usa HTTP próprio com cache_time=0 explícito; telego tem omitempty.
+- IDs atuais são aparência:índice; não existe validação AntiCheat/revision no handler atual.
+- InlineQuery e ChosenInlineResult não trazem chat_id. Não inferir destino por
+  inline_message_id. A seleção deve ficar vinculada à partida na emissão do resultado.
+- Passar no race detector atual não cobre os caminhos concorrentes defeituosos do V1.
+
+---
+
+## Histórico anterior (preservado; consultar correções acima)
+
 # Memória do Projeto - UnoGoBot
 
 ## Stack
