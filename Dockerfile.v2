@@ -12,6 +12,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-w -s" -o /build/unobot ./cmd/bot
 
 FROM gcr.io/distroless/static-debian12:nonroot
+EXPOSE 8080
 
 COPY --from=builder /build/unobot /unobot
 

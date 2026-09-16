@@ -167,3 +167,20 @@ Atender à preferência do usuário por mensagens mais compactas e limpas no gru
 Mensagens no chat do Telegram ficam mais limpas, diretas e com menos botões desnecessários, melhorando a experiência mobile dos usuários.
 
 
+
+# Decisão
+
+## Data
+2026-09-16
+
+## Contexto
+A Milestone 6 adiciona Webhook como transporte alternativo ao long polling.
+
+## Decisão tomada
+Usar um pipeline único de updates, servidor `net/http` interno com validação de `X-Telegram-Bot-Api-Secret-Token`, `SetWebhook` explícito em todo startup webhook, `DeleteWebhook(false)` ao iniciar polling e deduplicação em memória por `UpdateID`.
+
+## Motivo
+Preservar a jogabilidade existente, aplicar alterações de segredo sem operação manual e evitar processamento duplicado sem adicionar infraestrutura persistente.
+
+## Impacto
+Webhook exige URL HTTPS pública terminada externamente; a deduplicação é perdida após reinício.

@@ -129,3 +129,6 @@
 - **Seletor de cores:** Sem duplicação de emoji; `Title` mostra nome da cor.
 - **displayName:** `@@` corrigido para `@`.
 - **Cores da mão:** Mostra emojis das cores disponíveis durante escolha de cor.
+
+- M6: Bot suporta `TELEGRAM_MODE=polling|webhook`; polling é default.
+- Webhook usa `WEBHOOK_URL`, `WEBHOOK_SECRET`, `WEBHOOK_LISTEN_ADDR` e `WEBHOOK_DROP_PENDING_UPDATES` (default false), com `/healthz` liveness e dedupe em memória por UpdateID.
