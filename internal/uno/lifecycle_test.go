@@ -119,6 +119,11 @@ func TestPendingMembershipChanges(t *testing.T) {
 		t.Fatal("pending target not repaired")
 	}
 	apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Green})
+	s = g.Snapshot()
+	if s.Challenge == nil || s.Challenge.Target != 3 || s.DrawCounter != 4 || s.CurrentPlayerID != 3 {
+		t.Fatal("pending challenge after membership change")
+	}
+	apply(t, g, Action{Type: DrawCard, PlayerID: 3})
 	if len(g.Snapshot().Players[2].Hand) != 5 || g.Snapshot().CurrentPlayerID != 4 {
 		t.Fatal("pending penalty after membership change")
 	}

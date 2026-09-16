@@ -183,3 +183,25 @@ func TestLoadConfig_ValidationErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadWebhookConfig(t *testing.T) {
+	lookup := func(k string) (string, bool) {
+		m := map[string]string{"TOKEN": "123456789:abcdefghij", "TELEGRAM_MODE": "webhook", "WEBHOOK_URL": "https://bot.example/hook", "WEBHOOK_SECRET": "abc_DEF-123"}
+		v, ok := m[k]
+		return v, ok
+	}
+	cfg, err := LoadFromLookup(lookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TelegramMode != "webhook" || cfg.WebhookListenAddr != ":8080" || cfg.WebhookDropPending {
+		t.Fatalf("unexpected config: %+v", cfg)
+	}
+}
+func TestLoadRejectsInvalidWebhookConfig(t *testing.T) {
+	base := map[string]string{"TOKEN": "123456789:abcdefghij", "TELEGRAM_MODE": "webhook", "WEBHOOK_URL": "http://bot.example/hook", "WEBHOOK_SECRET": "secret"}
+	_, err := LoadFromLookup(func(k string) (string, bool) { v, ok := base[k]; return v, ok })
+	if !errors.Is(err, ErrInvalidWebhookURL) {
+		t.Fatalf("err=%v", err)
+	}
+}

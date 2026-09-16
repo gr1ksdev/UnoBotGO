@@ -56,6 +56,7 @@ func main() {
 	// 6. Assemble bot application
 	bot := telegram.New(telegoBot, svc, tokens, renderer, cfg.InlineTokenTTL, logger)
 	bot.SetTurnTimeout(cfg.TurnTimeout)
+	bot.SetTransport(telegram.TransportConfig{Mode: telegram.TransportMode(cfg.TelegramMode), WebhookURL: cfg.WebhookURL, WebhookSecret: cfg.WebhookSecret, ListenAddr: cfg.WebhookListenAddr, DropPendingUpdates: cfg.WebhookDropPending})
 
 	// 7. Setup graceful shutdown signals
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

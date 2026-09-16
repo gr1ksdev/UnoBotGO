@@ -10,11 +10,15 @@ import (
 type mockBotAPI struct {
 	mu sync.Mutex
 
-	MeUser      *telego.User
-	MeErr       error
-	WebhookInfo *telego.WebhookInfo
-	WebhookErr  error
-	CommandsErr error
+	MeUser             *telego.User
+	MeErr              error
+	WebhookInfo        *telego.WebhookInfo
+	WebhookErr         error
+	SetWebhookErr      error
+	DeleteWebhookErr   error
+	SetWebhookCalls    []telego.SetWebhookParams
+	DeleteWebhookCalls []telego.DeleteWebhookParams
+	CommandsErr        error
 
 	SentMessages       []telego.SendMessageParams
 	SentStickers       []telego.SendStickerParams
@@ -53,6 +57,32 @@ func (m *mockBotAPI) GetWebhookInfo(ctx context.Context) (*telego.WebhookInfo, e
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.WebhookInfo, m.WebhookErr
+}
+
+func (m *mockBotAPI) SetWebhook(ctx context.Context, params *telego.SetWebhookParams) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if params != nil {
+		m.SetWebhookCalls = append(m.SetWebhookCalls, *params)
+		if m.WebhookInfo == nil {
+			m.WebhookInfo = &telego.WebhookInfo{}
+		}
+		m.WebhookInfo.URL = params.URL
+	}
+	return m.SetWebhookErr
+}
+
+func (m *mockBotAPI) DeleteWebhook(ctx context.Context, params *telego.DeleteWebhookParams) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if params != nil {
+		m.DeleteWebhookCalls = append(m.DeleteWebhookCalls, *params)
+	}
+	if m.WebhookInfo == nil {
+		m.WebhookInfo = &telego.WebhookInfo{}
+	}
+	m.WebhookInfo.URL = ""
+	return m.DeleteWebhookErr
 }
 
 func (m *mockBotAPI) SetMyCommands(ctx context.Context, params *telego.SetMyCommandsParams) error {

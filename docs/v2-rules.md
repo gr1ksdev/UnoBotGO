@@ -158,3 +158,7 @@ Testes determinísticos cobrem regras, abertura, efeitos finais, erros sem muta�
 IDs físicos, descarte, políticas de participação/colocação, snapshots e recuperação.
 Incluem 40 partidas completas com seeds fixas. Testes concorrentes da mesma partida
 estão em internal/game na M2. Nenhum teste conecta Telegram ou PostgreSQL.
+
+## Desafio do Coringa Comprar 4
+
+Nos modos públicos atuais, o `Coringa Comprar 4` segue a mecânica legada do V1: ele pode ser jogado mesmo quando o jogador possui carta da cor ativa. Depois que a cor é escolhida, o próximo jogador pode comprar quatro cartas ou chamar o blefe. Se o lançador tinha uma carta da cor anterior, ele recebe quatro cartas; caso contrário, o desafiante recebe seis. A decisão é validada pela engine e mantém a mão privada.

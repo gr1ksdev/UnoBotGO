@@ -127,7 +127,7 @@ func authorize(entry *managedGame, actor Actor, kind uno.ActionType) error {
 		if actor.ChatID == 0 || actor.PlayerID != entry.ownerID {
 			return ErrForbidden
 		}
-	case uno.PlayCard, uno.DrawCard, uno.PassTurn, uno.ChooseColor:
+	case uno.PlayCard, uno.DrawCard, uno.PassTurn, uno.ChooseColor, uno.ChallengeDrawFour:
 		// Inline actions have no chat context. The engine still validates the actor.
 	default:
 		return uno.ErrInvalidAction

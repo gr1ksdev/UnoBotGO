@@ -630,3 +630,35 @@ func TestSkipTurnAction(t *testing.T) {
 		t.Fatalf("skip did not advance turn: %+v", s)
 	}
 }
+
+func TestDrawFourChallengeV1Mechanic(t *testing.T) {
+	cases := []struct {
+		name           string
+		actorHand      []Card
+		challengerHand int
+		penaltyPlayer  int
+		penalty        int
+	}{
+		{"true bluff", []Card{card(NoColor, WildDrawFour), card(Red, One)}, 1, 1, 4},
+		{"false bluff", []Card{card(NoColor, WildDrawFour), card(Blue, One)}, 1, 2, 6},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := scenario(t, BotRules(), [][]Card{tc.actorHand, {card(Blue, Two)}}, card(Red, Five), nil)
+			apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.Snapshot().Players[0].Hand[0]})
+			apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Red})
+			s := g.Snapshot()
+			if s.CurrentPlayerID != 2 || s.DrawCounter != 4 || s.Challenge == nil {
+				t.Fatalf("challenge not pending: %+v", s)
+			}
+			apply(t, g, Action{Type: ChallengeDrawFour, PlayerID: 2})
+			s = g.Snapshot()
+			if s.CurrentPlayerID != 1 || s.DrawCounter != 0 {
+				t.Fatalf("challenge turn state: %+v", s)
+			}
+			if len(s.Players[tc.penaltyPlayer-1].Hand) != tc.challengerHand+tc.penalty {
+				t.Fatalf("penalty hand=%d", len(s.Players[tc.penaltyPlayer-1].Hand))
+			}
+		})
+	}
+}

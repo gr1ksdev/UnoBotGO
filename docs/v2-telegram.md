@@ -181,3 +181,11 @@ Quando `cache_time` é 0, o encoder padrão omite o campo, fazendo o Telegram ad
 7. **Encerramento da Partida**:
    - Continuar a partida até um jogador bater (zero cartas).
    - Sob `BotRules`, o jogador obtém a 1ª colocação e a partida continua para os demais decidirem as próximas colocações até o encerramento total (`GameFinished`).
+
+## Transporte Webhook
+
+O transporte padrão é o long polling (`TELEGRAM_MODE=polling`). Para receber updates por webhook, configure `TELEGRAM_MODE=webhook`, uma `WEBHOOK_URL` pública HTTPS, `WEBHOOK_SECRET` e, se necessário, `WEBHOOK_LISTEN_ADDR` (padrão `:8080`). A terminação TLS fica no reverse proxy ou plataforma externa; o processo atende HTTP internamente. O segredo é validado no header `X-Telegram-Bot-Api-Secret-Token` e nunca é registrado.
+
+No modo webhook o bot aplica `setWebhook` em todo startup, inclusive quando a URL não mudou, para garantir que alterações do segredo sejam efetivadas. `WEBHOOK_DROP_PENDING_UPDATES` é `false` por padrão. Ao voltar para polling, um webhook existente é removido com `drop_pending_updates=false`, preservando updates pendentes. O shutdown normal não remove o webhook remoto.
+
+`GET /healthz` retorna apenas `200 OK` para liveness. O endpoint de webhook aceita somente `POST` JSON no caminho configurado, com corpo limitado a 1 MiB. Updates repetidos são ignorados por uma deduplicação em memória; após reinício essa proteção é perdida.

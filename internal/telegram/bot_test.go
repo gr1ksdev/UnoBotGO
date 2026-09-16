@@ -23,14 +23,20 @@ func TestBot_StartupChecks(t *testing.T) {
 		t.Fatalf("expected ErrInlineModeDisabled, got %v", err)
 	}
 
-	// 2. Webhook active check
+	// Existing webhook is removed safely before polling.
 	mockAPI2 := newMockBotAPI()
 	mockAPI2.WebhookInfo.URL = "https://example.com/webhook"
-
 	bot2 := New(mockAPI2, svc, nil, nil, time.Minute, nil)
-	err2 := bot2.Run(context.Background())
-	if !errors.Is(err2, ErrWebhookActive) {
-		t.Fatalf("expected ErrWebhookActive, got %v", err2)
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	done2 := make(chan error, 1)
+	go func() { done2 <- bot2.Run(ctx2) }()
+	time.Sleep(25 * time.Millisecond)
+	cancel2()
+	if err := <-done2; err != nil {
+		t.Fatalf("polling with existing webhook: %v", err)
+	}
+	if len(mockAPI2.DeleteWebhookCalls) != 1 || mockAPI2.DeleteWebhookCalls[0].DropPendingUpdates {
+		t.Fatalf("expected DeleteWebhook(false), got %#v", mockAPI2.DeleteWebhookCalls)
 	}
 }
 

@@ -12,6 +12,7 @@ const (
 	ChooseColor
 	CancelGame
 	SkipTurn
+	ChallengeDrawFour
 )
 
 // Action uses only domain IDs. The application authenticates PlayerID and

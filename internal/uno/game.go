@@ -73,7 +73,7 @@ func (g *Game) Apply(a Action) (Result, error) {
 	if g.state.Revision == math.MaxUint64 {
 		return Result{}, ErrInvalidState
 	}
-	if a.PlayerID <= 0 || a.Type < JoinGame || a.Type > SkipTurn {
+	if a.PlayerID <= 0 || a.Type < JoinGame || a.Type > ChallengeDrawFour {
 		return Result{}, ErrInvalidAction
 	}
 	if (a.Type != PlayCard && a.CardID != "") || (a.Type != ChooseColor && a.Color != NoColor) || (a.Type != StartGame && a.DealerID != 0) {
@@ -174,6 +174,13 @@ func (g *Game) leave(s *State, id PlayerID, events *[]Event) error {
 	}
 	if s.Pending != nil && s.Pending.Target == id {
 		s.Pending.Target = s.next(s.Pending.Actor, 1)
+	}
+	if s.Challenge != nil {
+		if s.Challenge.Actor == id {
+			s.Challenge = nil
+		} else if s.Challenge.Target == id {
+			s.Challenge.Target = s.next(s.Challenge.Actor, 1)
+		}
 	}
 	if s.CurrentPlayerID == id {
 		changeTurn(s, next, events)
@@ -283,6 +290,9 @@ func (g *Game) takeAction(s *State, a Action, events *[]Event) error {
 		}
 		return g.choose(s, a.Color, events)
 	}
+	if a.Type == ChallengeDrawFour {
+		return g.challengeDrawFour(s, a.PlayerID, events)
+	}
 	if a.Type == SkipTurn {
 		if s.Phase != TakingTurn {
 			return ErrInvalidAction
@@ -300,6 +310,7 @@ func (g *Game) takeAction(s *State, a Action, events *[]Event) error {
 		}
 		if s.DrawCounter > 0 {
 			count := s.DrawCounter
+			s.Challenge = nil
 			cards, err := g.draw(s, count)
 			if err != nil {
 				return err
@@ -379,9 +390,12 @@ func playable(s *State, player PlayerID, id CardID) error {
 		return nil
 	}
 	if card.Rank == WildDrawFour {
+		if s.Rules.ChallengeDrawFour {
+			return nil
+		}
 		hand := make([]Card, 0, len(p.Hand))
-		for _, id := range p.Hand {
-			c, _ := s.card(id)
+		for _, handID := range p.Hand {
+			c, _ := s.card(handID)
 			hand = append(hand, c)
 		}
 		if !CanPlayDrawFour(hand, s.ActiveColor) {
@@ -410,6 +424,9 @@ func (g *Game) play(s *State, id CardID, events *[]Event) error {
 	p.Hand = slices.Delete(p.Hand, i, i+1)
 	s.DiscardPile = append(s.DiscardPile, id)
 	s.DrawnCardID = ""
+	if s.Challenge != nil && card.Rank != WildDrawFour {
+		s.Challenge = nil
+	}
 	*events = append(*events, Event{Type: CardPlayed, PlayerID: actor, CardID: id})
 	if len(p.Hand) == 1 {
 		*events = append(*events, Event{Type: UnoAnnounced, PlayerID: actor})
@@ -454,6 +471,27 @@ func (g *Game) play(s *State, id CardID, events *[]Event) error {
 	return nil
 }
 
+func (g *Game) challengeDrawFour(s *State, target PlayerID, events *[]Event) error {
+	if !s.Rules.ChallengeDrawFour || s.Challenge == nil || s.DrawCounter != 4 {
+		return ErrNoChallenge
+	}
+	challenge := *s.Challenge
+	s.Challenge = nil
+	count := 6
+	penaltyPlayer := target
+	if challenge.HadMatchingColor {
+		count = 4
+		penaltyPlayer = challenge.Actor
+	}
+	if err := g.penalty(s, penaltyPlayer, count, events); err != nil {
+		return err
+	}
+	s.DrawCounter = 0
+	*events = append(*events, Event{Type: DrawFourChallenged, PlayerID: target, Count: count, Color: s.ActiveColor})
+	changeTurn(s, s.next(target, 1), events)
+	return nil
+}
+
 func (g *Game) choose(s *State, color Color, events *[]Event) error {
 	if !color.valid() {
 		return ErrInvalidColor
@@ -468,14 +506,35 @@ func (g *Game) choose(s *State, color Color, events *[]Event) error {
 	}
 	next := pending.Target
 	if pending.DrawCount != 0 {
-		if s.Rules.StackDrawTwoOnWildFour {
-			s.DrawCounter = pending.DrawCount
-		} else {
+		if !s.Rules.ChallengeDrawFour {
 			if err := g.penalty(s, next, pending.DrawCount, events); err != nil {
 				return err
 			}
 			next = s.next(next, 1)
+			completePlay(s, pending.Actor, next, events)
+			return nil
 		}
+		if actor := s.player(pending.Actor); actor == nil || len(actor.Hand) == 0 {
+			if err := g.penalty(s, next, pending.DrawCount, events); err != nil {
+				return err
+			}
+			next = s.next(next, 1)
+		} else {
+			s.DrawCounter = pending.DrawCount
+			hadMatchingColor := false
+			if actor := s.player(pending.Actor); actor != nil {
+				for _, handID := range actor.Hand {
+					c, _ := s.card(handID)
+					if c.Color == color {
+						hadMatchingColor = true
+						break
+					}
+				}
+			}
+			s.Challenge = &DrawFourChallenge{Actor: pending.Actor, Target: next, HadMatchingColor: hadMatchingColor}
+		}
+		completePlay(s, pending.Actor, next, events)
+		return nil
 	}
 	completePlay(s, pending.Actor, next, events)
 	return nil

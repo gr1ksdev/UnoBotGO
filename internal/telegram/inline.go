@@ -278,6 +278,11 @@ func (h *InlineHandler) buildPlayerHandResults(
 			},
 		})
 	} else if view.Public.Phase == uno.TakingTurn && view.Public.CurrentTurn == actorID {
+		if view.Public.TopCard != nil && view.Public.TopCard.Rank == uno.WildDrawFour && view.Public.DrawCounter > 0 {
+			tok, _ := h.tokens.CreateActionToken(actorID, gameID, view.Public.ChatID, uno.Action{Type: uno.ChallengeDrawFour, PlayerID: actorID, Revision: view.Public.Revision}, h.tokenTTL)
+			results = append(results, &telego.InlineQueryResultArticle{Type: "article", ID: tok, Title: "Chamar blefe do +4", Description: "Desafiar o jogador que lançou o Coringa +4", InputMessageContent: &telego.InputTextMessageContent{MessageText: "Estou chamando o blefe do +4!"}})
+		}
+
 		if view.DrawnCardID == "" {
 			// Player can draw
 			tokDraw, _ := h.tokens.CreateActionToken(actorID, gameID, view.Public.ChatID, uno.Action{
@@ -394,9 +399,9 @@ func (h *InlineHandler) buildPlayerHandResults(
 	return results, ""
 }
 
-func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *telego.ChosenInlineResult) {
+func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *telego.ChosenInlineResult) bool {
 	if chosen == nil {
-		return
+		return true
 	}
 
 	actorID := uno.PlayerID(chosen.From.ID)
@@ -404,17 +409,17 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 
 	tokenStr := chosen.ResultID
 	if strings.HasPrefix(tokenStr, "grey_") || strings.HasPrefix(tokenStr, "hdr_") || strings.HasPrefix(tokenStr, "select_") || strings.HasPrefix(tokenStr, "no_") || strings.HasPrefix(tokenStr, "info_") || strings.HasPrefix(tokenStr, "hand_") || strings.HasPrefix(tokenStr, "wait_") {
-		return
+		return true
 	}
 
 	actionToken, status := h.tokens.ConsumeAction(tokenStr, actorID)
 	if status != ConsumeOK {
 		h.logger.DebugContext(ctx, "ignoring unconsumed action token in chosen inline result", "status", status, "user_id", actorID)
-		return
+		return true
 	}
 
 	// Schedule the state change in the designated chat worker queue to ensure in-order execution
-	h.dispatcher.EnqueueChat(actionToken.ChatID, func(taskCtx context.Context) {
+	accepted := h.dispatcher.EnqueueChat(actionToken.ChatID, func(taskCtx context.Context) {
 		actor := game.Actor{PlayerID: actorID, ChatID: actionToken.ChatID}
 		outcome, err := h.service.Apply(taskCtx, actor, actionToken.GameID, actionToken.Action)
 		if err != nil {
@@ -474,4 +479,5 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 			ReplyMarkup: makeGameButtons(actionToken.GameID),
 		})
 	})
+	return accepted
 }

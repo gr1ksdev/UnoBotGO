@@ -24,6 +24,12 @@ const (
 
 // ColorChoice records the pre-play evidence needed by a future challenge flow.
 // Initial Wild color choice retains the chooser's turn; played Wild advances it.
+type DrawFourChallenge struct {
+	Actor            PlayerID
+	Target           PlayerID
+	HadMatchingColor bool
+}
+
 type ColorChoice struct {
 	Actor         PlayerID
 	Target        PlayerID
@@ -52,6 +58,7 @@ type State struct {
 	DrawnCardID     CardID
 	DrawCounter     int
 	Pending         *ColorChoice
+	Challenge       *DrawFourChallenge
 	Placements      []Placement
 	FinishReason    FinishReason
 }
@@ -69,6 +76,10 @@ func (s State) clone() State {
 	if s.Pending != nil {
 		pending := *s.Pending
 		s.Pending = &pending
+	}
+	if s.Challenge != nil {
+		challenge := *s.Challenge
+		s.Challenge = &challenge
 	}
 	return s
 }
@@ -204,7 +215,7 @@ func (s State) Validate() error {
 		}
 	}
 	if s.Phase == Finished {
-		if s.CurrentPlayerID != 0 || s.DrawnCardID != "" || s.Pending != nil {
+		if s.CurrentPlayerID != 0 || s.DrawnCardID != "" || s.Pending != nil || s.Challenge != nil {
 			return bad("finished turn")
 		}
 		if s.FinishReason != FinishedNormally && s.FinishReason != FinishedByDeparture && s.FinishReason != FinishedByCancellation {
@@ -221,6 +232,11 @@ func (s State) Validate() error {
 	}
 	if (s.Phase == ChoosingColor) != (s.Pending != nil) {
 		return bad("pending color phase")
+	}
+	if s.Challenge != nil {
+		if s.Phase != TakingTurn || s.DrawCounter != 4 || s.CurrentPlayerID != s.Challenge.Target || s.Challenge.Actor == 0 || s.Challenge.Target == 0 || !order[s.Challenge.Actor] || !order[s.Challenge.Target] {
+			return bad("draw four challenge")
+		}
 	}
 	if p := s.Pending; p != nil {
 		if p.Actor != s.CurrentPlayerID || !order[p.Actor] || !order[p.Target] || p.Target != s.next(p.Actor, 1) {

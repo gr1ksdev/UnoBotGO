@@ -12,6 +12,7 @@ const (
 	DirectionChanged    EventType = "direction_changed"
 	ColorChoiceRequired EventType = "color_choice_required"
 	ColorChosen         EventType = "color_chosen"
+	DrawFourChallenged  EventType = "draw_four_challenged"
 	TurnChanged         EventType = "turn_changed"
 	UnoAnnounced        EventType = "uno_announced"
 	PlayerWon           EventType = "player_won"

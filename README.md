@@ -75,3 +75,7 @@ validações.
 - [Regras da Engine V2](docs/v2-rules.md)
 - [Camada de Aplicação V2](docs/v2-application.md)
 - [Adapter Telegram V2 e Roteiro de Aceite](docs/v2-telegram.md)
+
+### Transporte Telegram
+
+Long polling é o padrão. Para webhook, use `TELEGRAM_MODE=webhook`, `WEBHOOK_URL`, `WEBHOOK_SECRET` e `WEBHOOK_LISTEN_ADDR=:8080`; publique o endpoint HTTPS por um proxy externo. `WEBHOOK_DROP_PENDING_UPDATES=false` preserva updates pendentes.

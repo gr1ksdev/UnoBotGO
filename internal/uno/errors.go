@@ -25,4 +25,5 @@ var (
 	ErrAlreadyDrawn        = errors.New("already drawn this turn")
 	ErrCannotPass          = errors.New("draw before passing")
 	ErrDeckEmpty           = errors.New("not enough drawable cards")
+	ErrNoChallenge         = errors.New("no draw four challenge pending")
 )
