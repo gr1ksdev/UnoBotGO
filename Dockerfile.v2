@@ -1,4 +1,7 @@
-FROM golang:1.26-alpine AS builder
+FROM golang:1.26.3-bookworm AS builder
+
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
 
 WORKDIR /build
 
@@ -6,16 +9,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /build/unobot ./cmd/bot
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-w -s" -o /build/unobot ./cmd/bot
 
-FROM alpine:3.20
+FROM gcr.io/distroless/static-debian12:nonroot
 
-RUN apk add --no-cache ca-certificates tzdata && \
-    addgroup -S unobot && adduser -S unobot -G unobot
+COPY --from=builder /build/unobot /unobot
 
-USER unobot:unobot
-
-WORKDIR /app
-COPY --from=builder /build/unobot /app/unobot
-
-ENTRYPOINT ["/app/unobot"]
+ENTRYPOINT ["/unobot"]
