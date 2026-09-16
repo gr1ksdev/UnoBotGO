@@ -118,11 +118,11 @@ func authorize(entry *managedGame, actor Actor, kind uno.ActionType) error {
 		return ErrForbidden
 	}
 	switch kind {
-	case uno.JoinGame, uno.LeaveGame:
+	case uno.JoinGame, uno.LeaveGame, uno.StartGame:
 		if actor.ChatID == 0 {
 			return ErrForbidden
 		}
-	case uno.StartGame, uno.CancelGame:
+	case uno.CancelGame:
 		if actor.ChatID == 0 || actor.PlayerID != entry.ownerID {
 			return ErrForbidden
 		}

@@ -136,9 +136,9 @@ func TestCreateEmptyLobbyAndObserverAdministration(t *testing.T) {
 	denied(t, s, v.GameID, Actor{PlayerID: 99, ChatID: -10}, uno.Action{Type: uno.StartGame, PlayerID: 99}, uno.ErrNotEnoughPlayers)
 	join(t, s, v, 1)
 	join(t, s, v, 2)
-	denied(t, s, v.GameID, Actor{PlayerID: 1, ChatID: -10}, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: 2}, ErrForbidden)
+	denied(t, s, v.GameID, Actor{PlayerID: 1, ChatID: 0}, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: 2}, ErrForbidden)
 	denied(t, s, v.GameID, Actor{PlayerID: 99, ChatID: -10}, uno.Action{Type: uno.StartGame, PlayerID: 99, Revision: 2, DealerID: 99}, uno.ErrUnknownPlayer)
-	r := act(t, s, v.GameID, Actor{PlayerID: 99, ChatID: -10}, uno.Action{Type: uno.StartGame})
+	r := act(t, s, v.GameID, Actor{PlayerID: 1, ChatID: -10}, uno.Action{Type: uno.StartGame})
 	if r.View.OwnerID != 99 || len(r.View.Players) != 2 {
 		t.Fatal("owner enrolled or transferred")
 	}

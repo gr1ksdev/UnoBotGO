@@ -63,21 +63,21 @@ func TestCommandHandler_NovoEntrarIniciarCancelar(t *testing.T) {
 		t.Fatalf("expected Bob in lobby, got: %s", lastMsg)
 	}
 
-	// 3. /iniciar attempted by Bob (ID 2) -> should be forbidden because Alice (1) is owner!
+	// 3. /cancelar attempted by Bob (ID 2) -> should be forbidden because Alice (1) is owner!
 	cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup", Title: "UNO Fun"},
 		From: &telego.User{ID: 2, FirstName: "Bob", Username: "bob"},
-		Text: "/iniciar",
+		Text: "/cancelar",
 	})
 	lastMsg = mockAPI.LastSentMessage()
 	if !strings.Contains(lastMsg, "Apenas o responsável") {
-		t.Fatalf("expected forbidden error for non-owner start, got: %s", lastMsg)
+		t.Fatalf("expected forbidden error for non-owner cancel, got: %s", lastMsg)
 	}
 
-	// 4. /iniciar attempted by Alice with only 1 player (Bob) -> should fail (not enough players)
+	// 4. /iniciar attempted by Bob with only 1 player -> should fail (not enough players, not forbidden!)
 	cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup", Title: "UNO Fun"},
-		From: &telego.User{ID: 1, FirstName: "Alice", Username: "alice"},
+		From: &telego.User{ID: 2, FirstName: "Bob", Username: "bob"},
 		Text: "/iniciar",
 	})
 	lastMsg = mockAPI.LastSentMessage()
@@ -92,10 +92,10 @@ func TestCommandHandler_NovoEntrarIniciarCancelar(t *testing.T) {
 		Text: "/entrar",
 	})
 
-	// 6. /iniciar by Alice (ID 1)
+	// 6. /iniciar by Carol (ID 3) — any player can start once lobby has >= 2 players!
 	cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup", Title: "UNO Fun"},
-		From: &telego.User{ID: 1, FirstName: "Alice", Username: "alice"},
+		From: &telego.User{ID: 3, FirstName: "Carol", Username: "carol"},
 		Text: "/iniciar",
 	})
 	lastMsg = mockAPI.LastSentMessage()
@@ -104,6 +104,16 @@ func TestCommandHandler_NovoEntrarIniciarCancelar(t *testing.T) {
 	}
 	if len(mockAPI.SentStickers) == 0 {
 		t.Fatalf("expected initial top card sticker to be sent on /iniciar")
+	}
+
+	// Verify reply markup on the started message has only "🃏 Suas cartas" button (no "Atualizar estado")
+	lastSentParams := mockAPI.SentMessages[len(mockAPI.SentMessages)-1]
+	markup, ok := lastSentParams.ReplyMarkup.(*telego.InlineKeyboardMarkup)
+	if !ok || markup == nil || len(markup.InlineKeyboard) != 1 || len(markup.InlineKeyboard[0]) != 1 {
+		t.Fatalf("expected exactly 1 button in game keyboard, got: %#v", lastSentParams.ReplyMarkup)
+	}
+	if markup.InlineKeyboard[0][0].Text != "🃏 Suas cartas" {
+		t.Fatalf("expected '🃏 Suas cartas' button text, got: %s", markup.InlineKeyboard[0][0].Text)
 	}
 
 	// Verify game is playing with numbered start (Rank < Skip) and both have 7 cards
