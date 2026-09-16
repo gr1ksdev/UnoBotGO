@@ -100,8 +100,8 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 	cmdName := strings.ToLower(cmdParts[0])
 
 	if len(cmdParts) == 2 {
-		targetBot := strings.ToLower(cmdParts[1])
-		if h.botUsername != "" && targetBot != h.botUsername {
+		targetBot := cmdParts[1]
+		if h.botUsername != "" && !strings.EqualFold(targetBot, h.botUsername) {
 			// Command addressed to another bot, ignore
 			return
 		}

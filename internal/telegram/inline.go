@@ -49,39 +49,6 @@ func NewInlineHandler(
 	}
 }
 
-func makeValidatingInlineMarkup(gameID uno.GameID, token string) *telego.InlineKeyboardMarkup {
-	return &telego.InlineKeyboardMarkup{
-		InlineKeyboard: [][]telego.InlineKeyboardButton{
-			{
-				{Text: "⏳ Aguardando validação", CallbackData: fmt.Sprintf("st_%s", token)},
-				{Text: "🃏 Suas cartas", SwitchInlineQueryCurrentChat: stringPtr(fmt.Sprintf("g_%s", gameID))},
-			},
-		},
-	}
-}
-
-func makeConfirmedInlineMarkup(gameID uno.GameID) *telego.InlineKeyboardMarkup {
-	return &telego.InlineKeyboardMarkup{
-		InlineKeyboard: [][]telego.InlineKeyboardButton{
-			{
-				{Text: "✅ Confirmado", CallbackData: "noop"},
-				{Text: "🃏 Suas cartas", SwitchInlineQueryCurrentChat: stringPtr(fmt.Sprintf("g_%s", gameID))},
-			},
-		},
-	}
-}
-
-func makeStaleInlineMarkup(gameID uno.GameID) *telego.InlineKeyboardMarkup {
-	return &telego.InlineKeyboardMarkup{
-		InlineKeyboard: [][]telego.InlineKeyboardButton{
-			{
-				{Text: "❌ Seleção antiga", CallbackData: "noop"},
-				{Text: "🃏 Suas cartas", SwitchInlineQueryCurrentChat: stringPtr(fmt.Sprintf("g_%s", gameID))},
-			},
-		},
-	}
-}
-
 func (h *InlineHandler) HandleInlineQuery(ctx context.Context, query *telego.InlineQuery) {
 	if query == nil {
 		return
@@ -227,34 +194,25 @@ func (h *InlineHandler) buildPlayerHandResults(
 		}, ""
 	}
 
+	if view.Public.Phase == uno.Lobby {
+		return []telego.InlineQueryResult{
+			&telego.InlineQueryResultArticle{
+				Type:        "article",
+				ID:          fmt.Sprintf("lobby_%s", gameID),
+				Title:       "A partida ainda não começou",
+				Description: "Aguarde o responsável iniciar com /iniciar",
+				InputMessageContent: &telego.InputTextMessageContent{
+					MessageText: fmt.Sprintf("A partida no grupo <b>%s</b> ainda não foi iniciada. Aguarde o responsável usar /iniciar!", view.Public.ChatName),
+					ParseMode:   "HTML",
+				},
+				ReplyMarkup: makeGameButtons(gameID),
+			},
+		}, ""
+	}
+
 	var results []telego.InlineQueryResult
 
-	// 1. Header article with public game overview
-	headerTitle := fmt.Sprintf("Partida: %s", view.Public.ChatName)
-	if headerTitle == "Partida: " {
-		headerTitle = fmt.Sprintf("Partida (ID: %s)", view.Public.GameID)
-	}
-
-	headerDesc := "Consultar estado da mesa"
-	if view.Public.CurrentTurn == actorID {
-		headerDesc = "👉 É A SUA VEZ!"
-	} else if view.Public.CurrentTurn > 0 {
-		headerDesc = fmt.Sprintf("Vez de: %s", h.renderer.userCache.GetRawName(view.Public.CurrentTurn))
-	}
-
-	results = append(results, &telego.InlineQueryResultArticle{
-		Type:        "article",
-		ID:          fmt.Sprintf("hdr_%s_%d", gameID, view.Public.Revision),
-		Title:       headerTitle,
-		Description: headerDesc,
-		InputMessageContent: &telego.InputTextMessageContent{
-			MessageText: h.renderer.RenderPublicState(view.Public),
-			ParseMode:   "HTML",
-		},
-		ReplyMarkup: makeGameButtons(gameID),
-	})
-
-	// 2. Action controls if it's the player's turn
+	// 1. Action controls if it's the player's turn
 	if view.Public.Phase == uno.ChoosingColor && view.Public.ColorChooserID == actorID {
 		// 4 color articles
 		colors := []struct {
@@ -283,7 +241,6 @@ func (h *InlineHandler) buildPlayerHandResults(
 					MessageText: fmt.Sprintf("Escolhi a cor <b>%s</b>!", c.name),
 					ParseMode:   "HTML",
 				},
-				ReplyMarkup: makeValidatingInlineMarkup(gameID, tok),
 			})
 		}
 	} else if view.Public.Phase == uno.TakingTurn && view.Public.CurrentTurn == actorID {
@@ -299,7 +256,6 @@ func (h *InlineHandler) buildPlayerHandResults(
 				Type:          "sticker",
 				ID:            tokDraw,
 				StickerFileID: Stickers["option_draw"],
-				ReplyMarkup:   makeValidatingInlineMarkup(gameID, tokDraw),
 			})
 		} else {
 			// Player drew already, can pass
@@ -313,7 +269,6 @@ func (h *InlineHandler) buildPlayerHandResults(
 				Type:          "sticker",
 				ID:            tokPass,
 				StickerFileID: Stickers["option_pass"],
-				ReplyMarkup:   makeValidatingInlineMarkup(gameID, tokPass),
 			})
 		}
 	}
@@ -350,7 +305,6 @@ func (h *InlineHandler) buildPlayerHandResults(
 					Type:          "sticker",
 					ID:            tokPlay,
 					StickerFileID: stickerID,
-					ReplyMarkup:   makeValidatingInlineMarkup(gameID, tokPlay),
 				})
 			} else {
 				greyStickerID := GetCardStickerGreyID(cv.Card)
@@ -363,6 +317,18 @@ func (h *InlineHandler) buildPlayerHandResults(
 					},
 				})
 			}
+		}
+
+		if view.Public.Phase == uno.TakingTurn && view.Public.CurrentTurn == actorID {
+			results = append(results, &telego.InlineQueryResultCachedSticker{
+				Type:          "sticker",
+				ID:            fmt.Sprintf("info_%s_%d", gameID, view.Public.Revision),
+				StickerFileID: Stickers["option_info"],
+				InputMessageContent: &telego.InputTextMessageContent{
+					MessageText: h.renderer.RenderPublicState(view.Public),
+					ParseMode:   "HTML",
+				},
+			})
 		}
 
 		nextOffset := ""
@@ -387,7 +353,7 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 	h.renderer.userCache.Put(actorID, chosen.From.FirstName, chosen.From.Username)
 
 	tokenStr := chosen.ResultID
-	if strings.HasPrefix(tokenStr, "grey_") || strings.HasPrefix(tokenStr, "hdr_") || strings.HasPrefix(tokenStr, "select_") || strings.HasPrefix(tokenStr, "no_") {
+	if strings.HasPrefix(tokenStr, "grey_") || strings.HasPrefix(tokenStr, "hdr_") || strings.HasPrefix(tokenStr, "select_") || strings.HasPrefix(tokenStr, "no_") || strings.HasPrefix(tokenStr, "info_") {
 		return
 	}
 
@@ -411,12 +377,6 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 					ParseMode:   "HTML",
 					ReplyMarkup: makeGameButtons(actionToken.GameID),
 				})
-				if chosen.InlineMessageID != "" {
-					_, _ = h.bot.EditMessageReplyMarkup(taskCtx, &telego.EditMessageReplyMarkupParams{
-						InlineMessageID: chosen.InlineMessageID,
-						ReplyMarkup:     makeStaleInlineMarkup(actionToken.GameID),
-					})
-				}
 			} else {
 				h.tokens.SetActionResult(tokenStr, "rejected")
 				errMsg := fmt.Sprintf("⚠️ %s: Jogada não aceita: %v. Abra Suas cartas novamente.", h.renderer.userCache.FormatLink(actorID), err)
@@ -432,12 +392,6 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 
 		// Success!
 		h.tokens.SetActionResult(tokenStr, "confirmed")
-		if chosen.InlineMessageID != "" {
-			_, _ = h.bot.EditMessageReplyMarkup(taskCtx, &telego.EditMessageReplyMarkupParams{
-				InlineMessageID: chosen.InlineMessageID,
-				ReplyMarkup:     makeConfirmedInlineMarkup(actionToken.GameID),
-			})
-		}
 
 		confText := h.renderer.RenderActionConfirmation(actorID, actionToken.Action, outcome)
 		_, _ = h.bot.SendMessage(taskCtx, &telego.SendMessageParams{

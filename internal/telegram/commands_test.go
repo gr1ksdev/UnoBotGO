@@ -231,6 +231,25 @@ func TestCommandHandler_FiltersAndAliases(t *testing.T) {
 	if !strings.Contains(mockAPI.LastSentMessage(), "Partida cancelada") {
 		t.Fatalf("expected /kill to act as cancel alias, got: %s", mockAPI.LastSentMessage())
 	}
+
+	// 7. Case-insensitive bot username command: /novo@UNOBOT works with unobot
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: -1003, Type: "supergroup", Title: "Test Group"},
+		From: &telego.User{ID: 10, FirstName: "Creator"},
+		Text: "/novo@UNOBOT",
+	})
+	if !strings.Contains(mockAPI.LastSentMessage(), "Partida de UNO") {
+		t.Fatalf("expected /novo@UNOBOT to work, got: %s", mockAPI.LastSentMessage())
+	}
+	// Verify creator is NOT auto-enrolled (0 players in lobby)
+	gSummary, err := svc.FindChatGame(ctx, game.ChatID(-1003))
+	if err != nil {
+		t.Fatalf("expected game created at -1003: %v", err)
+	}
+	gView, _ := svc.PublicView(ctx, gSummary.GameID)
+	if len(gView.Players) != 0 {
+		t.Fatalf("expected 0 players in lobby, got %d", len(gView.Players))
+	}
 }
 
 func TestCommandHandler_ReplyMarkup_OmitsNull(t *testing.T) {
