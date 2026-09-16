@@ -17,6 +17,7 @@ type mockBotAPI struct {
 	CommandsErr error
 
 	SentMessages       []telego.SendMessageParams
+	SentStickers       []telego.SendStickerParams
 	EditedMessages     []telego.EditMessageTextParams
 	EditedMarkups      []telego.EditMessageReplyMarkupParams
 	AnsweredInlines    []telego.AnswerInlineQueryParams
@@ -79,6 +80,15 @@ func (m *mockBotAPI) SendMessage(ctx context.Context, params *telego.SendMessage
 		m.SentMessages = append(m.SentMessages, *params)
 	}
 	return &telego.Message{MessageID: len(m.SentMessages)}, nil
+}
+
+func (m *mockBotAPI) SendSticker(ctx context.Context, params *telego.SendStickerParams) (*telego.Message, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if params != nil {
+		m.SentStickers = append(m.SentStickers, *params)
+	}
+	return &telego.Message{MessageID: len(m.SentStickers)}, nil
 }
 
 func (m *mockBotAPI) EditMessageText(ctx context.Context, params *telego.EditMessageTextParams) (*telego.Message, error) {

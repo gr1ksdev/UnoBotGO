@@ -212,6 +212,9 @@ func (g *Game) start(s *State, dealer PlayerID, events *[]Event) error {
 	skipped := false
 	for i, id := range s.DrawPile {
 		c, _ := s.card(id)
+		if s.Rules.NumberedStart && c.Rank >= Skip {
+			continue
+		}
 		if c.Rank != WildDrawFour {
 			top = c
 			skipped = i > 0

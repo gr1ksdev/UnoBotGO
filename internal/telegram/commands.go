@@ -266,6 +266,20 @@ func (h *CommandHandler) handleIniciar(ctx context.Context, actorID uno.PlayerID
 		return
 	}
 
+	// Send initial top card sticker to the chat
+	if outcome.View.TopCard != nil {
+		stickerID := GetCardStickerID(*outcome.View.TopCard)
+		if stickerID != "" {
+			_, errSticker := h.bot.SendSticker(ctx, &telego.SendStickerParams{
+				ChatID:  telego.ChatID{ID: int64(chatID)},
+				Sticker: telego.InputFile{FileID: stickerID},
+			})
+			if errSticker != nil {
+				h.logger.WarnContext(ctx, "failed to send initial top card sticker", "chat_id", chatID, "error", errSticker.Error())
+			}
+		}
+	}
+
 	msg := "🚀 <b>Partida iniciada!</b>\n\n" + h.renderer.RenderPublicState(outcome.View)
 	h.reply(ctx, int64(chatID), msg, makeGameButtons(outcome.View.GameID))
 }

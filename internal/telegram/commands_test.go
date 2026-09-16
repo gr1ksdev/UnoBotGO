@@ -102,11 +102,22 @@ func TestCommandHandler_NovoEntrarIniciarCancelar(t *testing.T) {
 	if !strings.Contains(lastMsg, "Partida iniciada") {
 		t.Fatalf("expected game started message, got: %s", lastMsg)
 	}
+	if len(mockAPI.SentStickers) == 0 {
+		t.Fatalf("expected initial top card sticker to be sent on /iniciar")
+	}
 
-	// Verify game is playing
+	// Verify game is playing with numbered start (Rank < Skip) and both have 7 cards
 	view2, _ := svc.PublicView(ctx, summary.GameID)
-	if view2.Phase != uno.TakingTurn && view2.Phase != uno.ChoosingColor {
-		t.Fatalf("expected active turn phase, got %v", view2.Phase)
+	if view2.Phase != uno.TakingTurn {
+		t.Fatalf("expected TakingTurn phase, got %v", view2.Phase)
+	}
+	if view2.TopCard.Rank >= uno.Skip {
+		t.Fatalf("expected numbered top card (< Skip), got %v", view2.TopCard.Rank)
+	}
+	for _, p := range view2.Players {
+		if p.CardCount != 7 {
+			t.Fatalf("expected player %d to have 7 cards, got %d", p.ID, p.CardCount)
+		}
 	}
 
 	// 7. /estado
