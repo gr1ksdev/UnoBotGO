@@ -114,14 +114,18 @@ func TestInlineHandler_PlayTurn_DrawAndPlayCard(t *testing.T) {
 		t.Fatalf("expected header + controls + hand cards, got %d results", len(results))
 	}
 
-	// Check that Draw sticker exists as a control
+	// Check that Draw sticker exists as a control and all results are clean stickers
 	var drawToken string
 	for _, r := range results {
-		if sticker, ok := r.(*telego.InlineQueryResultCachedSticker); ok {
-			if sticker.StickerFileID == Stickers["option_draw"] {
-				drawToken = sticker.ID
-				break
-			}
+		sticker, ok := r.(*telego.InlineQueryResultCachedSticker)
+		if !ok {
+			t.Fatalf("expected only sticker results for active hand, got %T", r)
+		}
+		if sticker.ReplyMarkup != nil {
+			t.Errorf("expected clean sticker without ReplyMarkup, got: %#v", sticker.ReplyMarkup)
+		}
+		if sticker.StickerFileID == Stickers["option_draw"] {
+			drawToken = sticker.ID
 		}
 	}
 	if drawToken == "" {
@@ -143,9 +147,9 @@ func TestInlineHandler_PlayTurn_DrawAndPlayCard(t *testing.T) {
 		t.Fatalf("expected draw confirmation message sent to group, got: %s", lastMsg)
 	}
 
-	// Verify inline message was updated to confirmed
-	if len(mockAPI.EditedMarkups) == 0 {
-		t.Errorf("expected inline message markup to be edited to confirmed")
+	// Verify sticker message was not cluttered with button edits
+	if len(mockAPI.EditedMarkups) != 0 {
+		t.Errorf("expected clean sticker without markup edits, got %d edits", len(mockAPI.EditedMarkups))
 	}
 }
 
@@ -189,9 +193,9 @@ func TestInlineHandler_StaleRevisionRejection(t *testing.T) {
 		t.Fatalf("expected stale notice sent to group, got: %s", lastMsg)
 	}
 
-	// Verify inline message was updated to stale
-	if len(mockAPI.EditedMarkups) == 0 {
-		t.Errorf("expected inline message markup to be edited to stale")
+	// Verify sticker message was not cluttered with button edits
+	if len(mockAPI.EditedMarkups) != 0 {
+		t.Errorf("expected clean sticker without markup edits, got %d edits", len(mockAPI.EditedMarkups))
 	}
 }
 
