@@ -179,7 +179,7 @@ func (r *Renderer) RenderLobby(view game.PublicGameView) string {
 
 	sb.WriteString("\nClique em /entrar para participar.")
 	if len(view.Players) >= 2 {
-		sb.WriteString("\nO responsável pode usar /iniciar para começar!")
+		sb.WriteString("\nUse /iniciar para começar!")
 	} else {
 		sb.WriteString("\n(Mínimo de 2 jogadores para iniciar)")
 	}
@@ -211,8 +211,6 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 		return sb.String()
 	}
 
-	sb.WriteString("🃏 <b>UnoBotGO</b>\n\n")
-
 	// Top card & active color
 	if view.TopCard != nil {
 		sb.WriteString(fmt.Sprintf("Carta no topo: <b>%s</b>\n", CardRepr(*view.TopCard)))
@@ -241,7 +239,7 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 		sb.WriteString("\n\n")
 	}
 
-	// Players and card counts
+	// Players
 	sb.WriteString("<b>Jogadores em jogo:</b>\n")
 	playerParts := make([]string, 0, len(view.Order))
 	for _, pid := range view.Order {
@@ -256,11 +254,10 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 			continue
 		}
 
-		cardWord := "cartas"
+		entry := r.userCache.FormatLink(pid)
 		if p.CardCount == 1 {
-			cardWord = "carta ⚠️ <b>UNO!</b>"
+			entry += " ⚠️ <b>UNO!</b>"
 		}
-		entry := fmt.Sprintf("%s (%d %s)", r.userCache.FormatLink(pid), p.CardCount, cardWord)
 		if pid == view.CurrentTurn {
 			entry = "👉 <b>" + entry + "</b>"
 		}

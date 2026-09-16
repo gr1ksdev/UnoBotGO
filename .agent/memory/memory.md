@@ -13,6 +13,9 @@
 - Matching de comandos case-insensitive (`strings.EqualFold(targetBot, h.botUsername)`): aceita `/novo@UnoGoBrBot` e `/novo@unogobrbot`.
 - Regra de lobby no `/novo`: criador NÃO é inscrito automaticamente (permanece responsável observador com 0 inscritos até enviar `/entrar`).
 - Stickers limpos no chat: remoção de botões de validação nos stickers jogados e eliminação de edições de markup.
+- Teclado inline de jogo simplificado: `makeGameButtons` gera exclusivamente o botão `🃏 Suas cartas` (removido botão redundante `🔄 Atualizar estado`).
+- Mensagem de estado mais enxuta: removido cabeçalho `🃏 UnoBotGO` de `RenderPublicState` e eliminada a contagem de cartas `(X cartas)` dos jogadores na lista pública (mantendo apenas o alerta `⚠️ UNO!` para quem estiver com 1 carta).
+- Permissão de `/iniciar` flexibilizada: qualquer participante do chat pode usar `/iniciar` quando houver pelo menos 2 inscritos no lobby (paridade com V1). O comando `/cancelar` continua restrito ao responsável/owner da partida.
 - Modo inline em grade/carrossel horizontal: exclusão de artigos de texto no fluxo de cartas durante a partida; apenas `InlineQueryResultCachedSticker` são emitidos.
 - Empilhamento de +2 (`StackDrawTwo: true` em `BotRules()`): jogar +2 soma 2 a `DrawCounter` e passa a vez ao próximo jogador sem pular. O próximo jogador pode contra-atacar com outro +2 ou comprar a penalidade acumulada (passando a vez). Enquanto `DrawCounter > 0`, apenas cartas +2 são jogáveis.
 - Seletor de cor estilo V1 limpo: na fase `ChoosingColor`, o jogador da vez recebe 4 artigos de cor ("Escolha sua cor") e 1 artigo de resumo das cartas ("Cartas (toque para estado do jogo):"), retornando imediatamente sem stickers cinzas misturados.

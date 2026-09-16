@@ -54,10 +54,6 @@ func makeGameButtons(gameID uno.GameID) *telego.InlineKeyboardMarkup {
 					Text:                         "🃏 Suas cartas",
 					SwitchInlineQueryCurrentChat: stringPtr(fmt.Sprintf("g_%s", gameID)),
 				},
-				{
-					Text:         "🔄 Atualizar estado",
-					CallbackData: fmt.Sprintf("view_%s", gameID),
-				},
 			},
 		},
 	}

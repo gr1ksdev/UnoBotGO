@@ -144,3 +144,26 @@ Garantir paridade completa com a dinâmica clássica apreciada pelos jogadores n
 ## Impacto
 Controle total do jogador preservado, interface do seletor alinhada ao V1 e suporte nativo à reação festiva via Bot API sem introduzir regressões ou alterar a separação arquitetural da engine.
 
+# Decisão: Simplificação de mensagens, remoção do botão de atualizar e liberação de /iniciar
+
+## Data
+2026-09-15
+
+## Contexto
+O usuário solicitou remover o botão "🔄 Atualizar estado" do teclado inline nas mensagens do jogo, remover a linha de cabeçalho `🃏 UnoBotGO`, ocultar a contagem de cartas `(X cartas)` dos jogadores nas mensagens públicas da mesa e permitir que qualquer membro do chat possa dar `/iniciar` (e não apenas quem criou a partida via `/novo`), mantendo `/cancelar` exclusivo do responsável.
+
+## Decisão tomada
+1. Em `internal/game/service.go`: autorização de `uno.StartGame` atualizada para exigir apenas que o autor esteja no chat da partida (`actor.ChatID != 0`), sem exigir que seja `entry.ownerID`. O comando `uno.CancelGame` permanece restrito exclusivamente ao `entry.ownerID`.
+2. Em `internal/telegram/commands.go`: `makeGameButtons` simplificado para conter apenas o botão `🃏 Suas cartas`, eliminando o botão `🔄 Atualizar estado`.
+3. Em `internal/telegram/renderer.go`:
+   - Removido cabeçalho `🃏 <b>UnoBotGO</b>\n\n` de `RenderPublicState`.
+   - Na lista "Jogadores em jogo:", removida a contagem `(X cartas)`. Se o jogador estiver com 1 carta, exibe `⚠️ <b>UNO!</b>`.
+   - Em `RenderLobby`, atualizado o texto para `Use /iniciar para começar!`.
+
+## Motivo
+Atender à preferência do usuário por mensagens mais compactas e limpas no grupo, manter a privacidade das mãos (sem expor a contagem exata de cartas de cada um a cada lance) e trazer paridade com o V1 onde qualquer membro podia iniciar a partida quando houvesse quórum.
+
+## Impacto
+Mensagens no chat do Telegram ficam mais limpas, diretas e com menos botões desnecessários, melhorando a experiência mobile dos usuários.
+
+

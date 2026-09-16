@@ -101,6 +101,12 @@ func TestRenderer_RenderLobbyAndState(t *testing.T) {
 	}
 
 	stateText := renderer.RenderPublicState(playView)
+	if strings.Contains(stateText, "UnoBotGO") {
+		t.Errorf("expected no UnoBotGO header in state text: %s", stateText)
+	}
+	if strings.Contains(stateText, "cartas") {
+		t.Errorf("expected no cartas count in state text: %s", stateText)
+	}
 	if !strings.Contains(stateText, "UNO!") {
 		t.Errorf("expected UNO warning for 1 card: %s", stateText)
 	}
