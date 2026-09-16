@@ -10,6 +10,10 @@
 - Bypass omitempty telego v1.10.0: `InlineRequestConstructor` emitindo explicitamente `cache_time:0`, `is_personal:true` e `next_offset:""` para `answerInlineQuery`.
 - `SafeAPICaller`: retry estrito de apenas 1 vez para HTTP 429 se `retry_after <= 5s`; timeouts e erros de rede não têm retry automático; URLs sanitizadas para nunca vazar tokens nos logs.
 - Comandos suportados: `/novo`, `/entrar`, `/iniciar`, `/cancelar` (alias `/kill`), `/sair`, `/estado`, `/ajuda` (alias `/start` em grupos/privado).
+- Matching de comandos case-insensitive (`strings.EqualFold(targetBot, h.botUsername)`): aceita `/novo@UnoGoBrBot` e `/novo@unogobrbot`.
+- Regra de lobby no `/novo`: criador NÃO é inscrito automaticamente (permanece responsável observador com 0 inscritos até enviar `/entrar`).
+- Stickers limpos no chat: remoção de botões de validação nos stickers jogados e eliminação de edições de markup.
+- Modo inline em grade/carrossel horizontal: exclusão de artigos de texto no fluxo de cartas durante a partida; apenas `InlineQueryResultCachedSticker` são emitidos.
 - Aceite manual do Telegram: testes automatizados 100% aprovados; roteiro de homologação manual detalhado em `docs/v2-telegram.md`.
 
 ---
