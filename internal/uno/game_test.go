@@ -547,3 +547,56 @@ func TestAdministrativeRequesterWithoutParticipation(t *testing.T) {
 		t.Fatal("empty cancellation")
 	}
 }
+
+func TestStackDrawTwoRules(t *testing.T) {
+	rules := BotRules()
+	p1Hand := []Card{card(Red, DrawTwo), card(Red, Five)}
+	p2Hand := []Card{card(Blue, DrawTwo), card(Red, One)}
+	p3Hand := []Card{card(Green, Seven)}
+	top := card(Red, Three)
+
+	g := scenario(t, rules, [][]Card{p1Hand, p2Hand, p3Hand}, top, nil)
+
+	// P1 plays Red +2
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.Snapshot().Players[0].Hand[0]})
+	s := g.Snapshot()
+	if s.CurrentPlayerID != 2 {
+		t.Fatalf("expected next player 2, got %d", s.CurrentPlayerID)
+	}
+	if s.DrawCounter != 2 {
+		t.Fatalf("expected DrawCounter 2, got %d", s.DrawCounter)
+	}
+
+	// P2 tries to play Red 1 -> should fail because DrawCounter > 0
+	p2RedOne := s.Players[1].Hand[1]
+	rejected(t, g, Action{Type: PlayCard, PlayerID: 2, CardID: p2RedOne, Revision: s.Revision}, ErrCardNotPlayable)
+
+	// P2 counters with Blue +2 -> stacks to 4
+	p2BlueDrawTwo := s.Players[1].Hand[0]
+	apply(t, g, Action{Type: PlayCard, PlayerID: 2, CardID: p2BlueDrawTwo})
+	s = g.Snapshot()
+	if s.CurrentPlayerID != 3 {
+		t.Fatalf("expected next player 3, got %d", s.CurrentPlayerID)
+	}
+	if s.DrawCounter != 4 {
+		t.Fatalf("expected DrawCounter 4, got %d", s.DrawCounter)
+	}
+
+	// P3 cannot counter, so draws
+	handBefore := len(s.Players[2].Hand)
+	r := apply(t, g, Action{Type: DrawCard, PlayerID: 3})
+	s = g.Snapshot()
+
+	if s.DrawCounter != 0 {
+		t.Fatalf("expected DrawCounter reset to 0, got %d", s.DrawCounter)
+	}
+	if len(s.Players[2].Hand) != handBefore+4 {
+		t.Fatalf("expected P3 to have %d cards, got %d", handBefore+4, len(s.Players[2].Hand))
+	}
+	if s.CurrentPlayerID != 1 {
+		t.Fatalf("expected turn to advance to 1, got %d", s.CurrentPlayerID)
+	}
+	if !hasEvent(r, CardsDrawn, 3) {
+		t.Fatal("expected CardsDrawn event for P3")
+	}
+}

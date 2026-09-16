@@ -268,3 +268,347 @@ func TestInlineHandler_Pagination(t *testing.T) {
 		}
 	}
 }
+
+func TestInlineHandler_ChoosingColorCleanV1Layout(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, _ := game.NewService()
+	renderer := NewRenderer(NewUserCache(100))
+	tokens := NewTokenStore(1000, 100, time.Now, nil)
+	dispatcher := NewDispatcher(nil, nil)
+	defer dispatcher.Stop(2 * time.Second)
+
+	inlineHandler := NewInlineHandler(mockAPI, svc, renderer, tokens, time.Minute, dispatcher, nil)
+	ctx := context.Background()
+
+	out, _ := svc.Create(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, game.CreateRequest{ChatName: "Group UNO", Rules: uno.BotRules()})
+	gameID := out.View.GameID
+	_, _ = svc.Apply(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 1, Revision: 0})
+	_, _ = svc.Apply(ctx, game.Actor{PlayerID: 2, ChatID: -1001}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 2, Revision: 1})
+	startOut, _ := svc.Apply(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, gameID, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: 2})
+
+	// Find or draw a wild card for current turn
+	curr := startOut.View.CurrentTurn
+	var chooserID uno.PlayerID
+	for i := 0; i < 50; i++ {
+		pub, _ := svc.PublicView(ctx, gameID)
+		if pub.Phase == uno.ChoosingColor {
+			chooserID = pub.ColorChooserID
+			break
+		}
+		curr = pub.CurrentTurn
+		pv, _ := svc.PlayerView(ctx, game.Actor{PlayerID: curr}, gameID)
+		var wildCardID uno.CardID
+		var otherPlayableID uno.CardID
+		for _, c := range pv.Hand {
+			if c.Playable {
+				if c.Card.Rank >= uno.Wild {
+					wildCardID = c.Card.ID
+					break
+				} else if otherPlayableID == "" {
+					otherPlayableID = c.Card.ID
+				}
+			}
+		}
+		if wildCardID != "" {
+			res, err := svc.Apply(ctx, game.Actor{PlayerID: curr, ChatID: -1001}, gameID, uno.Action{
+				Type:     uno.PlayCard,
+				PlayerID: curr,
+				CardID:   wildCardID,
+				Revision: pub.Revision,
+			})
+			if err == nil && res.View.Phase == uno.ChoosingColor {
+				chooserID = res.View.ColorChooserID
+				break
+			}
+		} else if otherPlayableID != "" {
+			_, _ = svc.Apply(ctx, game.Actor{PlayerID: curr, ChatID: -1001}, gameID, uno.Action{
+				Type:     uno.PlayCard,
+				PlayerID: curr,
+				CardID:   otherPlayableID,
+				Revision: pub.Revision,
+			})
+		} else {
+			if pv.DrawnCardID == "" {
+				_, _ = svc.Apply(ctx, game.Actor{PlayerID: curr, ChatID: -1001}, gameID, uno.Action{
+					Type:     uno.DrawCard,
+					PlayerID: curr,
+					Revision: pub.Revision,
+				})
+			} else {
+				_, _ = svc.Apply(ctx, game.Actor{PlayerID: curr, ChatID: -1001}, gameID, uno.Action{
+					Type:     uno.PassTurn,
+					PlayerID: curr,
+					Revision: pub.Revision,
+				})
+			}
+		}
+	}
+
+	if chooserID == 0 {
+		t.Skip("Could not trigger ChoosingColor within turn limit")
+	}
+
+	// 1. Query inline as the color chooser
+	inlineHandler.HandleInlineQuery(ctx, &telego.InlineQuery{
+		ID:    "q_choose_color",
+		From:  telego.User{ID: int64(chooserID), FirstName: "Chooser"},
+		Query: "g_" + string(gameID),
+	})
+
+	results := mockAPI.AnsweredInlines[len(mockAPI.AnsweredInlines)-1].Results
+	if len(results) != 5 {
+		t.Fatalf("expected exactly 5 articles for chooser (4 colors + 1 hand), got %d results", len(results))
+	}
+
+	// Verify all 5 results are Articles, 0 stickers!
+	for i, r := range results {
+		art, ok := r.(*telego.InlineQueryResultArticle)
+		if !ok {
+			t.Fatalf("result %d is not article: %T", i, r)
+		}
+		if i < 4 {
+			if art.Title != "Escolha sua cor" {
+				t.Errorf("expected title 'Escolha sua cor', got %q", art.Title)
+			}
+		} else {
+			if art.Title != "Cartas (toque para estado do jogo):" {
+				t.Errorf("expected hand summary title, got %q", art.Title)
+			}
+		}
+	}
+
+	// 2. Query inline as non-chooser
+	nonChooserID := uno.PlayerID(1)
+	if chooserID == 1 {
+		nonChooserID = 2
+	}
+	inlineHandler.HandleInlineQuery(ctx, &telego.InlineQuery{
+		ID:    "q_non_chooser",
+		From:  telego.User{ID: int64(nonChooserID), FirstName: "NonChooser"},
+		Query: "g_" + string(gameID),
+	})
+
+	ncResults := mockAPI.AnsweredInlines[len(mockAPI.AnsweredInlines)-1].Results
+	if len(ncResults) == 0 {
+		t.Fatalf("expected non-chooser results")
+	}
+	waitArt, ok := ncResults[0].(*telego.InlineQueryResultArticle)
+	if !ok || waitArt.Title != "Aguardando escolha de cor" {
+		t.Fatalf("expected 'Aguardando escolha de cor' article, got %+v", ncResults[0])
+	}
+}
+
+func TestInlineHandler_DrawTwoStackingDisplay(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, _ := game.NewService()
+	renderer := NewRenderer(NewUserCache(100))
+	tokens := NewTokenStore(1000, 100, time.Now, nil)
+	dispatcher := NewDispatcher(nil, nil)
+	defer dispatcher.Stop(2 * time.Second)
+
+	inlineHandler := NewInlineHandler(mockAPI, svc, renderer, tokens, time.Minute, dispatcher, nil)
+	ctx := context.Background()
+
+	out, _ := svc.Create(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, game.CreateRequest{ChatName: "Group UNO", Rules: uno.BotRules()})
+	gameID := out.View.GameID
+	_, _ = svc.Apply(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 1, Revision: 0})
+	_, _ = svc.Apply(ctx, game.Actor{PlayerID: 2, ChatID: -1001}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 2, Revision: 1})
+	_, _ = svc.Apply(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, gameID, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: 2})
+
+	// Find or draw a DrawTwo card for current player
+	var p2 uno.PlayerID
+	for i := 0; i < 50; i++ {
+		pub, _ := svc.PublicView(ctx, gameID)
+		if pub.Phase != uno.TakingTurn {
+			break
+		}
+		curr := pub.CurrentTurn
+		pv, _ := svc.PlayerView(ctx, game.Actor{PlayerID: curr}, gameID)
+		var d2CardID uno.CardID
+		var otherPlayableID uno.CardID
+		for _, c := range pv.Hand {
+			if c.Playable {
+				if c.Card.Rank == uno.DrawTwo {
+					d2CardID = c.Card.ID
+					break
+				} else if otherPlayableID == "" && c.Card.Rank < uno.Wild {
+					otherPlayableID = c.Card.ID
+				}
+			}
+		}
+		if d2CardID != "" {
+			res, err := svc.Apply(ctx, game.Actor{PlayerID: curr, ChatID: -1001}, gameID, uno.Action{
+				Type:     uno.PlayCard,
+				PlayerID: curr,
+				CardID:   d2CardID,
+				Revision: pub.Revision,
+			})
+			if err == nil && res.View.DrawCounter > 0 {
+				p2 = res.View.CurrentTurn
+				break
+			}
+		} else if otherPlayableID != "" {
+			_, _ = svc.Apply(ctx, game.Actor{PlayerID: curr, ChatID: -1001}, gameID, uno.Action{
+				Type:     uno.PlayCard,
+				PlayerID: curr,
+				CardID:   otherPlayableID,
+				Revision: pub.Revision,
+			})
+		} else {
+			if pv.DrawnCardID == "" {
+				_, _ = svc.Apply(ctx, game.Actor{PlayerID: curr, ChatID: -1001}, gameID, uno.Action{
+					Type:     uno.DrawCard,
+					PlayerID: curr,
+					Revision: pub.Revision,
+				})
+			} else {
+				_, _ = svc.Apply(ctx, game.Actor{PlayerID: curr, ChatID: -1001}, gameID, uno.Action{
+					Type:     uno.PassTurn,
+					PlayerID: curr,
+					Revision: pub.Revision,
+				})
+			}
+		}
+	}
+
+	if p2 == 0 {
+		t.Skip("Could not play DrawTwo within turn limit")
+	}
+
+	pub, _ := svc.PublicView(ctx, gameID)
+	if pub.DrawCounter != 2 {
+		t.Fatalf("expected DrawCounter 2, got %d", pub.DrawCounter)
+	}
+
+	// P2 opens inline query
+	inlineHandler.HandleInlineQuery(ctx, &telego.InlineQuery{
+		ID:    "q_p2_draw2",
+		From:  telego.User{ID: int64(p2), FirstName: "P2"},
+		Query: "g_" + string(gameID),
+	})
+
+	results := mockAPI.AnsweredInlines[len(mockAPI.AnsweredInlines)-1].Results
+	var drawSticker *telego.InlineQueryResultCachedSticker
+	for _, r := range results {
+		if st, ok := r.(*telego.InlineQueryResultCachedSticker); ok && st.StickerFileID == Stickers["option_draw"] {
+			drawSticker = st
+			break
+		}
+	}
+
+	if drawSticker == nil {
+		t.Fatalf("expected draw option sticker")
+	}
+	txtContent, ok := drawSticker.InputMessageContent.(*telego.InputTextMessageContent)
+	if !ok || txtContent.MessageText != "Comprando 2 cartas" {
+		t.Fatalf("expected 'Comprando 2 cartas', got %+v", drawSticker.InputMessageContent)
+	}
+
+	// Verify non-DrawTwo cards are not playable
+	p2View, _ := svc.PlayerView(ctx, game.Actor{PlayerID: p2}, gameID)
+	for _, c := range p2View.Hand {
+		if c.Card.Rank != uno.DrawTwo && c.Playable {
+			t.Errorf("card %v should not be playable when DrawCounter > 0", c.Card)
+		}
+	}
+}
+
+func TestInlineHandler_UnoAnnouncedReaction(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, _ := game.NewService()
+	renderer := NewRenderer(NewUserCache(100))
+	tokens := NewTokenStore(1000, 100, time.Now, nil)
+	dispatcher := NewDispatcher(nil, nil)
+	defer dispatcher.Stop(2 * time.Second)
+
+	inlineHandler := NewInlineHandler(mockAPI, svc, renderer, tokens, time.Minute, dispatcher, nil)
+	ctx := context.Background()
+
+	out, _ := svc.Create(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, game.CreateRequest{ChatName: "Group UNO", Rules: uno.BotRules()})
+	gameID := out.View.GameID
+	_, _ = svc.Apply(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 1, Revision: 0})
+	_, _ = svc.Apply(ctx, game.Actor{PlayerID: 2, ChatID: -1001}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 2, Revision: 1})
+	_, _ = svc.Apply(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, gameID, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: 2})
+
+	unoAnnouncedTriggered := false
+	for step := 0; step < 120; step++ {
+		pub, err := svc.PublicView(ctx, gameID)
+		if err != nil || pub.Closed {
+			break
+		}
+		if pub.Phase == uno.ChoosingColor {
+			_, _ = svc.Apply(ctx, game.Actor{PlayerID: pub.ColorChooserID, ChatID: -1001}, gameID, uno.Action{
+				Type:     uno.ChooseColor,
+				PlayerID: pub.ColorChooserID,
+				Color:    uno.Red,
+				Revision: pub.Revision,
+			})
+			continue
+		}
+		curr := pub.CurrentTurn
+		pv, _ := svc.PlayerView(ctx, game.Actor{PlayerID: curr}, gameID)
+		var playCardID uno.CardID
+		for _, c := range pv.Hand {
+			if c.Playable {
+				playCardID = c.Card.ID
+				break
+			}
+		}
+		if playCardID != "" {
+			if len(pv.Hand) == 2 {
+				tok, _ := tokens.CreateActionToken(curr, gameID, -1001, uno.Action{
+					Type:     uno.PlayCard,
+					PlayerID: curr,
+					CardID:   playCardID,
+					Revision: pub.Revision,
+				}, time.Minute)
+
+				inlineHandler.HandleChosenInlineResult(ctx, &telego.ChosenInlineResult{
+					ResultID: tok,
+					From:     telego.User{ID: int64(curr), FirstName: "UnoPlayer"},
+				})
+
+				time.Sleep(150 * time.Millisecond)
+
+				reactions := mockAPI.GetSentReactions()
+				if len(reactions) == 0 {
+					t.Fatalf("expected SetMessageReaction to be called on UNO announcement")
+				}
+				reaction := reactions[0]
+				if len(reaction.Reaction) == 0 {
+					t.Fatalf("expected at least 1 reaction")
+				}
+				emojiReaction, ok := reaction.Reaction[0].(*telego.ReactionTypeEmoji)
+				if !ok || emojiReaction.Emoji != "🥳" {
+					t.Fatalf("expected 🥳 emoji reaction, got %+v", reaction.Reaction[0])
+				}
+				unoAnnouncedTriggered = true
+				break
+			}
+			_, _ = svc.Apply(ctx, game.Actor{PlayerID: curr, ChatID: -1001}, gameID, uno.Action{
+				Type:     uno.PlayCard,
+				PlayerID: curr,
+				CardID:   playCardID,
+				Revision: pub.Revision,
+			})
+		} else {
+			if pv.DrawnCardID == "" {
+				_, _ = svc.Apply(ctx, game.Actor{PlayerID: curr, ChatID: -1001}, gameID, uno.Action{
+					Type:     uno.DrawCard,
+					PlayerID: curr,
+					Revision: pub.Revision,
+				})
+			} else {
+				_, _ = svc.Apply(ctx, game.Actor{PlayerID: curr, ChatID: -1001}, gameID, uno.Action{
+					Type:     uno.PassTurn,
+					PlayerID: curr,
+					Revision: pub.Revision,
+				})
+			}
+		}
+	}
+
+	if !unoAnnouncedTriggered {
+		t.Skip("Could not reach 2-to-1 card state within step limit")
+	}
+}

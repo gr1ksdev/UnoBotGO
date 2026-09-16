@@ -39,6 +39,7 @@ type PublicGameView struct {
 	ActiveColor    uno.Color
 	TopCard        *uno.Card
 	ColorChooserID uno.PlayerID
+	DrawCounter    int
 	Players        []PublicPlayer
 	Order          []uno.PlayerID
 	Placements     []uno.Placement
@@ -88,6 +89,7 @@ func publicView(entry *managedGame, state uno.State) PublicGameView {
 		CreatorID: entry.creatorID, OwnerID: entry.ownerID, Revision: state.Revision,
 		Phase: state.Phase, Rules: state.Rules, CurrentTurn: state.CurrentPlayerID,
 		Direction: state.Direction, ActiveColor: state.ActiveColor,
+		DrawCounter: state.DrawCounter,
 		Order: slices.Clone(state.Order), Placements: slices.Clone(state.Placements),
 		Closed: state.Phase == uno.Finished, CloseReason: CloseReason(state.FinishReason),
 		Players: make([]PublicPlayer, 0, len(state.Players)),

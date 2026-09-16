@@ -18,6 +18,7 @@ type mockBotAPI struct {
 
 	SentMessages       []telego.SendMessageParams
 	SentStickers       []telego.SendStickerParams
+	SentReactions      []telego.SetMessageReactionParams
 	EditedMessages     []telego.EditMessageTextParams
 	EditedMarkups      []telego.EditMessageReplyMarkupParams
 	AnsweredInlines    []telego.AnswerInlineQueryParams
@@ -127,6 +128,15 @@ func (m *mockBotAPI) AnswerCallbackQuery(ctx context.Context, params *telego.Ans
 	return nil
 }
 
+func (m *mockBotAPI) SetMessageReaction(ctx context.Context, params *telego.SetMessageReactionParams) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if params != nil {
+		m.SentReactions = append(m.SentReactions, *params)
+	}
+	return nil
+}
+
 func (m *mockBotAPI) LastSentMessage() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -141,5 +151,13 @@ func (m *mockBotAPI) GetRegisteredCommands() []telego.BotCommand {
 	defer m.mu.Unlock()
 	res := make([]telego.BotCommand, len(m.RegisteredCommands))
 	copy(res, m.RegisteredCommands)
+	return res
+}
+
+func (m *mockBotAPI) GetSentReactions() []telego.SetMessageReactionParams {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	res := make([]telego.SetMessageReactionParams, len(m.SentReactions))
+	copy(res, m.SentReactions)
 	return res
 }

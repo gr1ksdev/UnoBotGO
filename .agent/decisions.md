@@ -118,3 +118,29 @@ O V2 torna-se jogável de ponta a ponta no Telegram. A engine e o serviço mant�
 ## Documentação
 - docs/v2-telegram.md: arquitetura detalhada e roteiro de homologação manual.
 - README.md: visão geral e comandos.
+
+# Decisão: Paridade V1 de empilhamento +2, seletor de cor limpo e grito de UNO
+
+## Data
+2026-09-15
+
+## Contexto
+Na jogabilidade do V1, jogar um `+2` não pulava o oponente imediatamente; transferia o turno para que o jogador pudesse ver suas cartas e rebater com outro `+2` (acumulando a penalidade) ou comprar as cartas acumuladas. No seletor de cor, o jogador recebia 4 opções de cor limpas e um 5º artigo de resumo da mão, sem stickers cinzas misturados. Por fim, o anúncio de UNO devia ser enviado em mensagem dedicada no grupo com reação festiva 🥳.
+
+## Decisão tomada
+1. Adicionada regra `StackDrawTwo: true` a `uno.BotRules()` e campo `DrawCounter int` em `uno.State`.
+2. Em `internal/uno/game.go`:
+   - Quando `s.Rules.StackDrawTwo && card.Rank == DrawTwo`: `s.DrawCounter += 2` e a vez passa para o próximo jogador sem skip.
+   - Enquanto `s.DrawCounter > 0`: apenas cartas `DrawTwo` podem ser jogadas; se o jogador comprar, recebe `s.DrawCounter` cartas de uma vez, zera o contador e o turno avança.
+3. Em `internal/telegram/inline.go`:
+   - Na fase `ChoosingColor`, se o jogador for o selecionador da cor, retorna exclusivamente 4 artigos de cor ("Escolha sua cor") e 1 artigo de resumo das cartas da mão ("Cartas: ..."), retornando imediatamente sem misturar stickers cinzas.
+   - Na fase `TakingTurn` com `DrawCounter > 0`, o sticker de compra exibe "Comprando X cartas" e as cartas não-+2 da mão ficam desabilitadas (cinzas).
+   - Ao detectar `uno.UnoAnnounced` em `HandleChosenInlineResult`, o bot envia uma mensagem separada no grupo (`<link> <b>Gritou UNO!</b>`) e aplica a reação `🥳` via `SetMessageReaction`.
+4. Interface `BotAPI` estendida com `SetMessageReaction(ctx context.Context, params *telego.SetMessageReactionParams) error`.
+
+## Motivo
+Garantir paridade completa com a dinâmica clássica apreciada pelos jogadores no V1, eliminando a frustração de perder o turno compulsoriamente sem poder visualizar a mão ou rebater com outro +2, mantendo a interface inline limpa na escolha de cores e celebrando o grito de UNO com a reação festiva solicitada.
+
+## Impacto
+Controle total do jogador preservado, interface do seletor alinhada ao V1 e suporte nativo à reação festiva via Bot API sem introduzir regressões ou alterar a separação arquitetural da engine.
+
