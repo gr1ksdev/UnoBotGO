@@ -21,6 +21,7 @@ type BotAPI interface {
 	SetMyCommands(ctx context.Context, params *telego.SetMyCommandsParams) error
 	UpdatesViaLongPolling(ctx context.Context, params *telego.GetUpdatesParams, options ...telego.LongPollingOption) (<-chan telego.Update, error)
 	SendMessage(ctx context.Context, params *telego.SendMessageParams) (*telego.Message, error)
+	SendSticker(ctx context.Context, params *telego.SendStickerParams) (*telego.Message, error)
 	EditMessageText(ctx context.Context, params *telego.EditMessageTextParams) (*telego.Message, error)
 	EditMessageReplyMarkup(ctx context.Context, params *telego.EditMessageReplyMarkupParams) (*telego.Message, error)
 	AnswerInlineQuery(ctx context.Context, params *telego.AnswerInlineQueryParams) error
