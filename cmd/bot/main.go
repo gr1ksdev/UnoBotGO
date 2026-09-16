@@ -55,6 +55,7 @@ func main() {
 
 	// 6. Assemble bot application
 	bot := telegram.New(telegoBot, svc, tokens, renderer, cfg.InlineTokenTTL, logger)
+	bot.SetTurnTimeout(cfg.TurnTimeout)
 
 	// 7. Setup graceful shutdown signals
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

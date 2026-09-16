@@ -13,10 +13,25 @@ type Rules struct {
 	AllowLateJoin bool
 	NumberedStart bool
 	StackDrawTwo  bool
+	// Caseiro permits a Wild Draw Four to answer a pending Draw Two and a
+	// Draw Two of the chosen colour to answer a pending Wild Draw Four.
+	StackWildDrawFourOnTwo bool
+	StackDrawTwoOnWildFour bool
 }
 
 func ClassicRules() Rules { return Rules{EndPolicy: FirstWinner} }
-func BotRules() Rules     { return Rules{EndPolicy: Placements, AllowLateJoin: true, NumberedStart: true, StackDrawTwo: true} }
+func BotRules() Rules {
+	return Rules{EndPolicy: Placements, AllowLateJoin: true, NumberedStart: true, StackDrawTwo: true}
+}
+
+// CaseiroRules preserves the homologated bot lifecycle while enabling the
+// two explicit V1 house-rule responses for accumulated penalties.
+func CaseiroRules() Rules {
+	r := BotRules()
+	r.StackWildDrawFourOnTwo = true
+	r.StackDrawTwoOnWildFour = true
+	return r
+}
 
 // CanPlayDrawFour is the official color restriction, independent of turn/UI.
 // Evaluate the entire hand, including after a voluntary draw.

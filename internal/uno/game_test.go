@@ -600,3 +600,33 @@ func TestStackDrawTwoRules(t *testing.T) {
 		t.Fatal("expected CardsDrawn event for P3")
 	}
 }
+
+func TestCaseiroPenaltyResponses(t *testing.T) {
+	g := scenario(t, CaseiroRules(), [][]Card{
+		{card(Red, DrawTwo), card(Red, Five)},
+		{card(NoColor, WildDrawFour), card(Blue, Nine)},
+		{card(Red, DrawTwo), card(Green, Nine)},
+	}, card(Red, Three), nil)
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.Snapshot().Players[0].Hand[0]})
+	apply(t, g, Action{Type: PlayCard, PlayerID: 2, CardID: g.Snapshot().Players[1].Hand[0]})
+	if s := g.Snapshot(); s.Phase != ChoosingColor || s.DrawCounter != 2 {
+		t.Fatalf("expected pending caseiro color with draw counter 2: %+v", s)
+	}
+	apply(t, g, Action{Type: ChooseColor, PlayerID: 2, Color: Red})
+	s := g.Snapshot()
+	if s.CurrentPlayerID != 3 || s.DrawCounter != 4 {
+		t.Fatalf("expected target turn with accumulated +4: %+v", s)
+	}
+	if err := g.CanPlay(3, s.Players[2].Hand[0]); err != nil {
+		t.Fatalf("matching +2 should answer +4 in caseiro: %v", err)
+	}
+}
+
+func TestSkipTurnAction(t *testing.T) {
+	g := scenario(t, BotRules(), [][]Card{{card(Red, One)}, {card(Blue, Two)}}, card(Green, Three), nil)
+	r := apply(t, g, Action{Type: SkipTurn, PlayerID: 1})
+	s := g.Snapshot()
+	if s.CurrentPlayerID != 2 || !hasEvent(r, PlayerSkipped, 1) {
+		t.Fatalf("skip did not advance turn: %+v", s)
+	}
+}

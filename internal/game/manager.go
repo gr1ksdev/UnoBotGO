@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
@@ -30,13 +31,14 @@ type indexRecord struct {
 }
 
 type managedGame struct {
-	mu        sync.Mutex
-	engine    *uno.Game // unique runtime owner; nil once closed
-	chatID    ChatID
-	chatName  string
-	creatorID uno.PlayerID
-	ownerID   uno.PlayerID
-	final     *PublicGameView // public projection only, accessed under mu
+	mu          sync.Mutex
+	engine      *uno.Game // unique runtime owner; nil once closed
+	chatID      ChatID
+	chatName    string
+	creatorID   uno.PlayerID
+	ownerID     uno.PlayerID
+	turnStarted time.Time
+	final       *PublicGameView // public projection only, accessed under mu
 }
 
 func newManager(limit int) *manager {
@@ -68,7 +70,7 @@ func (m *manager) create(ctx context.Context, actor Actor, req CreateRequest) (O
 	if err != nil {
 		return Outcome{}, err
 	}
-	entry := &managedGame{engine: engine, chatID: actor.ChatID, chatName: req.ChatName, creatorID: actor.PlayerID, ownerID: actor.PlayerID}
+	entry := &managedGame{engine: engine, chatID: actor.ChatID, chatName: req.ChatName, creatorID: actor.PlayerID, ownerID: actor.PlayerID, turnStarted: time.Now()}
 	view := publicView(entry, engine.Snapshot())
 	// Entry is still private to this call. Creation publishes only an empty lobby.
 	m.indexMu.Lock()
@@ -108,6 +110,9 @@ func (m *manager) lockGame(ctx context.Context, id uno.GameID) (*managedGame, er
 // publish completes every successful engine action while the caller holds
 // entry.mu. No cancellation checks after Apply: an accepted action must publish.
 func (m *manager) publish(entry *managedGame, before, after uno.State, result uno.Result) Outcome {
+	if before.CurrentPlayerID != after.CurrentPlayerID || before.Phase != after.Phase {
+		entry.turnStarted = time.Now()
+	}
 	transferOwner(entry, before, after)
 	view := publicView(entry, after)
 	if view.Closed {
@@ -216,4 +221,37 @@ func (m *manager) findPlayer(ctx context.Context, id uno.PlayerID) ([]GameSummar
 		return 0
 	})
 	return result, nil
+}
+
+func (m *manager) skipExpired(ctx context.Context, timeout time.Duration, now time.Time) []Outcome {
+	m.indexMu.RLock()
+	entries := make([]*managedGame, 0, len(m.byID))
+	for _, record := range m.byID {
+		if record.entry.final == nil {
+			entries = append(entries, record.entry)
+		}
+	}
+	m.indexMu.RUnlock()
+	results := make([]Outcome, 0)
+	for _, entry := range entries {
+		if ctx.Err() != nil {
+			break
+		}
+		entry.mu.Lock()
+		if entry.final != nil || entry.engine == nil || now.Sub(entry.turnStarted) < timeout {
+			entry.mu.Unlock()
+			continue
+		}
+		before := entry.engine.Snapshot()
+		if before.Phase != uno.TakingTurn || before.CurrentPlayerID == 0 {
+			entry.mu.Unlock()
+			continue
+		}
+		result, err := entry.engine.Apply(uno.Action{Type: uno.SkipTurn, PlayerID: before.CurrentPlayerID, Revision: before.Revision})
+		if err == nil {
+			results = append(results, m.publish(entry, before, entry.engine.Snapshot(), result))
+		}
+		entry.mu.Unlock()
+	}
+	return results
 }

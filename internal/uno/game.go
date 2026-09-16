@@ -73,7 +73,7 @@ func (g *Game) Apply(a Action) (Result, error) {
 	if g.state.Revision == math.MaxUint64 {
 		return Result{}, ErrInvalidState
 	}
-	if a.PlayerID <= 0 || a.Type < JoinGame || a.Type > CancelGame {
+	if a.PlayerID <= 0 || a.Type < JoinGame || a.Type > SkipTurn {
 		return Result{}, ErrInvalidAction
 	}
 	if (a.Type != PlayCard && a.CardID != "") || (a.Type != ChooseColor && a.Color != NoColor) || (a.Type != StartGame && a.DealerID != 0) {
@@ -283,6 +283,14 @@ func (g *Game) takeAction(s *State, a Action, events *[]Event) error {
 		}
 		return g.choose(s, a.Color, events)
 	}
+	if a.Type == SkipTurn {
+		if s.Phase != TakingTurn {
+			return ErrInvalidAction
+		}
+		*events = append(*events, Event{Type: PlayerSkipped, PlayerID: a.PlayerID})
+		changeTurn(s, s.next(a.PlayerID, 1), events)
+		return nil
+	}
 	switch a.Type {
 	case PlayCard:
 		return g.play(s, a.CardID, events)
@@ -356,8 +364,17 @@ func playable(s *State, player PlayerID, id CardID) error {
 		return ErrCardNotPlayable
 	}
 	if s.DrawCounter > 0 {
+		if card.Rank == WildDrawFour && s.Rules.StackWildDrawFourOnTwo {
+			return nil
+		}
 		if card.Rank != DrawTwo {
 			return ErrCardNotPlayable
+		}
+		if s.Rules.StackDrawTwoOnWildFour {
+			top, _ := s.card(s.DiscardPile[len(s.DiscardPile)-1])
+			if top.Rank == WildDrawFour && card.Color != s.ActiveColor {
+				return ErrCardNotPlayable
+			}
 		}
 		return nil
 	}
@@ -451,10 +468,14 @@ func (g *Game) choose(s *State, color Color, events *[]Event) error {
 	}
 	next := pending.Target
 	if pending.DrawCount != 0 {
-		if err := g.penalty(s, next, pending.DrawCount, events); err != nil {
-			return err
+		if s.Rules.StackDrawTwoOnWildFour {
+			s.DrawCounter = pending.DrawCount
+		} else {
+			if err := g.penalty(s, next, pending.DrawCount, events); err != nil {
+				return err
+			}
+			next = s.next(next, 1)
 		}
-		next = s.next(next, 1)
 	}
 	completePlay(s, pending.Actor, next, events)
 	return nil
