@@ -162,9 +162,9 @@ func (r *Renderer) RenderLobby(view game.PublicGameView) string {
 	var sb strings.Builder
 	sb.WriteString("🎮 <b>Partida de UNO</b>\n\n")
 	sb.WriteString(fmt.Sprintf("Responsável: %s\n", r.userCache.FormatLink(view.OwnerID)))
-	rulesDesc := "ClassicRules"
-	if view.Rules.EndPolicy == uno.Placements {
-		rulesDesc = "BotRules (colocações e entrada tardia)"
+	rulesDesc := "Clássico"
+	if view.Rules.StackWildDrawFourOnTwo || view.Rules.StackDrawTwoOnWildFour {
+		rulesDesc = "Caseiro"
 	}
 	sb.WriteString(fmt.Sprintf("Regras: %s\n\n", rulesDesc))
 

@@ -28,7 +28,11 @@ type Bot struct {
 	inlineHandler *InlineHandler
 	logger        *slog.Logger
 	username      string
+	turnTimeout   time.Duration
 }
+
+// SetTurnTimeout configures automatic inactivity skips at the application layer.
+func (b *Bot) SetTurnTimeout(timeout time.Duration) { b.turnTimeout = timeout }
 
 func New(
 	api BotAPI,
@@ -134,6 +138,9 @@ func (b *Bot) Run(ctx context.Context) error {
 	}
 
 	b.logger.Info("started long polling updates", "username", b.username)
+	if b.turnTimeout > 0 {
+		go b.autoSkipLoop(ctx)
+	}
 
 	for {
 		select {
@@ -148,6 +155,29 @@ func (b *Bot) Run(ctx context.Context) error {
 				return nil
 			}
 			b.processUpdate(ctx, update)
+		}
+	}
+}
+
+func (b *Bot) autoSkipLoop(ctx context.Context) {
+	interval := b.turnTimeout / 4
+	if interval < time.Second {
+		interval = time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			for _, outcome := range b.service.AutoSkipExpired(ctx, b.turnTimeout) {
+				chatID := outcome.View.ChatID
+				b.dispatcher.EnqueueChat(chatID, func(taskCtx context.Context) {
+					text := "⏱️ O tempo acabou; o turno foi pulado.\n\n" + b.renderer.RenderPublicState(outcome.View)
+					b.cmdHandler.reply(taskCtx, int64(chatID), text, makeGameButtons(outcome.View.GameID))
+				})
+			}
 		}
 	}
 }

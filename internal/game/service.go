@@ -3,6 +3,7 @@ package game
 import (
 	"context"
 	"slices"
+	"time"
 
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
@@ -195,4 +196,14 @@ func (s *Service) FindPlayerGames(ctx context.Context, actor Actor) ([]GameSumma
 		return nil, ErrInvalidArgument
 	}
 	return s.manager.findPlayer(ctx, actor.PlayerID)
+}
+
+// AutoSkipExpired advances turns that exceeded timeout. It is intended for a
+// single application-level scheduler; no clock or goroutine is part of uno.Game.
+func (s *Service) AutoSkipExpired(ctx context.Context, timeout time.Duration) []Outcome {
+	if ctx == nil || timeout <= 0 {
+		return nil
+	}
+	now := time.Now()
+	return s.manager.skipExpired(ctx, timeout, now)
 }

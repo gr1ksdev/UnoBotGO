@@ -4,9 +4,27 @@ import (
 	"errors"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
+
+func TestAutoSkipExpiredTurn(t *testing.T) {
+	s := testService(t)
+	v := create(t, s, 77, 99, uno.BotRules())
+	join(t, s, v, 1)
+	join(t, s, v, 2)
+	act(t, s, v.GameID, Actor{PlayerID: 99, ChatID: 77}, uno.Action{Type: uno.StartGame})
+	e := s.manager.byID[v.GameID].entry
+	e.mu.Lock()
+	current := e.engine.Snapshot().CurrentPlayerID
+	e.turnStarted = time.Now().Add(-time.Minute)
+	e.mu.Unlock()
+	outs := s.AutoSkipExpired(t.Context(), time.Second)
+	if len(outs) != 1 || outs[0].View.CurrentTurn == current {
+		t.Fatalf("expected expired turn to advance: %+v", outs)
+	}
+}
 
 // Exact, validated positions; fixtures never become a public recovery API.
 func position(t *testing.T, s *Service, rules uno.Rules, wild bool) PublicGameView {

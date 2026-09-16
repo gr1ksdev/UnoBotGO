@@ -136,7 +136,11 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 	// Group command handling
 	switch cmdName {
 	case "novo":
-		h.handleNovo(ctx, actorID, chatID, msg.Chat.Title)
+		mode := "classic"
+		if len(fields) > 1 && strings.EqualFold(fields[1], "caseiro") {
+			mode = "caseiro"
+		}
+		h.handleNovo(ctx, actorID, chatID, msg.Chat.Title, mode)
 	case "entrar":
 		h.handleEntrar(ctx, actorID, chatID)
 	case "iniciar", "start":
@@ -152,10 +156,14 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 	}
 }
 
-func (h *CommandHandler) handleNovo(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID, chatTitle string) {
+func (h *CommandHandler) handleNovo(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID, chatTitle, mode string) {
+	rules := uno.BotRules()
+	if strings.EqualFold(mode, "caseiro") {
+		rules = uno.CaseiroRules()
+	}
 	req := game.CreateRequest{
 		ChatName: chatTitle,
-		Rules:    uno.BotRules(),
+		Rules:    rules,
 	}
 	actor := game.Actor{PlayerID: actorID, ChatID: chatID}
 

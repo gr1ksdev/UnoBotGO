@@ -7,15 +7,12 @@ arquivos exclusivos do V1.
 ## Fluxo
 
 1. Desenvolva e faça commits em `dev`.
-2. Execute `go test ./...`, `go test -race ./...`, `go vet ./...` e `go build ./...`.
-3. Gere uma árvore pública a partir do estado aprovado, mantendo somente arquivos
-   do V2 e documentação técnica humana.
-4. Atualize `main` com essa árvore pública e abra uma revisão antes de publicar.
+2. O CI de `dev` executa testes, race detector, vet, build e validação Docker.
+3. Gere uma árvore pública a partir do estado aprovado, mantendo somente
+   arquivos do V2 e documentação técnica humana.
+4. Atualize `main` com essa árvore pública e deixe o CI validar e publicar a
+   imagem no GHCR.
 
-Não faça merge direto de `dev` em `main`: isso reintroduziria `.agent/`, planos,
-prompts ou histórico privado. A branch `main` deve continuar sendo publicada como
-um histórico independente. O `.gitignore` de `main` bloqueia os nomes de artefatos
-locais mais comuns; a verificação de CI também rejeita esses caminhos se forem
-adicionados explicitamente.
-
-O remoto legado não faz parte desse fluxo e não deve receber force push.
+Não faça merge direto de `dev` em `main`: os históricos são independentes e a
+árvore pública não deve receber artefatos internos. A publicação usa as tags
+`latest` e `sha-<commit>` em `ghcr.io/gr1ksdev/unobotgo`.

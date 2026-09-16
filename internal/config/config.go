@@ -21,6 +21,7 @@ var (
 	ErrInvalidTokenTTL     = errors.New("config: INLINE_TOKEN_TTL must be positive")
 	ErrInvalidTokenLimit   = errors.New("config: INLINE_TOKEN_LIMIT must be positive")
 	ErrInvalidUserTokenLim = errors.New("config: INLINE_TOKEN_USER_LIMIT must be positive")
+	ErrInvalidTurnTimeout  = errors.New("config: TURN_TIMEOUT must be positive")
 
 	tokenRegex = regexp.MustCompile(`^[0-9]{3,}:[a-zA-Z0-9_-]{10,}$`)
 )
@@ -32,6 +33,7 @@ type Config struct {
 	InlineTokenTTL     time.Duration
 	InlineTokenLimit   int
 	InlineTokenUserLim int
+	TurnTimeout        time.Duration
 }
 
 // Load loads configuration from environment variables, optionally reading from .env if present.
@@ -59,6 +61,7 @@ func LoadFromLookup(lookup func(string) (string, bool)) (*Config, error) {
 		InlineTokenTTL:     2 * time.Minute,
 		InlineTokenLimit:   20000,
 		InlineTokenUserLim: 512,
+		TurnTimeout:        2 * time.Minute,
 	}
 
 	if val, ok := lookup("LOG_LEVEL"); ok && strings.TrimSpace(val) != "" {
@@ -106,6 +109,13 @@ func LoadFromLookup(lookup func(string) (string, bool)) (*Config, error) {
 			return nil, ErrInvalidUserTokenLim
 		}
 		cfg.InlineTokenUserLim = n
+	}
+	if val, ok := lookup("TURN_TIMEOUT"); ok && strings.TrimSpace(val) != "" {
+		d, err := time.ParseDuration(strings.TrimSpace(val))
+		if err != nil || d <= 0 {
+			return nil, ErrInvalidTurnTimeout
+		}
+		cfg.TurnTimeout = d
 	}
 
 	return cfg, nil

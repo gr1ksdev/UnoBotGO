@@ -11,6 +11,7 @@ const (
 	PassTurn
 	ChooseColor
 	CancelGame
+	SkipTurn
 )
 
 // Action uses only domain IDs. The application authenticates PlayerID and
