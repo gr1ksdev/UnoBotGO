@@ -50,6 +50,7 @@ type State struct {
 	Direction       int
 	ActiveColor     Color
 	DrawnCardID     CardID
+	DrawCounter     int
 	Pending         *ColorChoice
 	Placements      []Placement
 	FinishReason    FinishReason
@@ -102,8 +103,8 @@ func (s *State) next(id PlayerID, steps int) PlayerID {
 // Validate checks structural invariants for tests, debug and recovery.
 func (s State) Validate() error {
 	bad := func(message string) error { return fmt.Errorf("%w: %s", ErrInvalidState, message) }
-	if s.ID == "" || s.Phase > Finished || (s.Direction != 1 && s.Direction != -1) {
-		return bad("identity, phase or direction")
+	if s.ID == "" || s.Phase > Finished || (s.Direction != 1 && s.Direction != -1) || s.DrawCounter < 0 {
+		return bad("identity, phase, direction or draw counter")
 	}
 	if s.Rules.EndPolicy > Placements {
 		return bad("end policy")

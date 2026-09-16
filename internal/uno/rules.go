@@ -12,10 +12,11 @@ type Rules struct {
 	EndPolicy     EndPolicy
 	AllowLateJoin bool
 	NumberedStart bool
+	StackDrawTwo  bool
 }
 
 func ClassicRules() Rules { return Rules{EndPolicy: FirstWinner} }
-func BotRules() Rules     { return Rules{EndPolicy: Placements, AllowLateJoin: true, NumberedStart: true} }
+func BotRules() Rules     { return Rules{EndPolicy: Placements, AllowLateJoin: true, NumberedStart: true, StackDrawTwo: true} }
 
 // CanPlayDrawFour is the official color restriction, independent of turn/UI.
 // Evaluate the entire hand, including after a voluntary draw.

@@ -228,6 +228,10 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 	}
 	sb.WriteString(fmt.Sprintf("Direção: %s\n\n", dir))
 
+	if view.DrawCounter > 0 {
+		sb.WriteString(fmt.Sprintf("⚠️ <b>Penalidade acumulada: comprar %d cartas!</b>\n\n", view.DrawCounter))
+	}
+
 	// Placements so far (if BotRules)
 	if len(view.Placements) > 0 {
 		sb.WriteString("<b>Colocações:</b>\n")

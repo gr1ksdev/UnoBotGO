@@ -26,6 +26,7 @@ type BotAPI interface {
 	EditMessageReplyMarkup(ctx context.Context, params *telego.EditMessageReplyMarkupParams) (*telego.Message, error)
 	AnswerInlineQuery(ctx context.Context, params *telego.AnswerInlineQueryParams) error
 	AnswerCallbackQuery(ctx context.Context, params *telego.AnswerCallbackQueryParams) error
+	SetMessageReaction(ctx context.Context, params *telego.SetMessageReactionParams) error
 }
 
 // explicitAnswerInlineQueryParams ensures cache_time:0, is_personal:true and next_offset:""

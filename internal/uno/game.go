@@ -250,10 +250,14 @@ func (g *Game) start(s *State, dealer PlayerID, events *[]Event) error {
 		*events = append(*events, Event{Type: PlayerSkipped, PlayerID: s.CurrentPlayerID})
 		s.CurrentPlayerID = s.next(s.CurrentPlayerID, 1)
 	case DrawTwo:
-		if err := g.penalty(s, s.CurrentPlayerID, 2, events); err != nil {
-			return err
+		if s.Rules.StackDrawTwo {
+			s.DrawCounter = 2
+		} else {
+			if err := g.penalty(s, s.CurrentPlayerID, 2, events); err != nil {
+				return err
+			}
+			s.CurrentPlayerID = s.next(s.CurrentPlayerID, 1)
 		}
-		s.CurrentPlayerID = s.next(s.CurrentPlayerID, 1)
 	case Wild:
 		s.Phase = ChoosingColor
 		s.Pending = &ColorChoice{Actor: s.CurrentPlayerID, Target: s.next(s.CurrentPlayerID, 1), Initial: true}
@@ -285,6 +289,19 @@ func (g *Game) takeAction(s *State, a Action, events *[]Event) error {
 	case DrawCard:
 		if s.DrawnCardID != "" {
 			return ErrAlreadyDrawn
+		}
+		if s.DrawCounter > 0 {
+			count := s.DrawCounter
+			cards, err := g.draw(s, count)
+			if err != nil {
+				return err
+			}
+			p := s.player(a.PlayerID)
+			p.Hand = append(p.Hand, cards...)
+			s.DrawCounter = 0
+			*events = append(*events, Event{Type: CardsDrawn, PlayerID: p.ID, Count: count})
+			changeTurn(s, s.next(p.ID, 1), events)
+			return nil
 		}
 		cards, err := g.draw(s, 1)
 		if err != nil {
@@ -337,6 +354,12 @@ func playable(s *State, player PlayerID, id CardID) error {
 	}
 	if s.DrawnCardID != "" && s.DrawnCardID != id {
 		return ErrCardNotPlayable
+	}
+	if s.DrawCounter > 0 {
+		if card.Rank != DrawTwo {
+			return ErrCardNotPlayable
+		}
+		return nil
 	}
 	if card.Rank == WildDrawFour {
 		hand := make([]Card, 0, len(p.Hand))
@@ -400,10 +423,15 @@ func (g *Game) play(s *State, id CardID, events *[]Event) error {
 			next = s.next(actor, 1)
 		}
 	case DrawTwo:
-		if err := g.penalty(s, next, 2, events); err != nil {
-			return err
+		if s.Rules.StackDrawTwo {
+			s.DrawCounter += 2
+			next = s.next(actor, 1)
+		} else {
+			if err := g.penalty(s, next, 2, events); err != nil {
+				return err
+			}
+			next = s.next(actor, 2)
 		}
-		next = s.next(actor, 2)
 	}
 	completePlay(s, actor, next, events)
 	return nil

@@ -77,11 +77,25 @@ func TestPlacementLastActionEffects(t *testing.T) {
 			if rank == Wild {
 				next = 2
 			}
+			if rank == DrawTwo && s.Rules.StackDrawTwo {
+				next = 2
+			}
 			if s.Phase != TakingTurn || s.CurrentPlayerID != next || len(s.Order) != 2 {
 				t.Fatalf("placement turn %+v", s)
 			}
-			if rank == DrawTwo && len(s.Players[1].Hand) != 3 {
-				t.Fatal("last +2")
+			if rank == DrawTwo {
+				if s.Rules.StackDrawTwo {
+					if s.DrawCounter != 2 {
+						t.Fatalf("expected DrawCounter 2, got %d", s.DrawCounter)
+					}
+					apply(t, g, Action{Type: DrawCard, PlayerID: 2})
+					s = g.Snapshot()
+					if len(s.Players[1].Hand) != 3 || s.CurrentPlayerID != 3 {
+						t.Fatalf("expected player 2 to have 3 cards and turn to pass to 3, got hand=%d current=%d", len(s.Players[1].Hand), s.CurrentPlayerID)
+					}
+				} else if len(s.Players[1].Hand) != 3 {
+					t.Fatal("last +2")
+				}
 			}
 			if rank == WildDrawFour && len(s.Players[1].Hand) != 5 {
 				t.Fatal("last +4")

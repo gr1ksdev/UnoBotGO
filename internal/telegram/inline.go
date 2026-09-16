@@ -213,36 +213,70 @@ func (h *InlineHandler) buildPlayerHandResults(
 	var results []telego.InlineQueryResult
 
 	// 1. Action controls if it's the player's turn
-	if view.Public.Phase == uno.ChoosingColor && view.Public.ColorChooserID == actorID {
-		// 4 color articles
-		colors := []struct {
-			color uno.Color
-			name  string
-		}{
-			{uno.Red, "❤️ Vermelho"},
-			{uno.Blue, "💙 Azul"},
-			{uno.Green, "💚 Verde"},
-			{uno.Yellow, "💛 Amarelo"},
-		}
-		for _, c := range colors {
-			tok, _ := h.tokens.CreateActionToken(actorID, gameID, view.Public.ChatID, uno.Action{
-				Type:     uno.ChooseColor,
-				PlayerID: actorID,
-				Color:    c.color,
-				Revision: view.Public.Revision,
-			}, h.tokenTTL)
+	if view.Public.Phase == uno.ChoosingColor {
+		if view.Public.ColorChooserID == actorID {
+			// 4 color articles
+			colors := []struct {
+				color uno.Color
+				name  string
+			}{
+				{uno.Red, "❤️ Vermelho"},
+				{uno.Blue, "💙 Azul"},
+				{uno.Green, "💚 Verde"},
+				{uno.Yellow, "💛 Amarelo"},
+			}
+			for _, c := range colors {
+				tok, _ := h.tokens.CreateActionToken(actorID, gameID, view.Public.ChatID, uno.Action{
+					Type:     uno.ChooseColor,
+					PlayerID: actorID,
+					Color:    c.color,
+					Revision: view.Public.Revision,
+				}, h.tokenTTL)
 
-			results = append(results, &telego.InlineQueryResultArticle{
-				Type:        "article",
-				ID:          tok,
-				Title:       c.name,
-				Description: "Escolher esta cor",
-				InputMessageContent: &telego.InputTextMessageContent{
-					MessageText: fmt.Sprintf("Escolhi a cor <b>%s</b>!", c.name),
-					ParseMode:   "HTML",
-				},
-			})
+				results = append(results, &telego.InlineQueryResultArticle{
+					Type:        "article",
+					ID:          tok,
+					Title:       "Escolha sua cor",
+					Description: c.name,
+					InputMessageContent: &telego.InputTextMessageContent{
+						MessageText: c.name,
+					},
+				})
+			}
+
+			// 5th article: hand summary
+			if len(view.Hand) > 0 {
+				var descs []string
+				for _, cv := range view.Hand {
+					descs = append(descs, CardRepr(cv.Card))
+				}
+				results = append(results, &telego.InlineQueryResultArticle{
+					Type:        "article",
+					ID:          fmt.Sprintf("hand_%s_%d", gameID, view.Public.Revision),
+					Title:       "Cartas (toque para estado do jogo):",
+					Description: strings.Join(descs, ", "),
+					InputMessageContent: &telego.InputTextMessageContent{
+						MessageText: h.renderer.RenderPublicState(view.Public),
+						ParseMode:   "HTML",
+					},
+				})
+			}
+
+			return results, ""
 		}
+
+		// Other player viewing hand during ChoosingColor
+		chooserName := h.renderer.userCache.GetRawName(view.Public.ColorChooserID)
+		results = append(results, &telego.InlineQueryResultArticle{
+			Type:        "article",
+			ID:          fmt.Sprintf("wait_%s_%d", gameID, view.Public.Revision),
+			Title:       "Aguardando escolha de cor",
+			Description: fmt.Sprintf("Aguardando %s escolher a cor.", chooserName),
+			InputMessageContent: &telego.InputTextMessageContent{
+				MessageText: h.renderer.RenderPublicState(view.Public),
+				ParseMode:   "HTML",
+			},
+		})
 	} else if view.Public.Phase == uno.TakingTurn && view.Public.CurrentTurn == actorID {
 		if view.DrawnCardID == "" {
 			// Player can draw
@@ -252,10 +286,23 @@ func (h *InlineHandler) buildPlayerHandResults(
 				Revision: view.Public.Revision,
 			}, h.tokenTTL)
 
+			n := view.Public.DrawCounter
+			if n == 0 {
+				n = 1
+			}
+			cardWord := "carta"
+			if n != 1 {
+				cardWord = "cartas"
+			}
+			msgText := fmt.Sprintf("Comprando %d %s", n, cardWord)
+
 			results = append(results, &telego.InlineQueryResultCachedSticker{
 				Type:          "sticker",
 				ID:            tokDraw,
 				StickerFileID: Stickers["option_draw"],
+				InputMessageContent: &telego.InputTextMessageContent{
+					MessageText: msgText,
+				},
 			})
 		} else {
 			// Player drew already, can pass
@@ -269,6 +316,9 @@ func (h *InlineHandler) buildPlayerHandResults(
 				Type:          "sticker",
 				ID:            tokPass,
 				StickerFileID: Stickers["option_pass"],
+				InputMessageContent: &telego.InputTextMessageContent{
+					MessageText: "Passar",
+				},
 			})
 		}
 	}
@@ -353,7 +403,7 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 	h.renderer.userCache.Put(actorID, chosen.From.FirstName, chosen.From.Username)
 
 	tokenStr := chosen.ResultID
-	if strings.HasPrefix(tokenStr, "grey_") || strings.HasPrefix(tokenStr, "hdr_") || strings.HasPrefix(tokenStr, "select_") || strings.HasPrefix(tokenStr, "no_") || strings.HasPrefix(tokenStr, "info_") {
+	if strings.HasPrefix(tokenStr, "grey_") || strings.HasPrefix(tokenStr, "hdr_") || strings.HasPrefix(tokenStr, "select_") || strings.HasPrefix(tokenStr, "no_") || strings.HasPrefix(tokenStr, "info_") || strings.HasPrefix(tokenStr, "hand_") || strings.HasPrefix(tokenStr, "wait_") {
 		return
 	}
 
@@ -392,6 +442,29 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 
 		// Success!
 		h.tokens.SetActionResult(tokenStr, "confirmed")
+
+		for _, ev := range outcome.Events {
+			if ev.Type == uno.UnoAnnounced {
+				unoMsg, err := h.bot.SendMessage(taskCtx, &telego.SendMessageParams{
+					ChatID:    telego.ChatID{ID: int64(actionToken.ChatID)},
+					Text:      fmt.Sprintf("%s <b>Gritou UNO!</b>", h.renderer.userCache.FormatLink(ev.PlayerID)),
+					ParseMode: "HTML",
+				})
+				if err == nil && unoMsg != nil {
+					_ = h.bot.SetMessageReaction(taskCtx, &telego.SetMessageReactionParams{
+						ChatID:    telego.ChatID{ID: int64(actionToken.ChatID)},
+						MessageID: unoMsg.MessageID,
+						Reaction: []telego.ReactionType{
+							&telego.ReactionTypeEmoji{
+								Type:  telego.ReactionEmoji,
+								Emoji: "🥳",
+							},
+						},
+					})
+				}
+				break
+			}
+		}
 
 		confText := h.renderer.RenderActionConfirmation(actorID, actionToken.Action, outcome)
 		_, _ = h.bot.SendMessage(taskCtx, &telego.SendMessageParams{
