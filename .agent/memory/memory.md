@@ -14,6 +14,8 @@
 - Regra de lobby no `/novo`: criador NÃO é inscrito automaticamente (permanece responsável observador com 0 inscritos até enviar `/entrar`).
 - Stickers limpos no chat: remoção de botões de validação nos stickers jogados e eliminação de edições de markup.
 - Modo inline em grade/carrossel horizontal: exclusão de artigos de texto no fluxo de cartas durante a partida; apenas `InlineQueryResultCachedSticker` são emitidos.
+- Carta inicial sempre numérica (`NumberedStart: true` em `BotRules()`): a partida nunca inicia com cartas de ação (+2, Skip, Reverse, Wild), garantindo início limpo sem penalidades na largada e todos com 7 cartas.
+- Envio do sticker da carta virada: no `/iniciar`, o bot envia o sticker da primeira carta do topo no grupo antes da mensagem de status.
 - Aceite manual do Telegram: testes automatizados 100% aprovados; roteiro de homologação manual detalhado em `docs/v2-telegram.md`.
 
 ---
