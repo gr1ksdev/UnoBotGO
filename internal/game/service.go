@@ -198,12 +198,41 @@ func (s *Service) FindPlayerGames(ctx context.Context, actor Actor) ([]GameSumma
 	return s.manager.findPlayer(ctx, actor.PlayerID)
 }
 
-// AutoSkipExpired advances turns that exceeded timeout. It is intended for a
-// single application-level scheduler; no clock or goroutine is part of uno.Game.
-func (s *Service) AutoSkipExpired(ctx context.Context, timeout time.Duration) []Outcome {
+// ExpiredTurn identifies a particular revision, not a future turn in the chat.
+// Only a trusted scheduler should submit these candidates, never player input.
+type ExpiredTurn struct {
+	GameID   uno.GameID
+	ChatID   ChatID
+	PlayerID uno.PlayerID
+	Revision uint64
+}
+
+// ExpiredTurns discovers candidates without changing any game. Adapters must
+// enqueue their execution in the same chat queue as player actions.
+func (s *Service) ExpiredTurns(ctx context.Context, timeout time.Duration) []ExpiredTurn {
 	if ctx == nil || timeout <= 0 {
 		return nil
 	}
-	now := time.Now()
-	return s.manager.skipExpired(ctx, timeout, now)
+	return s.manager.expiredTurns(ctx, timeout, time.Now())
+}
+
+// AutoSkipTurn revalidates a candidate and its deadline under the game lock.
+// Obsolete candidates return applied=false and must not produce a notification.
+func (s *Service) AutoSkipTurn(ctx context.Context, candidate ExpiredTurn, timeout time.Duration) (outcome Outcome, applied bool) {
+	if ctx == nil || timeout <= 0 {
+		return Outcome{}, false
+	}
+	return s.manager.skipTurn(ctx, candidate, timeout, time.Now())
+}
+
+// AutoSkipExpired is the synchronous scheduler API. Adapters with chat queues
+// use ExpiredTurns and AutoSkipTurn to serialize mutation AND notification.
+func (s *Service) AutoSkipExpired(ctx context.Context, timeout time.Duration) []Outcome {
+	var outcomes []Outcome
+	for _, candidate := range s.ExpiredTurns(ctx, timeout) {
+		if outcome, applied := s.AutoSkipTurn(ctx, candidate, timeout); applied {
+			outcomes = append(outcomes, outcome)
+		}
+	}
+	return outcomes
 }

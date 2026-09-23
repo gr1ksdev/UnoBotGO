@@ -5,6 +5,7 @@ import (
 	"html"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/malbs/UnoGoBot/internal/game"
 	"github.com/malbs/UnoGoBot/internal/uno"
@@ -61,11 +62,6 @@ func (c *UserCache) GetRawName(id uno.PlayerID) string {
 		return name
 	}
 	return fmt.Sprintf("Jogador %d", id)
-}
-
-func (c *UserCache) FormatLink(id uno.PlayerID) string {
-	raw := c.GetRawName(id)
-	return fmt.Sprintf(`<a href="tg://user?id=%d">%s</a>`, id, html.EscapeString(raw))
 }
 
 // CardRepr returns a human-friendly string for a card, e.g. "❤️ 7" or "🌈+4 Coringa".
@@ -147,6 +143,7 @@ func RankName(rank uno.Rank) string {
 }
 
 type Renderer struct {
+	botID     atomic.Int64
 	userCache *UserCache
 }
 
@@ -157,11 +154,37 @@ func NewRenderer(cache *UserCache) *Renderer {
 	return &Renderer{userCache: cache}
 }
 
+// SetBotID configures presentation identity after GetMe, before update ingress.
+func (r *Renderer) SetBotID(id int64) { r.botID.Store(id) }
+
+// PlayerLink keeps the displayed identity separate from the mention target.
+// Events and confirmations must use the resulting view, not the previous turn.
+func (r *Renderer) PlayerLink(id uno.PlayerID, view game.PublicGameView) string {
+	name := html.EscapeString(r.userCache.GetRawName(id))
+	target := r.botID.Load()
+	if target <= 0 {
+		return name
+	}
+	if !view.Closed {
+		responsible := uno.PlayerID(0)
+		switch view.Phase {
+		case uno.TakingTurn:
+			responsible = view.CurrentTurn
+		case uno.ChoosingColor:
+			responsible = view.ColorChooserID
+		}
+		if id > 0 && id == responsible {
+			target = int64(id)
+		}
+	}
+	return fmt.Sprintf(`<a href="tg://user?id=%d">%s</a>`, target, name)
+}
+
 // RenderLobby returns formatted text for a newly created or joined lobby.
 func (r *Renderer) RenderLobby(view game.PublicGameView) string {
 	var sb strings.Builder
 	sb.WriteString("🎮 <b>Partida de UNO</b>\n\n")
-	sb.WriteString(fmt.Sprintf("Responsável: %s\n", r.userCache.FormatLink(view.OwnerID)))
+	sb.WriteString(fmt.Sprintf("Responsável: %s\n", r.PlayerLink(view.OwnerID, view)))
 	rulesDesc := "Clássico"
 	if view.Rules.StackWildDrawFourOnTwo || view.Rules.StackDrawTwoOnWildFour {
 		rulesDesc = "Caseiro"
@@ -173,7 +196,7 @@ func (r *Renderer) RenderLobby(view game.PublicGameView) string {
 		sb.WriteString("<i>Nenhum jogador inscrito ainda.</i>\n")
 	} else {
 		for i, p := range view.Players {
-			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, r.userCache.FormatLink(p.ID)))
+			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, r.PlayerLink(p.ID, view)))
 		}
 	}
 
@@ -191,7 +214,7 @@ func (r *Renderer) RenderLobby(view game.PublicGameView) string {
 func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 	var sb strings.Builder
 
-	if view.Closed {
+	if view.Closed || view.Phase == uno.Finished {
 		sb.WriteString("🏆 <b>Partida Encerrada!</b>\n\n")
 		switch view.CloseReason {
 		case game.Completed:
@@ -205,7 +228,7 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 		if len(view.Placements) > 0 {
 			sb.WriteString("<b>Colocações finais:</b>\n")
 			for _, pl := range view.Placements {
-				sb.WriteString(fmt.Sprintf("%dº lugar: %s\n", pl.Position, r.userCache.FormatLink(pl.PlayerID)))
+				sb.WriteString(fmt.Sprintf("%dº lugar: %s\n", pl.Position, r.PlayerLink(pl.PlayerID, view)))
 			}
 		}
 		return sb.String()
@@ -234,7 +257,7 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 	if len(view.Placements) > 0 {
 		sb.WriteString("<b>Colocações:</b>\n")
 		for _, pl := range view.Placements {
-			sb.WriteString(fmt.Sprintf("%dº: %s | ", pl.Position, r.userCache.FormatLink(pl.PlayerID)))
+			sb.WriteString(fmt.Sprintf("%dº: %s | ", pl.Position, r.PlayerLink(pl.PlayerID, view)))
 		}
 		sb.WriteString("\n\n")
 	}
@@ -254,7 +277,7 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 			continue
 		}
 
-		entry := r.userCache.FormatLink(pid)
+		entry := r.PlayerLink(pid, view)
 		if p.CardCount == 1 {
 			entry += " ⚠️ <b>UNO!</b>"
 		}
@@ -273,9 +296,9 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 
 	// Phase / Turn
 	if view.Phase == uno.ChoosingColor {
-		sb.WriteString(fmt.Sprintf("🎨 <b>Aguardando %s escolher a cor!</b>", r.userCache.FormatLink(view.ColorChooserID)))
+		sb.WriteString(fmt.Sprintf("🎨 <b>Aguardando %s escolher a cor!</b>", r.PlayerLink(view.ColorChooserID, view)))
 	} else if view.CurrentTurn > 0 {
-		sb.WriteString(fmt.Sprintf("👉 Vez de: %s", r.userCache.FormatLink(view.CurrentTurn)))
+		sb.WriteString(fmt.Sprintf("👉 Vez de: %s", r.PlayerLink(view.CurrentTurn, view)))
 	}
 
 	return sb.String()
@@ -285,7 +308,7 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 func (r *Renderer) RenderActionConfirmation(actorID uno.PlayerID, action uno.Action, outcome game.Outcome) string {
 	var sb strings.Builder
 
-	actorLink := r.userCache.FormatLink(actorID)
+	actorLink := r.PlayerLink(actorID, outcome.View)
 
 	switch action.Type {
 	case uno.PlayCard:
@@ -320,10 +343,10 @@ func (r *Renderer) RenderActionConfirmation(actorID uno.PlayerID, action uno.Act
 			sb.WriteString(" 🔄 O sentido do jogo foi invertido!")
 		case uno.PlayerSkipped:
 			if ev.PlayerID > 0 {
-				sb.WriteString(fmt.Sprintf(" 🚫 %s foi pulado(a)!", r.userCache.FormatLink(ev.PlayerID)))
+				sb.WriteString(fmt.Sprintf(" 🚫 %s foi pulado(a)!", r.PlayerLink(ev.PlayerID, outcome.View)))
 			}
 		case uno.PlayerWon:
-			sb.WriteString(fmt.Sprintf("\n🎉 <b>%s bateu e garantiu o %dº lugar!</b>", r.userCache.FormatLink(ev.PlayerID), ev.Position))
+			sb.WriteString(fmt.Sprintf("\n🎉 <b>%s bateu e garantiu o %dº lugar!</b>", r.PlayerLink(ev.PlayerID, outcome.View), ev.Position))
 		}
 	}
 

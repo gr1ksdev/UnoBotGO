@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -517,6 +518,7 @@ func TestInlineHandler_UnoAnnouncedReaction(t *testing.T) {
 	mockAPI := newMockBotAPI()
 	svc, _ := game.NewService()
 	renderer := NewRenderer(NewUserCache(100))
+	renderer.SetBotID(999)
 	tokens := NewTokenStore(1000, 100, time.Now, nil)
 	dispatcher := NewDispatcher(nil, nil)
 	defer dispatcher.Stop(2 * time.Second)
@@ -581,6 +583,29 @@ func TestInlineHandler_UnoAnnouncedReaction(t *testing.T) {
 				emojiReaction, ok := reaction.Reaction[0].(*telego.ReactionTypeEmoji)
 				if !ok || emojiReaction.Emoji != "🥳" {
 					t.Fatalf("expected 🥳 emoji reaction, got %+v", reaction.Reaction[0])
+				}
+				after, err := svc.PublicView(ctx, gameID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				expectedTarget := int64(999)
+				if after.CurrentTurn == curr {
+					expectedTarget = int64(curr)
+				}
+				mockAPI.mu.Lock()
+				messages := append([]telego.SendMessageParams(nil), mockAPI.SentMessages...)
+				mockAPI.mu.Unlock()
+				found := false
+				for _, msg := range messages {
+					if strings.Contains(msg.Text, "Gritou UNO!") {
+						found = true
+						if !strings.Contains(msg.Text, fmt.Sprintf(`href="tg://user?id=%d"`, expectedTarget)) {
+							t.Fatalf("UNO used previous turn identity: %s", msg.Text)
+						}
+					}
+				}
+				if !found {
+					t.Fatal("missing UNO announcement")
 				}
 				unoAnnouncedTriggered = true
 				break

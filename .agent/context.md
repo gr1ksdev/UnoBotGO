@@ -1,3 +1,18 @@
+# Contexto atual — milestone corretiva V2 (2026-09-23)
+
+- Implementação na dev, a partir de b08522d, aprovada pelo usuário com "Implement the plan.".
+- Engine mantém gameplay e encerra por placements quando resta um jogador, sem TurnChanged terminal.
+- Telegram usa PublicGameView para decidir teclados. Closed/Finished não oferecem Suas cartas; refresh remove markup; botões históricos de resumo retido informam partida encerrada.
+- Service.ExpiredTurns descobre candidatos sem mutar; AutoSkipTurn revalida jogador, GameID/ChatID, revision, fase e prazo sob lock. Scheduler aplica e notifica na mesma tarefa do chat. AutoSkipExpired continua disponível como wrapper síncrono.
+- turnStarted é zerado no encerramento; leituras de final/runtime usam mutex da partida.
+- Renderer recebe BotID após GetMe. PlayerLink usa UserID real só de CurrentTurn/ColorChooserID; demais nomes, lobby e encerrado apontam ao bot. Eventos usam view posterior. Sem BotID válido: texto escapado.
+- Contexto inline g_<GameID> preservado: não é token de ação; necessário para abertura contextual inequívoca entre grupos. Query vazia continua com mão única/seletor.
+- Regra terminal de stacking preservada por decisão explícita: sem compra extra automática, sem novo turno; contador final mantido.
+- Polling/webhook compartilham pipeline. Sem mudanças em Docker, CI, ranking, campeonato ou estratégia de branches. /estado já existia na base; não foi introduzido.
+- Testes, race detector, build, vet e diff --check aprovados. Homologação visual real do Telegram pendente; detalhes em docs/v2-telegram.md.
+
+---
+
 # Contexto atual — V2 Milestone 3 (2026-09-15)
 
 - M3 implementada: Playable Telegram MVP em `cmd/bot`, `internal/config` e `internal/telegram`.

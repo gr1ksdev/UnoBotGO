@@ -110,7 +110,9 @@ func (m *manager) lockGame(ctx context.Context, id uno.GameID) (*managedGame, er
 // publish completes every successful engine action while the caller holds
 // entry.mu. No cancellation checks after Apply: an accepted action must publish.
 func (m *manager) publish(entry *managedGame, before, after uno.State, result uno.Result) Outcome {
-	if before.CurrentPlayerID != after.CurrentPlayerID || before.Phase != after.Phase {
+	if after.Phase == uno.Finished {
+		entry.turnStarted = time.Time{}
+	} else if before.CurrentPlayerID != after.CurrentPlayerID || before.Phase != after.Phase {
 		entry.turnStarted = time.Now()
 	}
 	transferOwner(entry, before, after)
@@ -223,22 +225,20 @@ func (m *manager) findPlayer(ctx context.Context, id uno.PlayerID) ([]GameSummar
 	return result, nil
 }
 
-func (m *manager) skipExpired(ctx context.Context, timeout time.Duration, now time.Time) []Outcome {
+func (m *manager) expiredTurns(ctx context.Context, timeout time.Duration, now time.Time) []ExpiredTurn {
 	m.indexMu.RLock()
 	entries := make([]*managedGame, 0, len(m.byID))
 	for _, record := range m.byID {
-		if record.entry.final == nil {
-			entries = append(entries, record.entry)
-		}
+		entries = append(entries, record.entry)
 	}
 	m.indexMu.RUnlock()
-	results := make([]Outcome, 0)
+	results := make([]ExpiredTurn, 0)
 	for _, entry := range entries {
 		if ctx.Err() != nil {
 			break
 		}
 		entry.mu.Lock()
-		if entry.final != nil || entry.engine == nil || now.Sub(entry.turnStarted) < timeout {
+		if entry.final != nil || entry.engine == nil || entry.turnStarted.IsZero() || now.Sub(entry.turnStarted) < timeout {
 			entry.mu.Unlock()
 			continue
 		}
@@ -247,11 +247,28 @@ func (m *manager) skipExpired(ctx context.Context, timeout time.Duration, now ti
 			entry.mu.Unlock()
 			continue
 		}
-		result, err := entry.engine.Apply(uno.Action{Type: uno.SkipTurn, PlayerID: before.CurrentPlayerID, Revision: before.Revision})
-		if err == nil {
-			results = append(results, m.publish(entry, before, entry.engine.Snapshot(), result))
-		}
+		results = append(results, ExpiredTurn{GameID: before.ID, ChatID: entry.chatID, PlayerID: before.CurrentPlayerID, Revision: before.Revision})
 		entry.mu.Unlock()
 	}
 	return results
+}
+
+func (m *manager) skipTurn(ctx context.Context, candidate ExpiredTurn, timeout time.Duration, now time.Time) (Outcome, bool) {
+	entry, err := m.lockGame(ctx, candidate.GameID)
+	if err != nil {
+		return Outcome{}, false
+	}
+	defer entry.mu.Unlock()
+	if entry.final != nil || entry.engine == nil || entry.chatID != candidate.ChatID || entry.turnStarted.IsZero() || now.Sub(entry.turnStarted) < timeout {
+		return Outcome{}, false
+	}
+	before := entry.engine.Snapshot()
+	if before.Phase != uno.TakingTurn || before.CurrentPlayerID == 0 || before.CurrentPlayerID != candidate.PlayerID || before.Revision != candidate.Revision || ctx.Err() != nil {
+		return Outcome{}, false
+	}
+	result, err := entry.engine.Apply(uno.Action{Type: uno.SkipTurn, PlayerID: candidate.PlayerID, Revision: candidate.Revision})
+	if err != nil {
+		return Outcome{}, false
+	}
+	return m.publish(entry, before, entry.engine.Snapshot(), result), true
 }

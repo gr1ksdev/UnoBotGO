@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
 	"log/slog"
 	"strings"
 	"time"
@@ -180,6 +181,15 @@ func (h *InlineHandler) buildPlayerHandResults(
 	offsetStr string,
 ) ([]telego.InlineQueryResult, string) {
 	view, err := h.service.PlayerView(ctx, game.Actor{PlayerID: actorID}, gameID)
+	if errors.Is(err, game.ErrGameClosed) {
+		return []telego.InlineQueryResult{&telego.InlineQueryResultArticle{
+			Type:                "article",
+			ID:                  "closed_game",
+			Title:               "Partida encerrada",
+			Description:         "Esta partida já foi encerrada.",
+			InputMessageContent: &telego.InputTextMessageContent{MessageText: "Esta partida já foi encerrada."},
+		}}, ""
+	}
 	if err != nil {
 		return []telego.InlineQueryResult{
 			&telego.InlineQueryResultArticle{
@@ -205,7 +215,7 @@ func (h *InlineHandler) buildPlayerHandResults(
 					MessageText: fmt.Sprintf("A partida no grupo <b>%s</b> ainda não foi iniciada. Aguarde o responsável usar /iniciar!", view.Public.ChatName),
 					ParseMode:   "HTML",
 				},
-				ReplyMarkup: makeGameButtons(gameID),
+				ReplyMarkup: makeGameButtons(view.Public),
 			},
 		}, ""
 	}
@@ -418,36 +428,21 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 		actor := game.Actor{PlayerID: actorID, ChatID: actionToken.ChatID}
 		outcome, err := h.service.Apply(taskCtx, actor, actionToken.GameID, actionToken.Action)
 		if err != nil {
-			if errors.Is(err, uno.ErrStaleRevision) {
-				h.tokens.SetActionResult(tokenStr, "stale")
-				staleMsg := fmt.Sprintf("⚠️ %s: Seleção antiga: a partida mudou. Abra Suas cartas novamente.", h.renderer.userCache.FormatLink(actorID))
-				_, _ = h.bot.SendMessage(taskCtx, &telego.SendMessageParams{
-					ChatID:      telego.ChatID{ID: int64(actionToken.ChatID)},
-					Text:        staleMsg,
-					ParseMode:   "HTML",
-					ReplyMarkup: makeGameButtons(actionToken.GameID),
-				})
-			} else {
-				h.tokens.SetActionResult(tokenStr, "rejected")
-				errMsg := fmt.Sprintf("⚠️ %s: Jogada não aceita: %v. Abra Suas cartas novamente.", h.renderer.userCache.FormatLink(actorID), err)
-				_, _ = h.bot.SendMessage(taskCtx, &telego.SendMessageParams{
-					ChatID:      telego.ChatID{ID: int64(actionToken.ChatID)},
-					Text:        errMsg,
-					ParseMode:   "HTML",
-					ReplyMarkup: makeGameButtons(actionToken.GameID),
-				})
-			}
+			h.replyActionError(taskCtx, actorID, tokenStr, actionToken, err)
 			return
 		}
 
 		// Success!
 		h.tokens.SetActionResult(tokenStr, "confirmed")
+		if outcome.View.Closed {
+			h.tokens.InvalidateGame(actionToken.GameID)
+		}
 
 		for _, ev := range outcome.Events {
 			if ev.Type == uno.UnoAnnounced {
 				unoMsg, err := h.bot.SendMessage(taskCtx, &telego.SendMessageParams{
 					ChatID:    telego.ChatID{ID: int64(actionToken.ChatID)},
-					Text:      fmt.Sprintf("%s <b>Gritou UNO!</b>", h.renderer.userCache.FormatLink(ev.PlayerID)),
+					Text:      fmt.Sprintf("%s <b>Gritou UNO!</b>", h.renderer.PlayerLink(ev.PlayerID, outcome.View)),
 					ParseMode: "HTML",
 				})
 				if err == nil && unoMsg != nil {
@@ -467,12 +462,50 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 		}
 
 		confText := h.renderer.RenderActionConfirmation(actorID, actionToken.Action, outcome)
-		_, _ = h.bot.SendMessage(taskCtx, &telego.SendMessageParams{
-			ChatID:      telego.ChatID{ID: int64(actionToken.ChatID)},
-			Text:        confText,
-			ParseMode:   "HTML",
-			ReplyMarkup: makeGameButtons(actionToken.GameID),
-		})
+		params := &telego.SendMessageParams{
+			ChatID:    telego.ChatID{ID: int64(actionToken.ChatID)},
+			Text:      confText,
+			ParseMode: "HTML",
+		}
+		if markup := makeGameButtons(outcome.View); markup != nil {
+			params.ReplyMarkup = markup
+		}
+		_, _ = h.bot.SendMessage(taskCtx, params)
 	})
 	return accepted
+}
+
+// Failed actions use current public context, never the old token's turn.
+func (h *InlineHandler) replyActionError(ctx context.Context, actorID uno.PlayerID, tokenStr string, token ActionToken, actionErr error) {
+	status := "rejected"
+	message := "Jogada não aceita: " + html.EscapeString(actionErr.Error()) + "."
+	if errors.Is(actionErr, uno.ErrStaleRevision) {
+		status = "stale"
+		message = "Seleção antiga: a partida mudou."
+	}
+	h.tokens.SetActionResult(tokenStr, status)
+	view, viewErr := h.service.PublicView(ctx, token.GameID)
+	var markup *telego.InlineKeyboardMarkup
+	switch {
+	case viewErr != nil:
+		view = game.PublicGameView{}
+		message = "Esta partida não está disponível."
+	case view.Closed || view.Phase == uno.Finished:
+		message = "Esta partida já foi encerrada."
+	default:
+		// A player who left or already placed cannot reopen a private hand.
+		if _, err := h.service.PlayerView(ctx, game.Actor{PlayerID: actorID, ChatID: token.ChatID}, token.GameID); err == nil {
+			message += " Abra Suas cartas novamente."
+			markup = makeGameButtons(view)
+		}
+	}
+	params := &telego.SendMessageParams{
+		ChatID:    telego.ChatID{ID: int64(token.ChatID)},
+		Text:      fmt.Sprintf("⚠️ %s: %s", h.renderer.PlayerLink(actorID, view), message),
+		ParseMode: "HTML",
+	}
+	if markup != nil {
+		params.ReplyMarkup = markup
+	}
+	_, _ = h.bot.SendMessage(ctx, params)
 }

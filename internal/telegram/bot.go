@@ -72,6 +72,7 @@ func (b *Bot) Run(ctx context.Context) error {
 		return ErrMissingBotUsername
 	}
 	b.username = me.Username
+	b.renderer.SetBotID(me.ID)
 	b.cmdHandler.botUsername = me.Username
 	b.logger.Info("connected to telegram bot", "username", me.Username, "id", me.ID)
 	if !me.SupportsInlineQueries {
@@ -229,15 +230,24 @@ func (b *Bot) autoSkipLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			for _, outcome := range b.service.AutoSkipExpired(ctx, b.turnTimeout) {
-				chatID := outcome.View.ChatID
-				b.dispatcher.EnqueueChat(chatID, func(taskCtx context.Context) {
-					text := "⏱️ O tempo acabou; o turno foi pulado.\n\n" + b.renderer.RenderPublicState(outcome.View)
-					b.cmdHandler.reply(taskCtx, int64(chatID), text, makeGameButtons(outcome.View.GameID))
-				})
+			for _, candidate := range b.service.ExpiredTurns(ctx, b.turnTimeout) {
+				b.enqueueAutoSkip(candidate)
 			}
 		}
 	}
+}
+
+// Mutation and notification share a chat task with all player actions. Discovery
+// outside the queue is read-only; saturation or an obsolete candidate is a no-op.
+func (b *Bot) enqueueAutoSkip(candidate game.ExpiredTurn) bool {
+	return b.dispatcher.EnqueueChat(candidate.ChatID, func(ctx context.Context) {
+		outcome, applied := b.service.AutoSkipTurn(ctx, candidate, b.turnTimeout)
+		if !applied {
+			return
+		}
+		text := "⏱️ O tempo acabou; o turno foi pulado.\n\n" + b.renderer.RenderPublicState(outcome.View)
+		b.cmdHandler.reply(ctx, int64(candidate.ChatID), text, makeGameButtons(outcome.View))
+	})
 }
 func (b *Bot) submitUpdate(ctx context.Context, update telego.Update) bool {
 	if !b.dedupe.reserve(update.UpdateID) {

@@ -1,6 +1,9 @@
 package telegram
 
 import (
+	"html"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -10,16 +13,18 @@ import (
 
 func TestUserCache_HtmlEscapeAndEviction(t *testing.T) {
 	cache := NewUserCache(2)
+	renderer := NewRenderer(cache)
+	renderer.SetBotID(999)
 
 	cache.Put(1, "Alice <alert>", "alice_evil")
 	cache.Put(2, "Bob & Co", "")
 
-	link1 := cache.FormatLink(1)
+	link1 := renderer.PlayerLink(1, game.PublicGameView{})
 	if !strings.Contains(link1, "Alice &lt;alert&gt; (@alice_evil)") {
 		t.Errorf("expected escaped html link, got: %s", link1)
 	}
 
-	link2 := cache.FormatLink(2)
+	link2 := renderer.PlayerLink(2, game.PublicGameView{})
 	if !strings.Contains(link2, "Bob &amp; Co") {
 		t.Errorf("expected escaped html link, got: %s", link2)
 	}
@@ -27,7 +32,7 @@ func TestUserCache_HtmlEscapeAndEviction(t *testing.T) {
 	// Put 3rd -> 1 should be evicted from cache and fallback to Jogador 1
 	cache.Put(3, "Carol", "carol")
 
-	link1Fallback := cache.FormatLink(1)
+	link1Fallback := renderer.PlayerLink(1, game.PublicGameView{})
 	if !strings.Contains(link1Fallback, "Jogador 1") {
 		t.Errorf("expected evicted user to fallback to Jogador 1, got: %s", link1Fallback)
 	}
@@ -146,5 +151,118 @@ func TestRenderer_RenderActionConfirmation(t *testing.T) {
 	text := renderer.RenderActionConfirmation(10, uno.Action{Type: uno.PlayCard, PlayerID: 10}, outcome)
 	if !strings.Contains(text, "Alice") || !strings.Contains(text, "jogou") || !strings.Contains(text, "invertido") {
 		t.Errorf("unexpected action confirmation text: %s", text)
+	}
+}
+
+func TestRendererMentionTargetsFollowResultingTurn(t *testing.T) {
+	cache := NewUserCache(100)
+	cache.Put(11, `Alice <&"'>`, "alice")
+	cache.Put(22, "Bob", "bob")
+	cache.Put(33, "Carol", "")
+	r := NewRenderer(cache)
+	r.SetBotID(999)
+	for _, tc := range []struct {
+		name                string
+		phase               uno.Phase
+		closed              bool
+		turn, chooser, real uno.PlayerID
+	}{
+		{"lobby", uno.Lobby, false, 0, 0, 0},
+		{"alice_turn", uno.TakingTurn, false, 11, 0, 11},
+		{"bob_turn", uno.TakingTurn, false, 22, 0, 22},
+		{"color", uno.ChoosingColor, false, 11, 11, 11},
+		{"finished", uno.Finished, true, 0, 0, 0},
+		{"closed_overrides_turn", uno.TakingTurn, true, 11, 0, 0},
+		{"phase_overrides_turn", uno.Finished, false, 11, 0, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v := game.PublicGameView{
+				GameID: "test", OwnerID: 11, Rules: uno.BotRules(), Phase: tc.phase,
+				Closed: tc.closed, CurrentTurn: tc.turn, ColorChooserID: tc.chooser,
+				Direction: 1, ActiveColor: uno.Red, TopCard: &uno.Card{Color: uno.Red, Rank: uno.One},
+				Players: []game.PublicPlayer{{ID: 11, Active: true, CardCount: 1}, {ID: 22, Active: true, CardCount: 3}, {ID: 33}},
+				Order:   []uno.PlayerID{11, 22}, Placements: []uno.Placement{{PlayerID: 33, Position: 1, WentOut: true}},
+			}
+			text := r.RenderPublicState(v)
+			if tc.phase == uno.Lobby {
+				text = r.RenderLobby(v)
+			}
+			assertMentionTargets(t, text, cache, tc.real, 999)
+			for _, action := range []uno.ActionType{uno.PlayCard, uno.DrawCard, uno.PassTurn, uno.ChooseColor} {
+				out := game.Outcome{View: v, Events: []uno.Event{
+					{Type: uno.CardsDrawn, PlayerID: 11, Count: 2},
+					{Type: uno.PlayerSkipped, PlayerID: 22},
+					{Type: uno.PlayerWon, PlayerID: 33, Position: 1},
+				}}
+				confirmation := r.RenderActionConfirmation(11, uno.Action{Type: action, Color: uno.Blue}, out)
+				assertMentionTargets(t, confirmation, cache, tc.real, 999)
+				if (tc.closed || tc.phase == uno.Finished) && strings.Contains(confirmation, "Vez de") {
+					t.Fatalf("turn after closure: %s", confirmation)
+				}
+			}
+		})
+	}
+}
+
+func assertMentionTargets(t *testing.T, text string, cache *UserCache, real uno.PlayerID, botID int64) {
+	t.Helper()
+	links := regexp.MustCompile(`<a href="tg://user\?id=([0-9]+)">([^<]*)</a>`).FindAllStringSubmatch(text, -1)
+	if len(links) == 0 {
+		t.Fatalf("missing mentions: %s", text)
+	}
+	for _, link := range links {
+		found := false
+		for _, id := range []uno.PlayerID{11, 22, 33} {
+			if link[2] != html.EscapeString(cache.GetRawName(id)) {
+				continue
+			}
+			found = true
+			want := botID
+			if id == real {
+				want = int64(id)
+			}
+			if link[1] != strconv.FormatInt(want, 10) {
+				t.Errorf("name %s targets %s, want %d", link[2], link[1], want)
+			}
+		}
+		if !found {
+			t.Errorf("unknown or improperly escaped name: %s", link[2])
+		}
+	}
+}
+
+func TestRendererMissingIdentityAndContext(t *testing.T) {
+	r := NewRenderer(nil)
+	r.userCache.Put(11, "A <&>", "")
+	view := game.PublicGameView{Phase: uno.TakingTurn, CurrentTurn: 11}
+	if got := r.PlayerLink(11, view); got != "A &lt;&amp;&gt;" {
+		t.Fatalf("renderer without bot identity: %s", got)
+	}
+	r.SetBotID(999)
+	if got := r.PlayerLink(11, game.PublicGameView{}); got != `<a href="tg://user?id=999">A &lt;&amp;&gt;</a>` {
+		t.Fatal(got)
+	}
+	if got := r.PlayerLink(44, game.PublicGameView{}); got != `<a href="tg://user?id=999">Jogador 44</a>` {
+		t.Fatal(got)
+	}
+}
+
+func TestGameButtonsRespectLifecycle(t *testing.T) {
+	for _, phase := range []uno.Phase{uno.Lobby, uno.TakingTurn, uno.ChoosingColor, uno.Finished} {
+		v := game.PublicGameView{GameID: "context", Phase: phase}
+		markup := makeGameButtons(v)
+		if phase == uno.Finished {
+			if markup != nil {
+				t.Fatal("terminal keyboard")
+			}
+			continue
+		}
+		if markup == nil || len(markup.InlineKeyboard) != 1 || len(markup.InlineKeyboard[0]) != 1 || *markup.InlineKeyboard[0][0].SwitchInlineQueryCurrentChat != "g_context" {
+			t.Fatalf("contextual hand button changed: %+v", markup)
+		}
+		v.Closed = true
+		if makeGameButtons(v) != nil {
+			t.Fatal("closed view offered keyboard")
+		}
 	}
 }

@@ -1,3 +1,18 @@
+# Memória atual — milestone corretiva V2 — 2026-09-23
+
+- Usuário aprovou o plano: "Implement the plan.". Registro: milestone-corretiva-v2_2026-09-23_14-12.md.
+- Sintoma esclarecido pelo usuário: "Esta partida não está disponível ou você não está participando dela". Causa rastreada: confirmação final anexava Suas cartas incondicionalmente; engine/serviço já estavam encerrados.
+- Corrigida apresentação terminal, invalidação dos tokens existentes ao vencer/sair encerrando, resposta a query histórica e mensagem de rejeição sem convite de continuação após fechamento.
+- Corrida independente corrigida: scheduler mutava antes de enfileirar notificação. Agora candidato revisionado é revalidado e aplicado dentro da fila do chat, junto ao envio. Nenhum I/O sob lock do manager.
+- Clássico Telegram = BotRules (placements/stack +2); não confundir com ClassicRules (FirstWinner). Usuário escolheu preservar efeitos terminais atuais do stacking, sem nova compra automática.
+- UserCache guarda nomes; Renderer.PlayerLink escolhe destino usando view posterior. GetMe configura BotID antes de updates. Cor pendente mantém UserID real do chooser, mesmo com mão vazia.
+- g_<GameID> visível preservado. Telegram InlineQuery/ChosenInlineResult não fornecem chat_id; não usar estado global de última partida nem confiar em chosen.Query para roteamento. Token one-use mantém binding user/game/chat/action/card/color/revision.
+- Novos testes: matriz determinística de seis cartas finais, dois modos/direções, 3–4 participantes; prazos/candidatos concorrentes e encerrados; finais nos dois transportes com API mockada; barreiras de fila sem sleeps; targets/HTML, contexto multigrupo, cursor e replays.
+- Validações aprovadas: go test ./..., go test -race ./..., go build ./..., go vet ./..., git diff --check. Cenários selecionados de integração/scheduler/contexto passaram 20 execuções.
+- Homologação visual em Android/iOS/Desktop e Telegram real não executada. Sem commit, push, merge ou promoção.
+
+---
+
 # Memória atual — 2026-09-15 — M3
 
 - Aprovação explícita: “Aprovado. Implemente a Milestone 3 conforme este plano.”

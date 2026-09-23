@@ -184,3 +184,25 @@ Preservar a jogabilidade existente, aplicar alterações de segredo sem operaç�
 
 ## Impacto
 Webhook exige URL HTTPS pública terminada externamente; a deduplicação é perdida após reinício.
+
+
+# Decisão: encerramento e menções contextuais do V2
+
+## Data
+2026-09-23
+
+## Contexto
+A confirmação final oferecia acesso a uma mão indisponível. O scheduler podia publicar timeout fora de ordem. Todos os nomes apontavam ao próprio jogador. O usuário aprovou o plano corretivo e decidiu preservar a regra terminal existente de stacking.
+
+## Decisão tomada
+- Preservar a engine; teclados e erros seguem a view atual/terminal. Invalidar tokens existentes no encerramento natural ou por saída, mantendo validação server-side como autoridade.
+- Separar descoberta de candidatos de timeout da aplicação; GameID, ChatID, jogador, revision, fase e prazo são revalidados sob mutex. Mutação e mensagem executam na mesma fila de chat. Limpar turnStarted ao encerrar.
+- Centralizar destino das menções em Renderer.PlayerLink: UserID real somente para responsável atual, BotID nos demais casos. Usar view resultante em confirmações/eventos; obter BotID de GetMe antes do ingresso.
+- Manter g_<GameID> visível, separado dos tokens de ação one-use. Não há contexto oculto equivalente no botão Inline Mode. Não adicionar aliases, mudar formato ou usar seleção global por usuário.
+- Preservar penalidades imediatas, cor pendente e stacking terminal atual (sem nova compra automática nem chance de rebater). Não modificar gameplay, infraestrutura ou transportes.
+
+## Motivo
+Corrigir os caminhos que oferecem ou anunciam turnos obsoletos sem inventar outra fonte de estado nem sacrificar segurança/multigrupo. A política de menções precisa refletir o responsável posterior à ação, não seu autor anterior.
+
+## Impacto
+Final sem convite para jogar; candidates antigos tornam-se no-op; mesma implementação em polling e webhook. Novas mensagens apontam ao bot exceto pelo jogador responsável. Mensagens históricas não são reescritas em massa. Aceitação visual de tg://user?id=<BotID> continua pendente em clientes reais, conforme roteiro documentado.

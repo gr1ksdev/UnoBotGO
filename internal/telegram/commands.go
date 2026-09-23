@@ -46,13 +46,16 @@ func stringPtr(s string) *string {
 	return &s
 }
 
-func makeGameButtons(gameID uno.GameID) *telego.InlineKeyboardMarkup {
+func makeGameButtons(view game.PublicGameView) *telego.InlineKeyboardMarkup {
+	if view.GameID == "" || view.Closed || view.Phase == uno.Finished {
+		return nil
+	}
 	return &telego.InlineKeyboardMarkup{
 		InlineKeyboard: [][]telego.InlineKeyboardButton{
 			{
 				{
 					Text:                         "🃏 Suas cartas",
-					SwitchInlineQueryCurrentChat: stringPtr(fmt.Sprintf("g_%s", gameID)),
+					SwitchInlineQueryCurrentChat: stringPtr(fmt.Sprintf("g_%s", view.GameID)),
 				},
 			},
 		},
@@ -177,7 +180,7 @@ func (h *CommandHandler) handleNovo(ctx context.Context, actorID uno.PlayerID, c
 		return
 	}
 
-	h.reply(ctx, int64(chatID), h.renderer.RenderLobby(outcome.View), makeGameButtons(outcome.View.GameID))
+	h.reply(ctx, int64(chatID), h.renderer.RenderLobby(outcome.View), makeGameButtons(outcome.View))
 }
 
 func (h *CommandHandler) handleEntrar(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID) {
@@ -224,13 +227,13 @@ func (h *CommandHandler) handleEntrar(ctx context.Context, actorID uno.PlayerID,
 	}
 
 	if outcome.View.Phase == uno.Lobby {
-		h.reply(ctx, int64(chatID), h.renderer.RenderLobby(outcome.View), makeGameButtons(outcome.View.GameID))
+		h.reply(ctx, int64(chatID), h.renderer.RenderLobby(outcome.View), makeGameButtons(outcome.View))
 	} else {
 		msg := fmt.Sprintf("✅ %s entrou na partida em andamento!\n\n%s",
-			h.renderer.userCache.FormatLink(actorID),
+			h.renderer.PlayerLink(actorID, outcome.View),
 			h.renderer.RenderPublicState(outcome.View),
 		)
-		h.reply(ctx, int64(chatID), msg, makeGameButtons(outcome.View.GameID))
+		h.reply(ctx, int64(chatID), msg, makeGameButtons(outcome.View))
 	}
 }
 
@@ -285,7 +288,7 @@ func (h *CommandHandler) handleIniciar(ctx context.Context, actorID uno.PlayerID
 	}
 
 	msg := "🚀 <b>Partida iniciada!</b>\n\n" + h.renderer.RenderPublicState(outcome.View)
-	h.reply(ctx, int64(chatID), msg, makeGameButtons(outcome.View.GameID))
+	h.reply(ctx, int64(chatID), msg, makeGameButtons(outcome.View))
 }
 
 func (h *CommandHandler) handleCancelar(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID) {
@@ -351,17 +354,18 @@ func (h *CommandHandler) handleSair(ctx context.Context, actorID uno.PlayerID, c
 	h.tokens.InvalidateUserGame(summary.GameID, actorID)
 
 	if outcome.View.Closed {
+		h.tokens.InvalidateGame(summary.GameID)
 		msg := fmt.Sprintf("👋 %s saiu da partida.\n\n%s",
-			h.renderer.userCache.FormatLink(actorID),
+			h.renderer.PlayerLink(actorID, outcome.View),
 			h.renderer.RenderPublicState(outcome.View),
 		)
 		h.reply(ctx, int64(chatID), msg, nil)
 	} else {
 		msg := fmt.Sprintf("👋 %s saiu da partida.\n\n%s",
-			h.renderer.userCache.FormatLink(actorID),
+			h.renderer.PlayerLink(actorID, outcome.View),
 			h.renderer.RenderPublicState(outcome.View),
 		)
-		h.reply(ctx, int64(chatID), msg, makeGameButtons(outcome.View.GameID))
+		h.reply(ctx, int64(chatID), msg, makeGameButtons(outcome.View))
 	}
 }
 
@@ -383,8 +387,8 @@ func (h *CommandHandler) handleEstado(ctx context.Context, chatID game.ChatID) {
 	}
 
 	if view.Phase == uno.Lobby {
-		h.reply(ctx, int64(chatID), h.renderer.RenderLobby(view), makeGameButtons(view.GameID))
+		h.reply(ctx, int64(chatID), h.renderer.RenderLobby(view), makeGameButtons(view))
 	} else {
-		h.reply(ctx, int64(chatID), h.renderer.RenderPublicState(view), makeGameButtons(view.GameID))
+		h.reply(ctx, int64(chatID), h.renderer.RenderPublicState(view), makeGameButtons(view))
 	}
 }

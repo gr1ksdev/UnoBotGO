@@ -334,3 +334,143 @@ func TestInvalidShufflerCannotCorruptCommittedState(t *testing.T) {
 	apply(t, g, Action{Type: JoinGame, PlayerID: 2})
 	rejected(t, g, Action{Type: StartGame, PlayerID: 1, DealerID: 2, Revision: 2}, ErrInvalidState)
 }
+
+// Terminal turns must never be created, including effects that normally return
+// the turn to the actor in a two-player game. Stacking at closure is unchanged.
+func TestTwoPlayerFinalCardLifecycle(t *testing.T) {
+	for name, rules := range map[string]Rules{"classic_bot": BotRules(), "caseiro": CaseiroRules(), "first_winner": ClassicRules()} {
+		for _, rank := range []Rank{One, Reverse, Skip, DrawTwo, Wild, WildDrawFour} {
+			for _, direction := range []int{1, -1} {
+				t.Run(fmt.Sprintf("%s/%d/direction%d", name, rank, direction), func(t *testing.T) {
+					color := Red
+					if rank >= Wild {
+						color = NoColor
+					}
+					g := scenario(t, rules, [][]Card{{card(color, rank)}, {card(Blue, One)}}, card(Red, Five), nil)
+					g.state.Direction = direction
+					r := apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.state.Players[0].Hand[0]})
+					wantEvents := []EventType{CardPlayed}
+					if rank >= Wild {
+						if g.state.Phase != ChoosingColor || g.state.CurrentPlayerID != 1 || len(g.state.Order) != 2 || len(g.state.Placements) != 0 || !reflect.DeepEqual(eventTypes(r), []EventType{CardPlayed, ColorChoiceRequired}) {
+							t.Fatalf("premature wild completion: %+v, %+v", g.Snapshot(), r)
+						}
+						r = apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Blue})
+						wantEvents = []EventType{ColorChosen}
+					}
+					penalty, counter := 0, 0
+					switch rank {
+					case Reverse, Skip:
+						wantEvents = append(wantEvents, PlayerSkipped)
+					case DrawTwo:
+						if rules.StackDrawTwo {
+							counter = 2
+						} else {
+							penalty = 2
+						}
+					case WildDrawFour:
+						if rules.StackDrawTwoOnWildFour {
+							counter = 4
+						} else {
+							penalty = 4
+						}
+					}
+					if penalty > 0 {
+						wantEvents = append(wantEvents, CardsDrawn, PlayerSkipped)
+					}
+					wantEvents = append(wantEvents, PlayerWon, GameFinished)
+					if !reflect.DeepEqual(eventTypes(r), wantEvents) {
+						t.Fatalf("events = %v, want %v", eventTypes(r), wantEvents)
+					}
+					s := g.Snapshot()
+					if s.Phase != Finished || s.CurrentPlayerID != 0 || s.Pending != nil || s.DrawnCardID != "" || !slices.Equal(s.Order, []PlayerID{2}) || s.DrawCounter != counter || len(s.Players[1].Hand) != 1+penalty {
+						t.Fatalf("terminal state: %+v", s)
+					}
+					placements := []Placement{{PlayerID: 1, Position: 1, WentOut: true}}
+					if rules.EndPolicy == Placements {
+						placements = append(placements, Placement{PlayerID: 2, Position: 2})
+					}
+					if !reflect.DeepEqual(s.Placements, placements) {
+						t.Fatalf("placements: %+v", s.Placements)
+					}
+					for _, kind := range []ActionType{DrawCard, SkipTurn, PassTurn} {
+						rejected(t, g, Action{Type: kind, PlayerID: 2, Revision: s.Revision}, ErrGameFinished)
+					}
+				})
+			}
+		}
+	}
+}
+
+func eventTypes(r Result) []EventType {
+	types := make([]EventType, len(r.Events))
+	for i, ev := range r.Events {
+		types[i] = ev.Type
+	}
+	return types
+}
+
+func TestLastCardWithPendingStackPreservesTerminalRules(t *testing.T) {
+	for name, rules := range map[string]Rules{"classic_bot": BotRules(), "caseiro": CaseiroRules()} {
+		for _, rank := range []Rank{DrawTwo, WildDrawFour} {
+			if rank == WildDrawFour && !rules.StackWildDrawFourOnTwo {
+				continue
+			}
+			t.Run(fmt.Sprintf("%s/%d", name, rank), func(t *testing.T) {
+				color := Red
+				if rank == WildDrawFour {
+					color = NoColor
+				}
+				g := scenario(t, rules, [][]Card{{card(color, rank)}, {card(Blue, One)}}, card(Red, DrawTwo), nil)
+				g.state.DrawCounter = 6
+				r := apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.state.Players[0].Hand[0]})
+				wantCounter := 8
+				if rank == WildDrawFour {
+					r = apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Blue})
+					wantCounter = 4 // Existing Caseiro +4 response replaces the counter.
+				}
+				if g.state.Phase != Finished || g.state.DrawCounter != wantCounter || len(g.state.Players[1].Hand) != 1 || hasEvent(r, TurnChanged, 2) || hasEvent(r, CardsDrawn, 2) {
+					t.Fatalf("terminal stack changed: %+v %+v", g.Snapshot(), r)
+				}
+			})
+		}
+	}
+}
+
+func TestPlacementsContinueAcrossModesAndDirections(t *testing.T) {
+	for name, rules := range map[string]Rules{"classic_bot": BotRules(), "caseiro": CaseiroRules()} {
+		for _, direction := range []int{1, -1} {
+			for _, players := range []int{3, 4} {
+				for _, rank := range []Rank{One, Reverse, Skip, DrawTwo, Wild, WildDrawFour} {
+					t.Run(fmt.Sprintf("%s/%d/%d/%d", name, direction, players, rank), func(t *testing.T) {
+						color := Red
+						if rank >= Wild {
+							color = NoColor
+						}
+						hands := [][]Card{{card(color, rank)}}
+						for i := 1; i < players; i++ {
+							hands = append(hands, []Card{card(Red, Two), card(Blue, Three)})
+						}
+						g := scenario(t, rules, hands, card(Red, Five), nil)
+						g.state.Direction = direction
+						expectedDirection := direction
+						if rank == Reverse {
+							expectedDirection *= -1
+						}
+						steps := 1
+						if rank == Skip || (rank == WildDrawFour && !rules.StackDrawTwoOnWildFour) {
+							steps = 2
+						}
+						expectedPlayer := PlayerID((steps*expectedDirection%players+players)%players + 1)
+						r := apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.state.Players[0].Hand[0]})
+						if rank >= Wild {
+							r = apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Red})
+						}
+						if g.state.Phase != TakingTurn || g.state.CurrentPlayerID != expectedPlayer || g.state.Direction != expectedDirection || len(g.state.Order) != players-1 || len(g.state.Placements) != 1 || !hasEvent(r, TurnChanged, expectedPlayer) || hasEvent(r, GameFinished, 0) {
+							t.Fatalf("placement continuation: %+v %+v", g.Snapshot(), r)
+						}
+					})
+				}
+			}
+		}
+	}
+}

@@ -1,5 +1,42 @@
 # UnoBotGO V2 — Milestone 2
 
+> Atualização de 2026-09-23: o contrato de timeout e encerramento vigente está
+> descrito abaixo. As seções da M2 preservam o contexto histórico.
+
+## Timeout e encerramento — milestone corretiva
+
+A engine continua responsável por `GameFinished`. O serviço publica a view final,
+remove os índices ativos, descarta o runtime privado e zera `turnStarted` na mesma
+operação protegida pelo mutex da partida. Não há timer individual nem turno do
+último jogador após encerramento.
+
+O scheduler usa duas operações:
+
+- `ExpiredTurns(ctx, timeout) []ExpiredTurn`: descoberta somente de leitura;
+  candidato contém `GameID`, `ChatID`, `PlayerID` e `Revision`.
+- `AutoSkipTurn(ctx, candidate, timeout) (Outcome, bool)`: revalida candidato,
+  fase, prazo e encerramento sob o mutex, antes de aplicar `SkipTurn`.
+  `false` significa que não houve ação nem deve haver mensagem.
+
+Candidatos são dados internos do scheduler confiável, nunca input de jogadores.
+O adapter enfileira execução e envio da mensagem na mesma tarefa do chat utilizada
+pelas jogadas. Não deve aplicar um timeout fora da fila e enfileirar somente sua
+notificação: esse padrão permitiria anunciar um turno antigo após a vitória.
+Candidatos duplicados, antigos, cancelados, de jogos removidos ou de um jogo
+anterior no mesmo chat não alteram o estado. Saturação da fila não aplica a ação.
+
+`AutoSkipExpired(ctx, timeout)` permanece como wrapper síncrono das duas operações
+para consumidores sem fila. O bot usa as operações separadas. Leituras de runtime,
+`final` e prazo usam exclusivamente o mutex da partida; `indexMu` só protege os
+índices e a cópia de referências.
+
+Regras de cartas preservadas: o Clássico do Telegram usa `BotRules` (placements e
+stacking de +2), enquanto `ClassicRules` da engine usa primeiro vencedor. Wild/+4
+aguardam escolha de cor antes da colocação. Penalidades imediatas continuam sendo
+aplicadas antes do término. Com stacking terminal, não há nova compra automática,
+chance de rebater ou turno adicional; o contador final é preservado como antes.
+
+
 `internal/game` fornece a camada de aplicação entre adapters futuros e
 `internal/uno`. Não inicia Telegram, não substitui o executável V1 e não depende
 de banco, tokens inline, ranking, Match ou timers.

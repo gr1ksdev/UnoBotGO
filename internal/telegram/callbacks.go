@@ -82,12 +82,17 @@ func (h *CallbackHandler) handleRefreshState(ctx context.Context, cq *telego.Cal
 	}
 
 	if cq.Message != nil {
+		markup := makeGameButtons(view)
+		if markup == nil {
+			// Explicit empty keyboard removes buttons from the existing message.
+			markup = &telego.InlineKeyboardMarkup{InlineKeyboard: [][]telego.InlineKeyboardButton{}}
+		}
 		_, _ = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
 			ChatID:      telego.ChatID{ID: cq.Message.GetChat().ID},
 			MessageID:   cq.Message.GetMessageID(),
 			Text:        text,
 			ParseMode:   "HTML",
-			ReplyMarkup: makeGameButtons(gameID),
+			ReplyMarkup: markup,
 		})
 	}
 
