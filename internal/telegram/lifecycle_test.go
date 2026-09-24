@@ -378,7 +378,7 @@ func TestInlineContextAndActionBindingAcrossGroups(t *testing.T) {
 			t.Fatalf("invalid selector: %T", result)
 		}
 		context := *article.ReplyMarkup.InlineKeyboard[0][0].SwitchInlineQueryCurrentChat
-		if context != "g_"+string(first.GameID) && context != "g_"+string(second.GameID) {
+		if !strings.HasPrefix(context, "g_"+string(first.GameID)) && !strings.HasPrefix(context, "g_"+string(second.GameID)) {
 			t.Fatalf("wrong selector context %s", context)
 		}
 	}

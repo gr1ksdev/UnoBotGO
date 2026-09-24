@@ -55,6 +55,7 @@ não copiar a instância nem utilizar seu valor zero.
 | `PlayerView(ctx, Actor, GameID)` | Apenas mão do próprio participante ativo autenticado. |
 | `FindChatGame(ctx, ChatID)` | Resumo da única sessão aberta no chat. |
 | `FindPlayerGames(ctx, Actor)` | Sessões de participação ativa do autor, ordenadas por ChatID/GameID. |
+| `ResetChat(ctx, Actor)` | Remove sessão ativa e histórico do chat; exige responsável da partida ou administrador autenticado pelo adapter. |
 
 `CreateRequest` contém `ChatName` e `uno.Rules`; regras zero equivalem a Classic.
 `WithHistoryLimit(n)` configura retenção de encerrados: padrão 100; zero desativa;
@@ -88,17 +89,20 @@ _ = started
 
 ## Responsável, solicitante e participante
 
-`Actor` é identidade/contexto vindo de um adapter **confiável**. A M2 não verifica
-credenciais Telegram. Nunca construir Actor a partir de um ID alegado no payload
-cliente; o adapter deverá autenticá-lo. `Action.PlayerID` deve coincidir com o
-solicitante real; divergência retorna `ErrForbidden`.
+`Actor` é identidade/contexto vindo de um adapter **confiável**. A camada não
+verifica credenciais Telegram. Nunca construir Actor a partir de um ID alegado no
+payload cliente; o adapter deverá autenticá-lo. `Action.PlayerID` deve coincidir
+com o solicitante real; divergência retorna `ErrForbidden`. `Actor.ChatAdmin`
+também é uma afirmação confiável do adapter, preenchida somente após consultar a
+função administrativa do usuário no chat.
 
 - Create exige PlayerID positivo e ChatID não zero.
 - Join/Leave exigem contexto do chat correspondente.
 - Start/Cancel exigem contexto do chat e `Actor.PlayerID == OwnerID`.
 - Play/Draw/Pass/ChooseColor aceitam ChatID zero para o futuro inline; qualquer
   ChatID fornecido precisa corresponder ao jogo.
-- Não há papel de admin externo nesta milestone. Owner não recebe acesso a mãos.
+- ResetChat aceita o responsável da partida ou `ChatAdmin`; nenhum dos dois recebe
+  acesso a mãos por causa dessa autorização.
 
 O responsável pode iniciar/cancelar sem participar, inclusive cancelar lobby vazio.
 Start escolhe `Order[0]` como dealer quando `DealerID` é zero. Dealer explícito
@@ -153,6 +157,14 @@ Contexto é verificado na entrada e após espera por lock, antes de mutar. Mutex
 padrão não é interrompível: cancelamento não promete retorno imediato durante
 espera. Após engine aceitar a ação, o serviço termina publicação e retorna sucesso
 mesmo se ctx for cancelado nesse intervalo; não simula rollback de ação aceita.
+
+`ResetChat` usa espera de lock sensível ao contexto. Quando autorizado, marca o
+runtime removido como resetado, apaga a sessão ativa, todos os índices de jogadores
+e todos os resumos históricos do chat em uma única seção protegida. Referências
+antigas passam a retornar `ErrGameReset` e não podem publicar novamente nos
+índices. Partidas de outros chats permanecem intactas. Para administradores, o
+reset sem estado é idempotente; sem partida ativa, um usuário comum não possui
+autoridade implícita para limpar o chat.
 
 ## Lifecycle e histórico
 
@@ -212,7 +224,7 @@ Save/Get artificiais ou recovery público. Reiniciar perde sessões e histórico
 
 Erros de aplicação: `ErrInvalidArgument`, `ErrForbidden`, `ErrGameNotFound`,
 `ErrNoActiveGame`, `ErrChatOccupied`, `ErrGameClosed`, `ErrNotParticipant`,
-`ErrIDConflict`. Erros de regras/revision são preservados para `errors.Is`.
+`ErrIDConflict`, `ErrGameReset`. Erros de regras/revision são preservados para `errors.Is`.
 Falhas de Apply retornam Outcome vazio e não alteram estado/índices.
 
 ```bash

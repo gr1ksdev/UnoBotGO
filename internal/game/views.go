@@ -45,6 +45,7 @@ type PublicGameView struct {
 	Placements     []uno.Placement
 	Closed         bool
 	CloseReason    CloseReason
+	CanCallBluff   bool
 }
 
 type CardView struct {
@@ -64,6 +65,7 @@ type GameSummary struct {
 	GameID   uno.GameID
 	ChatID   ChatID
 	ChatName string
+	OwnerID  uno.PlayerID
 	Revision uint64
 	Phase    uno.Phase
 }
@@ -80,7 +82,7 @@ func (v PublicGameView) clone() PublicGameView {
 }
 
 func (v PublicGameView) summary() GameSummary {
-	return GameSummary{GameID: v.GameID, ChatID: v.ChatID, ChatName: v.ChatName, Revision: v.Revision, Phase: v.Phase}
+	return GameSummary{GameID: v.GameID, ChatID: v.ChatID, ChatName: v.ChatName, OwnerID: v.OwnerID, Revision: v.Revision, Phase: v.Phase}
 }
 
 func publicView(entry *managedGame, state uno.State) PublicGameView {
@@ -90,7 +92,7 @@ func publicView(entry *managedGame, state uno.State) PublicGameView {
 		Phase: state.Phase, Rules: state.Rules, CurrentTurn: state.CurrentPlayerID,
 		Direction: state.Direction, ActiveColor: state.ActiveColor,
 		DrawCounter: state.DrawCounter,
-		Order: slices.Clone(state.Order), Placements: slices.Clone(state.Placements),
+		Order:       slices.Clone(state.Order), Placements: slices.Clone(state.Placements),
 		Closed: state.Phase == uno.Finished, CloseReason: CloseReason(state.FinishReason),
 		Players: make([]PublicPlayer, 0, len(state.Players)),
 	}
@@ -109,6 +111,9 @@ func publicView(entry *managedGame, state uno.State) PublicGameView {
 	}
 	if state.Pending != nil {
 		v.ColorChooserID = state.Pending.Actor
+	}
+	if state.PendingBluff != nil && state.CurrentPlayerID == state.PendingBluff.Target && state.DrawCounter > 0 {
+		v.CanCallBluff = true
 	}
 	return v
 }

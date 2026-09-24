@@ -19,6 +19,8 @@ type mockBotAPI struct {
 	SetWebhookCalls    []telego.SetWebhookParams
 	DeleteWebhookCalls []telego.DeleteWebhookParams
 	CommandsErr        error
+	ChatMemberErr      error
+	ChatMembers        map[int64]telego.ChatMember
 
 	SentMessages       []telego.SendMessageParams
 	SentStickers       []telego.SendStickerParams
@@ -28,6 +30,7 @@ type mockBotAPI struct {
 	AnsweredInlines    []telego.AnswerInlineQueryParams
 	AnsweredCallbacks  []telego.AnswerCallbackQueryParams
 	RegisteredCommands []telego.BotCommand
+	SentMessageSignal  chan struct{}
 
 	UpdatesChan chan telego.Update
 }
@@ -43,7 +46,9 @@ func newMockBotAPI() *mockBotAPI {
 		WebhookInfo: &telego.WebhookInfo{
 			URL: "",
 		},
-		UpdatesChan: make(chan telego.Update, 100),
+		UpdatesChan:       make(chan telego.Update, 100),
+		ChatMembers:       make(map[int64]telego.ChatMember),
+		SentMessageSignal: make(chan struct{}, 100),
 	}
 }
 
@@ -94,6 +99,18 @@ func (m *mockBotAPI) SetMyCommands(ctx context.Context, params *telego.SetMyComm
 	return m.CommandsErr
 }
 
+func (m *mockBotAPI) GetChatMember(ctx context.Context, params *telego.GetChatMemberParams) (telego.ChatMember, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.ChatMemberErr != nil {
+		return nil, m.ChatMemberErr
+	}
+	if params == nil {
+		return nil, nil
+	}
+	return m.ChatMembers[params.UserID], nil
+}
+
 func (m *mockBotAPI) UpdatesViaLongPolling(
 	ctx context.Context,
 	params *telego.GetUpdatesParams,
@@ -109,6 +126,10 @@ func (m *mockBotAPI) SendMessage(ctx context.Context, params *telego.SendMessage
 	defer m.mu.Unlock()
 	if params != nil {
 		m.SentMessages = append(m.SentMessages, *params)
+	}
+	select {
+	case m.SentMessageSignal <- struct{}{}:
+	default:
 	}
 	return &telego.Message{MessageID: len(m.SentMessages)}, nil
 }

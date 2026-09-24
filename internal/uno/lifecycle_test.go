@@ -67,7 +67,16 @@ func TestPlacementLastActionEffects(t *testing.T) {
 			if rank >= Wild {
 				color = NoColor
 			}
-			g := scenario(t, BotRules(), [][]Card{{card(color, rank)}, {card(Blue, One)}, {card(Green, One)}}, card(Red, Five), nil)
+			// Verify that under BotRules(), wild cannot be used as the final card.
+			if rank >= Wild {
+				botGame := scenario(t, BotRules(), [][]Card{{card(color, rank)}, {card(Blue, One)}, {card(Green, One)}}, card(Red, Five), nil)
+				_, err := botGame.Apply(Action{Type: PlayCard, PlayerID: 1, CardID: botGame.Snapshot().Players[0].Hand[0]})
+				if !errors.Is(err, ErrCardNotPlayable) {
+					t.Fatalf("expected ErrCardNotPlayable for wild finish under BotRules, got %v", err)
+				}
+			}
+			rules := Rules{EndPolicy: Placements, StackDrawTwo: true, StackWildDrawFour: true}
+			g := scenario(t, rules, [][]Card{{card(color, rank)}, {card(Blue, One)}, {card(Green, One)}}, card(Red, Five), nil)
 			apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.Snapshot().Players[0].Hand[0]})
 			if rank >= Wild {
 				apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Blue})
@@ -77,7 +86,7 @@ func TestPlacementLastActionEffects(t *testing.T) {
 			if rank == Wild {
 				next = 2
 			}
-			if rank == DrawTwo && s.Rules.StackDrawTwo {
+			if (rank == DrawTwo && s.Rules.StackDrawTwo) || (rank == WildDrawFour && s.Rules.StackWildDrawFour) {
 				next = 2
 			}
 			if s.Phase != TakingTurn || s.CurrentPlayerID != next || len(s.Order) != 2 {
@@ -97,8 +106,19 @@ func TestPlacementLastActionEffects(t *testing.T) {
 					t.Fatal("last +2")
 				}
 			}
-			if rank == WildDrawFour && len(s.Players[1].Hand) != 5 {
-				t.Fatal("last +4")
+			if rank == WildDrawFour {
+				if s.Rules.StackWildDrawFour {
+					if s.DrawCounter != 4 {
+						t.Fatalf("expected DrawCounter 4, got %d", s.DrawCounter)
+					}
+					apply(t, g, Action{Type: DrawCard, PlayerID: 2})
+					s = g.Snapshot()
+					if len(s.Players[1].Hand) != 5 || s.CurrentPlayerID != 3 {
+						t.Fatalf("expected player 2 to have 5 cards and turn to pass to 3, got hand=%d current=%d", len(s.Players[1].Hand), s.CurrentPlayerID)
+					}
+				} else if len(s.Players[1].Hand) != 5 {
+					t.Fatal("last +4")
+				}
 			}
 		})
 	}
@@ -119,6 +139,10 @@ func TestPendingMembershipChanges(t *testing.T) {
 		t.Fatal("pending target not repaired")
 	}
 	apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Green})
+	if g.Snapshot().CurrentPlayerID != 3 || g.Snapshot().DrawCounter != 4 {
+		t.Fatal("expected player 3 turn with DrawCounter 4")
+	}
+	apply(t, g, Action{Type: DrawCard, PlayerID: 3})
 	if len(g.Snapshot().Players[2].Hand) != 5 || g.Snapshot().CurrentPlayerID != 4 {
 		t.Fatal("pending penalty after membership change")
 	}
@@ -348,6 +372,13 @@ func TestTwoPlayerFinalCardLifecycle(t *testing.T) {
 					}
 					g := scenario(t, rules, [][]Card{{card(color, rank)}, {card(Blue, One)}}, card(Red, Five), nil)
 					g.state.Direction = direction
+					if rules.NoWildFinish && rank >= Wild {
+						_, err := g.Apply(Action{Type: PlayCard, PlayerID: 1, CardID: g.state.Players[0].Hand[0]})
+						if !errors.Is(err, ErrCardNotPlayable) {
+							t.Fatalf("expected ErrCardNotPlayable for wild finish under NoWildFinish, got %v", err)
+						}
+						return
+					}
 					r := apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.state.Players[0].Hand[0]})
 					wantEvents := []EventType{CardPlayed}
 					if rank >= Wild {
@@ -368,7 +399,7 @@ func TestTwoPlayerFinalCardLifecycle(t *testing.T) {
 							penalty = 2
 						}
 					case WildDrawFour:
-						if rules.StackDrawTwoOnWildFour {
+						if rules.StackWildDrawFour || rules.StackDrawTwoOnWildFour {
 							counter = 4
 						} else {
 							penalty = 4
@@ -422,6 +453,13 @@ func TestLastCardWithPendingStackPreservesTerminalRules(t *testing.T) {
 				}
 				g := scenario(t, rules, [][]Card{{card(color, rank)}, {card(Blue, One)}}, card(Red, DrawTwo), nil)
 				g.state.DrawCounter = 6
+				if rules.NoWildFinish && rank == WildDrawFour {
+					_, err := g.Apply(Action{Type: PlayCard, PlayerID: 1, CardID: g.state.Players[0].Hand[0]})
+					if !errors.Is(err, ErrCardNotPlayable) {
+						t.Fatalf("expected ErrCardNotPlayable for wild finish under NoWildFinish, got %v", err)
+					}
+					return
+				}
 				r := apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.state.Players[0].Hand[0]})
 				wantCounter := 8
 				if rank == WildDrawFour {
@@ -437,7 +475,11 @@ func TestLastCardWithPendingStackPreservesTerminalRules(t *testing.T) {
 }
 
 func TestPlacementsContinueAcrossModesAndDirections(t *testing.T) {
-	for name, rules := range map[string]Rules{"classic_bot": BotRules(), "caseiro": CaseiroRules()} {
+	for name, rules := range map[string]Rules{
+		"classic_placements": {EndPolicy: Placements},
+		"classic_bot":        BotRules(),
+		"caseiro":            CaseiroRules(),
+	} {
 		for _, direction := range []int{1, -1} {
 			for _, players := range []int{3, 4} {
 				for _, rank := range []Rank{One, Reverse, Skip, DrawTwo, Wild, WildDrawFour} {
@@ -452,12 +494,19 @@ func TestPlacementsContinueAcrossModesAndDirections(t *testing.T) {
 						}
 						g := scenario(t, rules, hands, card(Red, Five), nil)
 						g.state.Direction = direction
+						if rules.NoWildFinish && rank >= Wild {
+							_, err := g.Apply(Action{Type: PlayCard, PlayerID: 1, CardID: g.state.Players[0].Hand[0]})
+							if !errors.Is(err, ErrCardNotPlayable) {
+								t.Fatalf("expected ErrCardNotPlayable for wild finish under NoWildFinish, got %v", err)
+							}
+							return
+						}
 						expectedDirection := direction
 						if rank == Reverse {
 							expectedDirection *= -1
 						}
 						steps := 1
-						if rank == Skip || (rank == WildDrawFour && !rules.StackDrawTwoOnWildFour) {
+						if rank == Skip || (rank == DrawTwo && !rules.StackDrawTwo) || (rank == WildDrawFour && !rules.StackDrawTwoOnWildFour && !rules.StackWildDrawFour) {
 							steps = 2
 						}
 						expectedPlayer := PlayerID((steps*expectedDirection%players+players)%players + 1)

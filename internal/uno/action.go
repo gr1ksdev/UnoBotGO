@@ -12,6 +12,8 @@ const (
 	ChooseColor
 	CancelGame
 	SkipTurn
+	CallBluff
+	SetRules
 )
 
 // Action uses only domain IDs. The application authenticates PlayerID and
@@ -27,4 +29,5 @@ type Action struct {
 	CardID   CardID
 	Color    Color
 	DealerID PlayerID
+	Rules    Rules
 }

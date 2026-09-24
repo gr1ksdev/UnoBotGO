@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -84,7 +85,9 @@ func (h *InlineHandler) HandleInlineQuery(ctx context.Context, query *telego.Inl
 			results, nextOffset = h.buildGameSelectorResults(ctx, actorID, playerGames, query.Offset)
 		}
 	} else if strings.HasPrefix(rawQuery, "g_") {
-		targetGameID := uno.GameID(strings.TrimPrefix(rawQuery, "g_"))
+		queryBody := strings.TrimPrefix(rawQuery, "g_")
+		gameIDStr := strings.SplitN(queryBody, "_", 2)[0]
+		targetGameID := uno.GameID(gameIDStr)
 		results, nextOffset = h.buildPlayerHandResults(ctx, actorID, targetGameID, query.Offset)
 	} else {
 		// Unknown query format
@@ -156,7 +159,7 @@ func (h *InlineHandler) buildGameSelectorResults(
 					{
 						{
 							Text:                         "🃏 Abrir minha mão",
-							SwitchInlineQueryCurrentChat: stringPtr(fmt.Sprintf("g_%s", g.GameID)),
+							SwitchInlineQueryCurrentChat: stringPtr(fmt.Sprintf("g_%s_%d", g.GameID, g.Revision)),
 						},
 					},
 				},
@@ -221,6 +224,7 @@ func (h *InlineHandler) buildPlayerHandResults(
 	}
 
 	var results []telego.InlineQueryResult
+	sortedHand := sortHand(view.Hand)
 
 	// 1. Action controls if it's the player's turn
 	if view.Public.Phase == uno.ChoosingColor {
@@ -255,9 +259,9 @@ func (h *InlineHandler) buildPlayerHandResults(
 			}
 
 			// 5th article: hand summary
-			if len(view.Hand) > 0 {
+			if len(sortedHand) > 0 {
 				var descs []string
-				for _, cv := range view.Hand {
+				for _, cv := range sortedHand {
 					descs = append(descs, CardRepr(cv.Card))
 				}
 				results = append(results, &telego.InlineQueryResultArticle{
@@ -287,6 +291,25 @@ func (h *InlineHandler) buildPlayerHandResults(
 				ParseMode:   "HTML",
 			},
 		})
+
+		if len(sortedHand) > 0 {
+			var descs []string
+			for _, cv := range sortedHand {
+				descs = append(descs, CardRepr(cv.Card))
+			}
+			results = append(results, &telego.InlineQueryResultArticle{
+				Type:        "article",
+				ID:          fmt.Sprintf("hand_%s_%d", gameID, view.Public.Revision),
+				Title:       "Suas cartas (toque para estado do jogo):",
+				Description: strings.Join(descs, ", "),
+				InputMessageContent: &telego.InputTextMessageContent{
+					MessageText: h.renderer.RenderPublicState(view.Public),
+					ParseMode:   "HTML",
+				},
+			})
+		}
+
+		return results, ""
 	} else if view.Public.Phase == uno.TakingTurn && view.Public.CurrentTurn == actorID {
 		if view.DrawnCardID == "" {
 			// Player can draw
@@ -314,6 +337,23 @@ func (h *InlineHandler) buildPlayerHandResults(
 					MessageText: msgText,
 				},
 			})
+
+			if view.Public.CanCallBluff {
+				tokBluff, _ := h.tokens.CreateActionToken(actorID, gameID, view.Public.ChatID, uno.Action{
+					Type:     uno.CallBluff,
+					PlayerID: actorID,
+					Revision: view.Public.Revision,
+				}, h.tokenTTL)
+
+				results = append(results, &telego.InlineQueryResultCachedSticker{
+					Type:          "sticker",
+					ID:            tokBluff,
+					StickerFileID: Stickers["option_bluff"],
+					InputMessageContent: &telego.InputTextMessageContent{
+						MessageText: "Desafiando blefe!",
+					},
+				})
+			}
 		} else {
 			// Player drew already, can pass
 			tokPass, _ := h.tokens.CreateActionToken(actorID, gameID, view.Public.ChatID, uno.Action{
@@ -344,14 +384,14 @@ func (h *InlineHandler) buildPlayerHandResults(
 		}
 	}
 
-	if offset < len(view.Hand) {
+	if offset < len(sortedHand) {
 		end := offset + 40 // Leave room for header + controls (total < 50)
-		if end > len(view.Hand) {
-			end = len(view.Hand)
+		if end > len(sortedHand) {
+			end = len(sortedHand)
 		}
 
 		for i := offset; i < end; i++ {
-			cv := view.Hand[i]
+			cv := sortedHand[i]
 			if cv.Playable {
 				tokPlay, _ := h.tokens.CreateActionToken(actorID, gameID, view.Public.ChatID, uno.Action{
 					Type:     uno.PlayCard,
@@ -392,7 +432,7 @@ func (h *InlineHandler) buildPlayerHandResults(
 		}
 
 		nextOffset := ""
-		if end < len(view.Hand) {
+		if end < len(sortedHand) {
 			if curTok, err := h.tokens.CreateCursorToken(actorID, CursorKindHand, gameID, view.Public.Revision, end, h.tokenTTL); err == nil {
 				nextOffset = curTok
 			}
@@ -508,4 +548,39 @@ func (h *InlineHandler) replyActionError(ctx context.Context, actorID uno.Player
 		params.ReplyMarkup = markup
 	}
 	_, _ = h.bot.SendMessage(ctx, params)
+}
+
+func sortHand(hand []game.CardView) []game.CardView {
+	sorted := make([]game.CardView, len(hand))
+	copy(sorted, hand)
+	slices.SortStableFunc(sorted, func(a, b game.CardView) int {
+		ar := colorSortRank(a.Card.Color, a.Card.Rank)
+		br := colorSortRank(b.Card.Color, b.Card.Rank)
+		if ar != br {
+			return ar - br
+		}
+		if a.Card.Rank != b.Card.Rank {
+			return int(a.Card.Rank) - int(b.Card.Rank)
+		}
+		return strings.Compare(string(a.Card.ID), string(b.Card.ID))
+	})
+	return sorted
+}
+
+func colorSortRank(c uno.Color, r uno.Rank) int {
+	if r >= uno.Wild {
+		return 99
+	}
+	switch c {
+	case uno.Red:
+		return 0
+	case uno.Blue:
+		return 1
+	case uno.Green:
+		return 2
+	case uno.Yellow:
+		return 3
+	default:
+		return 98
+	}
 }

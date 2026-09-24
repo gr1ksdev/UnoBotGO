@@ -89,7 +89,7 @@ func (b *Bot) Run(ctx context.Context) error {
 	return b.runPolling(ctx)
 }
 func (b *Bot) registerCommands(ctx context.Context) error {
-	commands := []telego.BotCommand{{Command: "novo", Description: "Criar uma nova partida de UNO"}, {Command: "entrar", Description: "Entrar na partida de UNO"}, {Command: "iniciar", Description: "Iniciar a partida (apenas responsável)"}, {Command: "cancelar", Description: "Cancelar a partida (apenas responsável)"}, {Command: "sair", Description: "Sair da partida em andamento"}, {Command: "estado", Description: "Ver estado atual da partida"}, {Command: "ajuda", Description: "Instruções de como jogar"}}
+	commands := []telego.BotCommand{{Command: "novo", Description: "Criar uma nova partida de UNO"}, {Command: "entrar", Description: "Entrar na partida de UNO"}, {Command: "iniciar", Description: "Iniciar a partida (apenas responsável)"}, {Command: "cancelar", Description: "Cancelar a partida (apenas responsável)"}, {Command: "reset", Description: "Recuperar e limpar o estado do grupo"}, {Command: "sair", Description: "Sair da partida em andamento"}, {Command: "estado", Description: "Ver estado atual da partida"}, {Command: "ajuda", Description: "Instruções de como jogar"}}
 	if err := b.api.SetMyCommands(ctx, &telego.SetMyCommandsParams{Commands: commands}); err != nil {
 		b.logger.Warn("failed to register bot commands with Telegram", "error", err.Error())
 	}
@@ -262,6 +262,14 @@ func (b *Bot) submitUpdate(ctx context.Context, update telego.Update) bool {
 	return accepted
 }
 func (b *Bot) processUpdate(ctx context.Context, update telego.Update) bool {
+	if update.Message != nil {
+		if command, _, ok := parseBotCommand(update.Message.Text, b.username); ok && command == "reset" {
+			chatID := game.ChatID(update.Message.Chat.ID)
+			return b.dispatcher.EnqueueRecovery(chatID, func(c context.Context) {
+				b.cmdHandler.HandleReset(c, update.Message, func() { b.dispatcher.ResetChat(chatID) })
+			})
+		}
+	}
 	switch {
 	case update.Message != nil:
 		chatID := game.ChatID(update.Message.Chat.ID)

@@ -1,3 +1,28 @@
+# Contexto atual — recuperação e reset por grupo (2026-09-24)
+
+- A branch `dev` oferece `/reset` para recuperar somente o grupo afetado, sem reiniciar o processo nem tocar em outros chats.
+- O comando entra por uma fila de recuperação independente (2 workers, capacidade 16), mesmo quando a fila normal está cheia.
+- Depois da autorização como responsável atual ou creator/administrator confirmado pelo Telegram, o dispatcher cancela o contexto anterior, incrementa a geração e cria uma fila limpa dedicada ao chat.
+- Tarefas antigas são descartadas pela geração. Todos os workers de chat, inline e recuperação possuem barreira de `recover` com stack trace sem payloads ou tokens.
+- `game.Service.ResetChat` remove atomicamente a sessão ativa, índices de chat/jogadores, histórico retido e runtime; referências antigas retornam `ErrGameReset`.
+- O adapter invalida todos os tokens dos jogos removidos. Administrador pode repetir reset sem estado; membro comum não pode.
+- Chats privados, tópicos e remetentes anônimos são recusados. O comando está registrado no Telegram, ajuda e README.
+- Cancelamento de contexto é cooperativo; código externo que ignore context pode continuar em sua goroutine, mas fica isolado da nova geração e do estado removido.
+
+---
+
+# Contexto atual — simulador local de partidas (2026-09-23)
+
+- A branch `dev` possui um simulador separado em `cmd/simulator`, apoiado pelo pacote `internal/simulation` e pela API pública de `internal/uno`.
+- Execução interativa solicita 2–10 jogadores e modo `classico`/`caseiro`; flags permitem seed, limite de ações, saída e modo silencioso.
+- `classico` mapeia para `uno.BotRules()` e `caseiro` para `uno.CaseiroRules()`, preservando os modos efetivamente expostos pelo Telegram.
+- Baralho e decisões automáticas compartilham RNG derivado da seed. A seed é registrada para reprodução da jogabilidade.
+- Cada ação captura revisão, resumo anterior/posterior e eventos; todo snapshot aceito passa por `State.Validate()`.
+- Relatório Markdown registra resultado, estatísticas gerais/por jogador, jogadas especiais explicadas e diagnósticos. Saída padrão: `.reports/simulations/`, ignorada pelo Git.
+- O simulador não importa Telegram, não usa `.env`, rede ou banco, e não altera regras de produção.
+
+---
+
 # Contexto atual — milestone corretiva V2 (2026-09-23)
 
 - Implementação na dev, a partir de b08522d, aprovada pelo usuário com "Implement the plan.".

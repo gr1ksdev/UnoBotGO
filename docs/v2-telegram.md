@@ -3,6 +3,32 @@
 > Atualização de 2026-09-23: as regras abaixo descrevem a milestone corretiva.
 > O roteiro histórico da M3 mais adiante contém comportamentos já substituídos.
 
+## Recuperação isolada por grupo
+
+O comando `/reset` existe para recuperar um grupo quando uma chamada anterior
+ficou lenta, bloqueada ou deixou estado inconsistente. Ele percorre uma fila de
+recuperação própria, com dois workers e capacidade limitada, portanto não depende
+de espaço na fila normal particionada por `ChatID`.
+
+Antes de alterar o estado, o adapter autentica o remetente. O responsável pela
+partida ativa pode executar o comando diretamente. Outros usuários precisam ser
+confirmados pela API do Telegram como criador ou administrador do grupo. Mensagens
+privadas, tópicos de fórum e remetentes anônimos são recusados explicitamente.
+
+Após a autorização, o dispatcher cancela o contexto da geração anterior daquele
+chat e incrementa sua geração. Tarefas antigas que ainda estejam nas filas são
+descartadas antes da execução. Uma fila dedicada e limpa passa a atender o grupo,
+permitindo `/novo` imediatamente mesmo se o shard antigo continuar ocupado. O
+serviço remove a partida ativa, os índices de participantes e todo histórico do
+chat; o TokenStore invalida os tokens de cada partida removida. Outros chats não
+são interrompidos.
+
+Cada worker possui uma barreira de recuperação de panic com log do tipo do worker,
+chat e stack trace. Payloads, mãos, tokens e segredos não são incluídos nesse log.
+Cancelamento cooperativo não encerra à força código externo que ignore `context`,
+mas isola esse trabalho da nova geração e impede que ele volte a alterar o estado
+removido pelo serviço.
+
 ## Encerramento, contexto inline e menções — milestone corretiva
 
 ### Encerramento
@@ -152,6 +178,9 @@ O UnoBotGO V2 é executado via `./cmd/bot` e consome diretamente a camada de apl
 - **Particionamento por ChatID**:
   - 8 workers com canais de capacidade 32 dedicados às mensagens, comandos e confirmações de ações agrupados pelo `ChatID`.
   - Garante ordem estrita de execução para a mesma partida, eliminando condições de corrida entre comandos e jogadas.
+- **Recuperação por ChatID**:
+  - `/reset` entra por uma fila independente com 2 workers e capacidade 16.
+  - Cada reset troca a geração e o contexto do chat; trabalhos antigos são descartados e comandos novos seguem por uma fila limpa dedicada àquele grupo.
 - **Inline Workers**:
   - 4 workers dedicados a responder consultas inline através de uma fila com capacidade 64.
   - Não bloqueiam nem são bloqueados por requisições de rede no chat de grupo.

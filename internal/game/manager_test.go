@@ -32,11 +32,27 @@ func TestAutoSkipExpiredTurn(t *testing.T) {
 func position(t *testing.T, s *Service, rules uno.Rules, wild bool) PublicGameView {
 	t.Helper()
 	v := create(t, s, 1, 1, rules)
-	cards := []uno.Card{{ID: "top", Color: uno.Red, Rank: uno.One}, {ID: "a", Color: uno.Red, Rank: uno.Two}, {ID: "b", Color: uno.Red, Rank: uno.Three}, {ID: "c", Color: uno.Blue, Rank: uno.Four}, {ID: "draw", Color: uno.Red, Rank: uno.Five}}
+	cards := []uno.Card{
+		{ID: "top", Color: uno.Red, Rank: uno.One},
+		{ID: "a", Color: uno.Red, Rank: uno.Two},
+		{ID: "extra", Color: uno.Blue, Rank: uno.Nine},
+		{ID: "b", Color: uno.Red, Rank: uno.Three},
+		{ID: "c", Color: uno.Blue, Rank: uno.Four},
+		{ID: "draw", Color: uno.Red, Rank: uno.Five},
+	}
+	p1Hand := []uno.CardID{"a"}
+	drawPile := []uno.CardID{"draw"}
 	if wild {
 		cards[1] = uno.Card{ID: "a", Rank: uno.Wild}
+		if rules.NoWildFinish {
+			p1Hand = append(p1Hand, "extra")
+		} else {
+			drawPile = append(drawPile, "extra")
+		}
+	} else {
+		drawPile = append(drawPile, "extra")
 	}
-	state := uno.State{ID: v.GameID, Revision: 10, Rules: rules, Phase: uno.TakingTurn, Cards: cards, DiscardPile: []uno.CardID{"top"}, DrawPile: []uno.CardID{"draw"}, Players: []uno.Player{{ID: 1, Hand: []uno.CardID{"a"}}, {ID: 2, Hand: []uno.CardID{"b"}}, {ID: 3, Hand: []uno.CardID{"c"}}}, Order: []uno.PlayerID{1, 2, 3}, DealerID: 3, CurrentPlayerID: 1, Direction: 1, ActiveColor: uno.Red}
+	state := uno.State{ID: v.GameID, Revision: 10, Rules: rules, Phase: uno.TakingTurn, Cards: cards, DiscardPile: []uno.CardID{"top"}, DrawPile: drawPile, Players: []uno.Player{{ID: 1, Hand: p1Hand}, {ID: 2, Hand: []uno.CardID{"b"}}, {ID: 3, Hand: []uno.CardID{"c"}}}, Order: []uno.PlayerID{1, 2, 3}, DealerID: 3, CurrentPlayerID: 1, Direction: 1, ActiveColor: uno.Red}
 	engine, err := uno.Restore(state, func([]uno.CardID) {})
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +73,8 @@ func TestPlacementsAndCompletion(t *testing.T) {
 	for _, wild := range []bool{false, true} {
 		t.Run(map[bool]string{false: "number", true: "wild"}[wild], func(t *testing.T) {
 			s := testService(t)
-			v := position(t, s, uno.BotRules(), wild)
+			rules := uno.Rules{EndPolicy: uno.Placements}
+			v := position(t, s, rules, wild)
 			out := act(t, s, v.GameID, Actor{PlayerID: 1}, uno.Action{Type: uno.PlayCard, CardID: "a"})
 			if wild {
 				if out.View.OwnerID != 1 || out.View.ColorChooserID != 1 {

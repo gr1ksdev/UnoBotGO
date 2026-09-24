@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/malbs/UnoGoBot/internal/game"
 	"github.com/malbs/UnoGoBot/internal/uno"
@@ -50,12 +51,36 @@ func makeGameButtons(view game.PublicGameView) *telego.InlineKeyboardMarkup {
 	if view.GameID == "" || view.Closed || view.Phase == uno.Finished {
 		return nil
 	}
+	if view.Phase == uno.Lobby {
+		isCaseiro := view.Rules.StackWildDrawFourOnTwo || view.Rules.StackDrawTwoOnWildFour
+		classicText := "🎻 Clássico"
+		caseiroText := "🏠 Caseiro"
+		if isCaseiro {
+			caseiroText = "✅ 🏠 Caseiro"
+		} else {
+			classicText = "✅ 🎻 Clássico"
+		}
+		return &telego.InlineKeyboardMarkup{
+			InlineKeyboard: [][]telego.InlineKeyboardButton{
+				{
+					{
+						Text:         classicText,
+						CallbackData: fmt.Sprintf("mode_classic_%s", view.GameID),
+					},
+					{
+						Text:         caseiroText,
+						CallbackData: fmt.Sprintf("mode_caseiro_%s", view.GameID),
+					},
+				},
+			},
+		}
+	}
 	return &telego.InlineKeyboardMarkup{
 		InlineKeyboard: [][]telego.InlineKeyboardButton{
 			{
 				{
 					Text:                         "🃏 Suas cartas",
-					SwitchInlineQueryCurrentChat: stringPtr(fmt.Sprintf("g_%s", view.GameID)),
+					SwitchInlineQueryCurrentChat: stringPtr(fmt.Sprintf("g_%s_%d", view.GameID, view.Revision)),
 				},
 			},
 		},
@@ -87,23 +112,9 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		h.renderer.userCache.Put(uno.PlayerID(msg.From.ID), msg.From.FirstName, msg.From.Username)
 	}
 
-	text := strings.TrimSpace(msg.Text)
-	if !strings.HasPrefix(text, "/") {
+	cmdName, fields, ok := parseBotCommand(msg.Text, h.botUsername)
+	if !ok {
 		return
-	}
-
-	// Split command and target bot, e.g. /novo@UnoBot
-	fields := strings.Fields(text)
-	cmdFull := fields[0][1:] // strip '/'
-	cmdParts := strings.SplitN(cmdFull, "@", 2)
-	cmdName := strings.ToLower(cmdParts[0])
-
-	if len(cmdParts) == 2 {
-		targetBot := cmdParts[1]
-		if h.botUsername != "" && !strings.EqualFold(targetBot, h.botUsername) {
-			// Command addressed to another bot, ignore
-			return
-		}
 	}
 
 	// Check sender identity
@@ -154,9 +165,111 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		h.handleSair(ctx, actorID, chatID)
 	case "estado":
 		h.handleEstado(ctx, chatID)
+	case "reset":
+		h.HandleReset(ctx, msg, nil)
 	case "ajuda", "help":
 		h.reply(ctx, msg.Chat.ID, h.renderer.RenderHelp(h.botUsername), nil)
 	}
+}
+
+func parseBotCommand(text, botUsername string) (string, []string, bool) {
+	text = strings.TrimSpace(text)
+	if !strings.HasPrefix(text, "/") {
+		return "", nil, false
+	}
+	fields := strings.Fields(text)
+	if len(fields) == 0 || len(fields[0]) < 2 {
+		return "", nil, false
+	}
+	cmdParts := strings.SplitN(fields[0][1:], "@", 2)
+	if len(cmdParts) == 2 && botUsername != "" && !strings.EqualFold(cmdParts[1], botUsername) {
+		return "", nil, false
+	}
+	return strings.ToLower(cmdParts[0]), fields, true
+}
+
+// HandleReset runs through the dispatcher's independent recovery lane in
+// production. resetExecution invalidates queued work only after authorization.
+func (h *CommandHandler) HandleReset(ctx context.Context, msg *telego.Message, resetExecution func()) {
+	if msg == nil || msg.From == nil || msg.From.IsBot {
+		return
+	}
+	if msg.SenderChat != nil {
+		h.reply(ctx, msg.Chat.ID, "⚠️ O /reset deve ser executado por um administrador identificável, não como canal ou administrador anônimo.", nil)
+		return
+	}
+	if msg.Chat.Type != "group" && msg.Chat.Type != "supergroup" {
+		h.reply(ctx, msg.Chat.ID, "⚠️ Este comando só pode ser utilizado em grupos.", nil)
+		return
+	}
+	if msg.IsTopicMessage || msg.MessageThreadID != 0 {
+		h.reply(ctx, msg.Chat.ID, "⚠️ Tópicos de fórum ainda não são suportados. Execute /reset no chat geral do grupo.", nil)
+		return
+	}
+	cmdName, _, ok := parseBotCommand(msg.Text, h.botUsername)
+	if !ok || cmdName != "reset" {
+		return
+	}
+
+	actorID := uno.PlayerID(msg.From.ID)
+	chatID := game.ChatID(msg.Chat.ID)
+	isOwner := false
+	if summary, err := h.service.FindChatGame(ctx, chatID); err == nil {
+		isOwner = summary.OwnerID == actorID
+	}
+	isAdmin := false
+	if !isOwner {
+		roleCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		member, err := h.bot.GetChatMember(roleCtx, &telego.GetChatMemberParams{
+			ChatID: telego.ChatID{ID: msg.Chat.ID},
+			UserID: msg.From.ID,
+		})
+		cancel()
+		if err != nil {
+			h.logger.WarnContext(ctx, "failed to verify reset permission", "chat_id", chatID, "user_id", actorID, "error", err.Error())
+			h.reply(ctx, msg.Chat.ID, "❌ Não foi possível confirmar sua permissão de administrador. O responsável atual ainda pode usar /reset.", nil)
+			return
+		}
+		if member != nil {
+			status := member.MemberStatus()
+			isAdmin = status == telego.MemberStatusCreator || status == telego.MemberStatusAdministrator
+		}
+		if !isAdmin {
+			h.reply(ctx, msg.Chat.ID, "⚠️ Apenas o responsável pela partida ou um administrador do grupo pode usar /reset.", nil)
+			return
+		}
+	}
+
+	if resetExecution != nil {
+		resetExecution()
+	}
+	resetCtx, cancelReset := context.WithTimeout(ctx, 10*time.Second)
+	result, err := h.service.ResetChat(resetCtx, game.Actor{PlayerID: actorID, ChatID: chatID, ChatAdmin: isAdmin})
+	cancelReset()
+	if err != nil {
+		if errors.Is(err, game.ErrForbidden) {
+			h.reply(ctx, msg.Chat.ID, "⚠️ Sua autorização mudou antes do reset. Tente novamente como administrador do grupo.", nil)
+			return
+		}
+		h.logger.ErrorContext(ctx, "failed to reset chat state", "chat_id", chatID, "user_id", actorID, "error", err.Error())
+		h.reply(ctx, msg.Chat.ID, "❌ Não foi possível resetar o estado deste grupo.", nil)
+		return
+	}
+	for _, gameID := range result.GameIDs {
+		h.tokens.InvalidateGame(gameID)
+	}
+	h.logger.WarnContext(ctx, "chat state reset",
+		"chat_id", chatID,
+		"user_id", actorID,
+		"removed_games", len(result.GameIDs),
+		"removed_active", result.RemovedActive,
+		"removed_history", result.RemovedHistory,
+	)
+	if len(result.GameIDs) == 0 {
+		h.reply(ctx, msg.Chat.ID, "♻️ <b>A fila deste grupo foi renovada.</b> Não havia partida ou histórico para remover. Use /novo para iniciar.", nil)
+		return
+	}
+	h.reply(ctx, msg.Chat.ID, "♻️ <b>Estado deste grupo resetado.</b> Tarefas e botões antigos foram invalidados. Use /novo para iniciar uma nova partida.", nil)
 }
 
 func (h *CommandHandler) handleNovo(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID, chatTitle, mode string) {

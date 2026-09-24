@@ -154,6 +154,53 @@ func TestRenderer_RenderActionConfirmation(t *testing.T) {
 	}
 }
 
+func TestRenderer_RenderCallBluffConfirmation(t *testing.T) {
+	cache := NewUserCache(100)
+	cache.Put(10, "Alice", "alice")
+	cache.Put(20, "Bob", "bob")
+	renderer := NewRenderer(cache)
+
+	// 1. Bluff caught
+	outcomeCaught := game.Outcome{
+		View: game.PublicGameView{
+			GameID: "g1",
+			Phase:  uno.TakingTurn,
+			Players: []game.PublicPlayer{
+				{ID: 10, CardCount: 5, Active: true},
+				{ID: 20, CardCount: 3, Active: true},
+			},
+		},
+		Events: []uno.Event{
+			{Type: uno.BluffCalled, PlayerID: 20, TargetID: 10, Success: true, Count: 4},
+			{Type: uno.CardsDrawn, PlayerID: 10, Count: 4},
+		},
+	}
+	textCaught := renderer.RenderActionConfirmation(20, uno.Action{Type: uno.CallBluff, PlayerID: 20}, outcomeCaught)
+	if !strings.Contains(textCaught, "Blefe pego!") || !strings.Contains(textCaught, "Alice") || !strings.Contains(textCaught, "4 cartas") {
+		t.Errorf("unexpected caught confirmation text: %s", textCaught)
+	}
+
+	// 2. Bluff failed
+	outcomeFailed := game.Outcome{
+		View: game.PublicGameView{
+			GameID: "g1",
+			Phase:  uno.TakingTurn,
+			Players: []game.PublicPlayer{
+				{ID: 10, CardCount: 1, Active: true},
+				{ID: 20, CardCount: 8, Active: true},
+			},
+		},
+		Events: []uno.Event{
+			{Type: uno.BluffCalled, PlayerID: 20, TargetID: 10, Success: false, Count: 6},
+			{Type: uno.CardsDrawn, PlayerID: 20, Count: 6},
+		},
+	}
+	textFailed := renderer.RenderActionConfirmation(20, uno.Action{Type: uno.CallBluff, PlayerID: 20}, outcomeFailed)
+	if !strings.Contains(textFailed, "não blefou!") || !strings.Contains(textFailed, "Alice") || !strings.Contains(textFailed, "Bob") || !strings.Contains(textFailed, "6 cartas") {
+		t.Errorf("unexpected failed confirmation text: %s", textFailed)
+	}
+}
+
 func TestRendererMentionTargetsFollowResultingTurn(t *testing.T) {
 	cache := NewUserCache(100)
 	cache.Put(11, `Alice <&"'>`, "alice")
@@ -257,8 +304,17 @@ func TestGameButtonsRespectLifecycle(t *testing.T) {
 			}
 			continue
 		}
-		if markup == nil || len(markup.InlineKeyboard) != 1 || len(markup.InlineKeyboard[0]) != 1 || *markup.InlineKeyboard[0][0].SwitchInlineQueryCurrentChat != "g_context" {
-			t.Fatalf("contextual hand button changed: %+v", markup)
+		if phase == uno.Lobby {
+			if markup == nil || len(markup.InlineKeyboard) != 1 || len(markup.InlineKeyboard[0]) != 2 {
+				t.Fatalf("expected lobby mode buttons: %+v", markup)
+			}
+			if markup.InlineKeyboard[0][0].CallbackData != "mode_classic_context" || markup.InlineKeyboard[0][1].CallbackData != "mode_caseiro_context" {
+				t.Fatalf("unexpected lobby callback data: %+v", markup)
+			}
+		} else {
+			if markup == nil || len(markup.InlineKeyboard) != 1 || len(markup.InlineKeyboard[0]) != 1 || *markup.InlineKeyboard[0][0].SwitchInlineQueryCurrentChat != "g_context_0" {
+				t.Fatalf("contextual hand button changed: %+v", markup)
+			}
 		}
 		v.Closed = true
 		if makeGameButtons(v) != nil {

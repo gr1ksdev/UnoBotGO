@@ -1,7 +1,137 @@
 # Decisões
 
+# Decisão: Autorização da ação CallBluff no Service da aplicação
+
 ## Data
-2026-06-21
+2026-09-23
+
+## Contexto
+Ao desafiar o blefe de um +4 Coringa através do sticker inline `option_bluff`, a jogada era rejeitada com o erro `invalid action` (`⚠️ <jogador>: Jogada não aceita: invalid action. Abra Suas cartas novamente.`).
+
+## Decisão tomada
+Incluir `uno.CallBluff` no switch de autorização de ações inline em `internal/game/service.go` (`case uno.PlayCard, uno.DrawCard, uno.PassTurn, uno.ChooseColor, uno.CallBluff:`), permitindo que a ação seja devidamente autenticada e enviada à engine `uno.Game`.
+
+## Motivo
+Garantir que a ação de blefe não seja descartada prematuramente pela camada de aplicação antes de alcançar as regras da partida.
+
+## Impacto
+O blefe agora é processado normalmente pelo bot no Telegram.
+
+---
+
+# Decisão: Seleção de modo no lobby e travamento pós-início
+
+## Data
+2026-09-23
+
+## Contexto
+Ao enviar o comando `/novo`, a mensagem do lobby exibia o botão "🃏 Suas cartas", mesmo sem nenhuma carta distribuída aos jogadores. O usuário solicitou que esse botão fosse substituído pela seleção de modo (Clássico ou Caseiro) e que essa seleção permanecesse disponível até o início da partida com `/iniciar`, momento a partir do qual a alteração de modo não é mais permitida.
+
+## Decisão tomada
+1. Na engine (`internal/uno`):
+   - Adicionar `SetRules ActionType = 11` e `RulesChanged EventType = "rules_changed"`.
+   - Adicionar campo `Rules Rules` em `Action`.
+   - No `Game.Apply`, permitir a ação `SetRules` exclusivamente quando `Phase == Lobby`, atualizando as regras e emitindo `RulesChanged`. Se já iniciado, rejeitar com `ErrGameStarted`.
+2. No serviço (`internal/game`):
+   - Autorizar `uno.SetRules` no mesmo chat para o responsável (`actor.PlayerID == entry.ownerID`).
+   - Adicionar método `s.SetRules(ctx, actor, gameID, rules)`.
+3. No teclado do Telegram (`internal/telegram/commands.go`):
+   - Em `makeGameButtons`, durante `Phase == uno.Lobby`, retornar botões inline de seleção de modo: `[ ✅ 🎻 Clássico ]  [ 🏠 Caseiro ]` (ou vice-versa com base nas regras ativas).
+   - Durante as fases de jogo ativo (`TakingTurn`, `ChoosingColor`), retornar exclusivamente `[ 🃏 Suas cartas ]`.
+4. No handler de callbacks (`internal/telegram/callbacks.go`):
+   - Tratar prefixos `mode_classic_` e `mode_caseiro_`.
+   - Validar que a partida ainda está em `Phase == Lobby`. Se já iniciada, exibir alerta no Telegram informando que o jogo já começou e o modo não pode ser alterado.
+   - Validar que o solicitante é o responsável pela partida (`view.OwnerID`). Se não for, alertar que apenas o responsável pode alterar.
+   - Atualizar as regras via `s.SetRules` e editar em tempo real o texto do lobby (`RenderLobby`) e os botões (`makeGameButtons`).
+
+## Motivo
+Eliminar o botão prematuro "Suas cartas" durante o lobby, proporcionar uma experiência intuitiva e rápida de configuração de modo diretamente no grupo e garantir que as regras da partida fiquem travadas após o início.
+
+## Impacto
+Interface mais clara e organizada no lobby, sem confusão para novos jogadores e com total garantia de imutabilidade das regras após o início do jogo.
+
+---
+
+# Decisão: Restituição do blefe no +4 Coringa e ordenação das cartas da mão estilo V1
+
+## Data
+2026-09-23
+
+## Contexto
+O usuário relatou que a opção de blefe havia sumido quando um jogador descartava +4 Coringa, impedindo a vítima de desafiar o blefe. Além disso, as cartas da mão no teclado inline apareciam espalhadas e desordenadas (ex: vermelhas misturadas com verdes).
+
+## Decisão tomada
+1. Criar a ação `uno.CallBluff` e o evento `uno.BluffCalled` na engine.
+2. Na engine (`internal/uno`):
+   - Ao jogar `WildDrawFour`, verificar se o descarte foi um blefe (se o jogador possuía cartas da cor ativa na mão antes de jogar o +4) e guardar `Bluffing bool`.
+   - Ao escolher a cor (`ChooseColor`), criar `s.PendingBluff = &BluffInfo{Actor: actor, Target: target, Bluffing: bluffing}`.
+   - Tratar `CallBluff`: se teve sucesso (o autor blefou), o autor recebe a penalidade de compra `DrawCounter`; se não teve sucesso (não blefou), o desafiante recebe `DrawCounter + 2` cartas. Em ambos os casos a penalidade é aplicada e a vez passa para o próximo jogador.
+   - Limpar `PendingBluff` caso qualquer outra ação seja executada.
+3. Expor `CanCallBluff bool` na `PublicGameView` de `internal/game/views.go`.
+4. No Telegram inline (`internal/telegram/inline.go`):
+   - Ordenar a mão do jogador (`sortHand`) seguindo o critério da V1: Vermelho -> Azul -> Verde -> Amarelo -> Coringas (+4 e Wild), ordenados numericamente e depois por ação internamente.
+   - Quando `view.Public.CanCallBluff` for verdadeiro e for a vez da vítima, anexar o sticker de blefe `option_bluff` ("BQADBAADygIAAl9XmQABJoLfB9ntI2UC").
+5. No Telegram renderer (`internal/telegram/renderer.go`):
+   - Renderizar o resultado da ação de blefe ("Blefe pego!" ou "<jogador> não blefou!").
+
+## Motivo
+Restauração integral da regra clássica de desafio de blefe do +4 Coringa e melhoria ergonômica da visualização de cartas na mão do jogador, garantindo organização visual limpa e paridade total com a V1.
+
+## Impacto
+Mecânica de blefe do UNO restabelecida com fidelidade à V1 e cartas perfeitamente agrupadas por cor e valor na interface inline.
+
+---
+
+# Decisão: Restauração integral das regras de cartas da V1 na engine V2
+
+## Data
+2026-09-23
+
+## Contexto
+O usuário solicitou o retorno de todas as regras de jogabilidade de cartas originais da V1, preservando 100% dos textos, layouts e formatações da V2 atual. Na V1 existiam comportamentos clássicos específicos como não bater com Coringa, proibição de jogar Coringa sobre Coringa, +4 livre sem restrição de cartas na mão, e a mecânica de compra livre onde o turno não passa compulsoriamente se a carta comprada for incompatível.
+
+## Decisão tomada
+1. Adicionar quatro novas flags configuráveis na struct `Rules` da engine (`internal/uno`):
+   - `NoWildFinish`: impede que um jogador vença/feche o jogo descartando uma carta especial (Wild ou WildDrawFour) como sua última carta.
+   - `NoWildOnWild`: impede jogar Coringa sobre Coringa (Wild sobre Wild, +4 sobre Wild, etc.) na rodada comum quando não estiver respondendo a empilhamento de penalidade.
+   - `AllowWildDrawFourAlways`: permite descartar +4 a qualquer momento, sem a restrição oficial da Mattel de verificar se o jogador tem a cor ativa na mão.
+   - `FreePlayAfterDraw`: após comprar uma carta voluntariamente, não passa a vez compulsoriamente; o jogador pode descartar qualquer carta válida de sua mão ou acionar a ação `PassTurn`.
+2. Habilitar todas essas flags em `BotRules()` (modo Clássico do bot) e em `CaseiroRules()` (modo Caseiro do bot).
+3. No `CaseiroRules()`, manter adicionalmente as regras de cruzamento de penalidades (`StackWildDrawFourOnTwo` e `StackDrawTwoOnWildFour`), respeitando a paridade com a V1.
+4. Manter `ClassicRules()` sem essas flags para compatibilidade estrita do manual Mattel nos testes de conformidade.
+5. Preservar inalterada toda a camada de apresentação em HTML, formatações, queries dinâmicas, menções seguras e reação festiva `🥳` no UNO.
+
+## Motivo
+Fidelidade total à experiência de jogo consolidada na versão 1 do UnoBotGO, mantendo a estabilidade arquitetural e a segurança de concorrência da V2.
+
+## Impacto
+Jogabilidade idêntica ao bot clássico, sem quebras visuais e com suite de testes 100% aprovada.
+
+---
+
+# Decisão: Empilhamento de +4 coringa e invalidação de cache de cartas
+
+## Data
+2026-09-23
+
+## Contexto
+Após jogar um +4 Coringa, o bot na engine V2 aplicava imediatamente a compra de 4 cartas e pulava compulsoriamente a vez do próximo jogador, tirando a interatividade e a possibilidade de rebater (+4 sobre +4). Além disso, os botões inline estáticos com `g_<GameID>` faziam com que o cache do cliente do Telegram entregasse a visão de seleção de cores do primeiro jogador quando outro jogador abria o botão "Suas cartas".
+
+## Decisão tomada
+1. Adicionar `StackWildDrawFour: true` em `BotRules()`, permitindo que ao escolher a cor do +4 a penalidade seja acumulada em `DrawCounter` e o próximo jogador receba a sua vez normalmente para rebater com outro +4 ou recolher as cartas voluntariamente.
+2. Anexar a revisão atual da partida no botão `🃏 Suas cartas` (`g_<GameID>_<revision>`), tornando a query string sempre dinâmica a cada turno/jogada para invalidar o cache local dos clientes do Telegram.
+3. Permitir parse de query inline flexível ignorando sufixos após o `GameID`.
+4. Durante `ChoosingColor`, exibir exclusivamente o aviso de espera e o resumo das próprias cartas para jogadores espectadores/não-escolhedores, sem expor seletores de cor nem stickers.
+
+## Motivo
+Eliminar a sensação de pulo de turno automático e garantir que cada jogador veja com fidelidade suas próprias cartas no Telegram.
+
+## Impacto
+Fluxo de jogo do +4 alinhado ao comportamento esperado do bot, com controle completo de turnos e sem vazamento de opções ou cache compartilhado entre usuários.
+
+---
+
+# Decisão: Correção de estado global e concorrência V1
 
 ## Contexto
 O bot mantinha estado global em memória e apresentava problemas de cartas fantasmas ao limpar lobbies não iniciados (vazamento de referências) e exibição incorreta de cartas em inline query ao jogar em múltiplos chats devido à falta de contexto do chat nas requisições inline.
@@ -206,3 +336,38 @@ Corrigir os caminhos que oferecem ou anunciam turnos obsoletos sem inventar outr
 
 ## Impacto
 Final sem convite para jogar; candidates antigos tornam-se no-op; mesma implementação em polling e webhook. Novas mensagens apontam ao bot exceto pelo jogador responsável. Mensagens históricas não são reescritas em massa. Aceitação visual de tg://user?id=<BotID> continua pendente em clientes reais, conforme roteiro documentado.
+
+# Decisão: simulador local desacoplado dos transportes
+
+## Data
+2026-09-23
+
+## Contexto
+Era necessário executar partidas automáticas com quantidade e modo escolhidos pelo operador, detectar falhas e explicar cartas especiais sem depender do Telegram ou duplicar as regras da engine.
+
+## Decisão tomada
+Criar `internal/simulation` sobre a API pública de `internal/uno` e expô-lo por `cmd/simulator`. Usar uma seed única para embaralhamento e decisões, validar o snapshot após cada ação e gerar relatório Markdown a partir de ações, eventos e estados resumidos. Manter o simulador fora de `internal/game` e `internal/telegram`.
+
+## Motivo
+A engine é a fonte de verdade das regras e já oferece ações transacionais, snapshots, `CanPlay`, shuffler injetável e validação estrutural. Um adaptador local separado testa esse contrato sem credenciais, rede, banco ou efeitos no bot em produção.
+
+## Impacto
+Partidas de 2–10 bots nos modos Clássico e Caseiro podem ser reproduzidas por seed. Relatórios ficam em `.reports/simulations/`, fora do Git. O simulador cobre lógica de jogo; transporte, stickers, callbacks e filas Telegram permanecem fora de seu escopo.
+# Decisão: recuperação isolada e geração por grupo
+
+## Data
+2026-09-24
+
+## Contexto
+O bot legado em Python podia deixar um grupo lento ou sem respostas após uma ação desconhecida. Na V2, grupos compartilham workers particionados e um comando colocado na fila comum não conseguiria recuperar um shard saturado.
+
+## Decisão tomada
+Processar `/reset` em uma fila administrativa independente. Após autenticar o responsável ou administrador do grupo, cancelar o contexto anterior, avançar a geração do chat e encaminhar novos trabalhos para uma fila dedicada limpa. Remover atomicamente no serviço a partida ativa, índices, histórico e runtime daquele chat, tombstonar referências antigas e invalidar os tokens retornados. Proteger todas as classes de worker com recuperação de panic.
+
+## Motivo
+A via de recuperação precisa continuar acessível quando o caminho comum falha e precisa isolar ações antigas sem reiniciar o bot inteiro ou interromper outros grupos. A autorização via Telegram evita que um membro comum use a limpeza para sabotar partidas.
+
+## Impacto
+O grupo pode criar uma nova partida imediatamente após o reset. Tarefas da geração anterior são descartadas e o estado removido não pode ser republicado por referências antigas. O mecanismo não recupera processo morto, indisponibilidade global da API ou código externo que ignore cancelamento; esses casos ainda dependem do supervisor do processo e dos timeouts de rede.
+
+---

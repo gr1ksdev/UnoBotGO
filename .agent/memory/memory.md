@@ -1,4 +1,115 @@
-# Memória atual — milestone corretiva V2 — 2026-09-23
+# Memória atual — simulador local de partidas — 2026-09-23
+
+- Pedido aprovado: ambiente de testes na `dev`, organizado em milestones, com escolha de jogadores/modo, bots autônomos e relatório final.
+- Ajuste posterior de 2026-09-24: o relatório passou a incluir início, fim, tempo total de execução e histórico completo de preparação e jogadas, com revisão, ação, todos os eventos públicos da engine e estado da mesa após cada etapa. A linha do tempo resumida de especiais foi preservada.
+- Implementação:
+  - `cmd/simulator`: interface interativa e flags `--players`, `--mode`, `--seed`, `--max-actions`, `--output` e `--quiet`.
+  - `internal/simulation`: configuração, estratégia determinística, runner, diagnósticos, estatísticas e Markdown.
+  - Quantidade aceita: 2–10. Modos: Clássico=`uno.BotRules()` e Caseiro=`uno.CaseiroRules()`.
+  - A mesma seed reproduz embaralhamento, dealer e decisões dos bots.
+  - Estratégia usa `Game.CanPlay`; empilha quando possível, desafia +4 quando não pode responder, escolhe a cor predominante, compra e passa pela API real.
+  - Estado validado após cada ação; rejeição, invariante, cancelamento ou limite gera diagnóstico e relatório parcial.
+  - Relatório registra colocações, ações, compras, maior mão, UNO, especiais, empilhamentos, penalidades e blefes, com explicação contextual.
+- Uso: `make simulator` ou `go run ./cmd/simulator --players 4 --mode caseiro --seed 20260924`.
+- Relatórios padrão ficam em `.reports/simulations/` e são ignorados pelo Git.
+- Validações normais aprovadas; o race detector não é suportado pelo linker C do ambiente Termux/Android atual.
+
+---
+
+# Memória atual — correção de autorização do CallBluff no Service — 2026-09-23
+
+- Pedido do usuário: "ao tentar fazer o blefe: ⚠️ Mezi: Jogada não aceita: invalid action. Abra Suas cartas novamente.; nao precisa criar plano para correcao"
+- Causa identificada: em `internal/game/service.go`, a função de autorização `authorize` verificava os tipos de ação recebidos inline. Faltava incluir `uno.CallBluff` no switch (`case uno.PlayCard, uno.DrawCard, uno.PassTurn, uno.ChooseColor, uno.CallBluff:`), fazendo com que a validação caísse no `default: return uno.ErrInvalidAction` antes de encaminhar a ação para a engine `uno.Game`.
+- Correção:
+  - Adicionado `uno.CallBluff` ao caso de ações inline autorizadas em `internal/game/service.go`.
+  - Adicionado teste de regressão `TestService_CallBluffAuthorized` em `internal/game/service_test.go`.
+- Testes: 100% aprovados sem regressões.
+
+---
+
+# Memória anterior — seleção de modo no lobby e travamento pós-início — 2026-09-23
+
+- Usuário aprovou o plano: "sim". Registro: `selecao-modo-lobby_2026-09-23_20-55.md`.
+- Substituição do botão no Lobby:
+  - Durante `Phase == uno.Lobby`, o botão inline da mensagem do grupo agora exibe a seleção de modo (`[ ✅ 🎻 Clássico ]  [ 🏠 Caseiro ]` ou `[ 🎻 Clássico ]  [ ✅ 🏠 Caseiro ]`), em vez de "Suas cartas".
+  - O responsável/criador da partida (`view.OwnerID`) pode alternar livremente entre os modos Clássico e Caseiro clicando nos botões diretamente na mensagem.
+  - Ao alternar, o texto do lobby (`Regras: Clássico` ou `Regras: Caseiro`) e os botões inline são atualizados imediatamente.
+- Bloqueio após início da partida:
+  - Ao iniciar com `/iniciar`, `view.Phase` transita para `TakingTurn` e o botão passa a ser `[ 🃏 Suas cartas ]`.
+  - Qualquer clique residual em botões de modo de mensagens anteriores é rejeitado no servidor com alerta `⚠️ A partida já foi iniciada, não é possível alterar o modo!`.
+  - Tentativas de alteração por não-responsáveis são rejeitadas com alerta `⚠️ Apenas o responsável pela partida pode alterar o modo.`.
+- Engine e Service:
+  - `uno.SetRules ActionType = 11` e `uno.RulesChanged EventType = "rules_changed"`.
+  - Método `s.SetRules(ctx, actor, gameID, rules)` em `Service`.
+  - Regra validada: só permitida durante `Phase == uno.Lobby` e autorizada apenas para `entry.ownerID`.
+- Testes 100% aprovados.
+
+---
+
+# Memória atual — recuperação e reset por grupo — 2026-09-24
+
+- Pedido: evitar que uma falha ou ação lenta deixe um grupo permanentemente sem resposta e fornecer um comando que restaure apenas aquele grupo.
+- Plano aprovado: `recuperacao-e-reset-por-grupo_2026-09-24_05-14.md`, aprovado com “pode sim”.
+- `/reset` é admitido antes da fila normal e processado numa fila de recuperação própria. A deduplicação de updates continua compartilhada por polling e webhook.
+- Autorização: responsável da partida ou membro confirmado via `GetChatMember` como creator/administrator. Sem partida, somente administrador. Privado, tópico e remetente anônimo são rejeitados.
+- Cada chat possui geração/contexto. O reset cancela a geração anterior, descarta tarefas antigas e cria uma fila dedicada limpa para aceitar `/novo` imediatamente mesmo com o shard original saturado.
+- `Service.ResetChat` apaga partida ativa, runtime, índices, histórico do chat e retorna GameIDs para invalidação no TokenStore. O reset administrativo sem estado é idempotente.
+- Workers de chat, inline e recuperação recuperam panic e registram categoria, chat e stack trace, sem registrar payload, cartas, token inline ou token do bot.
+- Testes específicos cobrem saturação, cancelamento, tarefas obsoletas, isolamento entre chats, panic, autorização, contexto expirado, remoção dos índices/histórico/tokens, deduplicação e nova partida após reset.
+- Validação: `go test ./...`, 20 repetições de game/telegram, `go vet ./...`, `go build ./...`, gofmt e `git diff --check` passaram. `go test -race` ficou indisponível no Termux/Android por falha do toolchain CGO/linker e deve rodar no CI Linux.
+- Limite operacional: Go não mata goroutines à força. O cancelamento depende de operações cooperarem com context; a geração e a tombstone impedem que o trabalho antigo volte a controlar o estado resetado.
+
+---
+
+# Memória anterior — restituição de blefe (+4) e ordenação de cartas da V1 — 2026-09-23
+
+- Pedido do usuário: "o blef foi removido, quando um player joga um +4 coringa, nao da pro usuario solicitar o blefe. tbm qurria que as cartas fossem em ordem igual na v1, elas estao espalhadas, vermelhas entre verdes e virce versa. nao precisa criar plano"
+- Registro de plano: `restituir-blefe-e-ordenacao-cartas_2026-09-23_20-25.md`.
+- Blefe do +4 Coringa (Call Bluff):
+  1. No momento do descarte do WildDrawFour, a engine verifica se o jogador possuía cartas da cor ativa na mão antes do descarte (`p.Bluffing = true`).
+  2. Ao selecionar a cor do +4 (`ChooseColor`), a engine registra a intenção e a pendência de blefe em `State.PendingBluff = &BluffInfo{Actor: actor, Target: target, Bluffing: bluffing}`.
+  3. A view pública expõe `CanCallBluff: true` para o jogador alvo (vítima do +4) enquanto `PendingBluff` estiver ativo.
+  4. Na interface inline do Telegram, é exibido o botão com sticker `option_bluff` ("BQADBAADygIAAl9XmQABJoLfB9ntI2UC").
+  5. Ao solicitar o blefe (`uno.CallBluff`):
+     - Se o autor do +4 blefou: "Blefe pego! <bluffer> recebeu X cartas!" (o autor compra a penalidade acumulada em `DrawCounter`).
+     - Se o autor do +4 não blefou: "<bluffer> não blefou! <challenger> recebeu X cartas!" (a vítima compra `DrawCounter + 2` cartas).
+     - O turno passa ao próximo jogador após a vítima.
+  6. Se a vítima comprar cartas ou jogar normalmente (ou se o jogo avançar), o `PendingBluff` é limpo.
+- Ordenação de cartas na mão:
+  - Implementada ordenação idêntica à V1 (`sortHand`): cores agrupadas em Vermelho (0), Azul (1), Verde (2), Amarelo (3), e Especiais/Coringas (+4 e Wild) ao final (99).
+  - Dentro de cada cor, ordenadas por valor numérico (0 a 9) seguido de cartas de ação (Skip, Reverse, DrawTwo).
+  - Aplicada tanto no resumo textual da mão quanto na paginação de stickers inline.
+- Todos os testes unitários e de integração passaram com 100% de sucesso.
+
+---
+
+# Memória anterior — restauração das regras de jogo da V1 — 2026-09-23
+
+- Usuário aprovou o plano: "sim". Registro: `restaurar-regras-v1_2026-09-23_19-55.md`.
+- Regras originais da V1 restauradas na engine (`internal/uno`):
+  1. `NoWildFinish: true`: Proibido bater o jogo com carta especial (Wild / Coringa ou +4). Quando o jogador tem apenas 1 carta e ela é especial, a carta fica indisponível para jogada.
+  2. `NoWildOnWild: true`: Proibido jogar Coringa sobre Coringa (Wild ou +4 sobre outro Wild ou +4 no topo do descarte, exceto quando respondendo/empilhando penalidade permitida pelas regras do modo).
+  3. `AllowWildDrawFourAlways: true`: +4 livre para jogar a qualquer momento, sem a restrição da Mattel de verificar se o jogador tem a cor ativa na mão.
+  4. `FreePlayAfterDraw: true`: Ao comprar 1 carta voluntariamente, a vez não passa compulsoriamente se ela não for jogável. O jogador pode descartar qualquer carta válida que possua na mão ou clicar em passar a vez.
+- Configuração de modos:
+  - `BotRules()` (Clássico V1): ativa todas as 4 regras acima, além de `StackDrawTwo: true`, `StackWildDrawFour: true`, `NumberedStart: true` e `AllowLateJoin: true`.
+  - `CaseiroRules()` (Caseiro V1): herda `BotRules()` e ativa o cruzamento de penalidades (`StackWildDrawFourOnTwo: true` e `StackDrawTwoOnWildFour: true`).
+  - `ClassicRules()`: preserva o modo estrito Mattel sem essas regras de casa para suites oficiais.
+- Toda a camada visual e de textos do Telegram (HTML, formatação, botões, stickers, reação festiva 🥳 no UNO) permaneceu 100% inalterada.
+
+---
+
+# Memória anterior — correção +4 coringa e cache de cartas — 2026-09-23
+
+- Usuário aprovou o plano: "sim". Registro: `corrigir-coringa-mais-quatro-e-cache-cartas_2026-09-23_19-25.md`.
+- +4 Coringa não pula automaticamente o próximo jogador (`StackWildDrawFour: true` em `BotRules()`): ao jogar +4 e escolher a cor, a penalidade é acumulada em `DrawCounter` e o próximo jogador recebe a vez normalmente (sem execução de penalidade forçada e sem pular o turno). O jogador pode contra-atacar com outro +4 ou recolher as cartas voluntariamente com a opção "Comprar X cartas".
+- Invalidação de cache local do cliente Telegram: o botão `🃏 Suas cartas` agora é gerado dinamicamente com a revisão da partida (`g_<GameID>_<revision>`), impedindo que o cliente do Telegram reaproveite resultados cacheados de jogadas anteriores ou de outros jogadores.
+- Parse flexível de inline query: `HandleInlineQuery` extrai `GameID` mesmo com o sufixo de revisão `_<revision>` (`strings.SplitN(queryBody, "_", 2)[0]`).
+- Visão de espectador durante `ChoosingColor`: para jogadores que não são o autor da escolha da cor, exibe exclusivamente o aviso de espera e o resumo de suas próprias cartas, retornando imediatamente sem expor artigos de cor nem misturar stickers cinzas.
+
+---
+
+# Memória histórica — milestone corretiva V2 — 2026-09-23
 
 - Usuário aprovou o plano: "Implement the plan.". Registro: milestone-corretiva-v2_2026-09-23_14-12.md.
 - Sintoma esclarecido pelo usuário: "Esta partida não está disponível ou você não está participando dela". Causa rastreada: confirmação final anexava Suas cartas incondicionalmente; engine/serviço já estavam encerrados.

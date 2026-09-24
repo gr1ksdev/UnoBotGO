@@ -21,6 +21,7 @@ type BotAPI interface {
 	SetWebhook(ctx context.Context, params *telego.SetWebhookParams) error
 	DeleteWebhook(ctx context.Context, params *telego.DeleteWebhookParams) error
 	SetMyCommands(ctx context.Context, params *telego.SetMyCommandsParams) error
+	GetChatMember(ctx context.Context, params *telego.GetChatMemberParams) (telego.ChatMember, error)
 	UpdatesViaLongPolling(ctx context.Context, params *telego.GetUpdatesParams, options ...telego.LongPollingOption) (<-chan telego.Update, error)
 	SendMessage(ctx context.Context, params *telego.SendMessageParams) (*telego.Message, error)
 	SendSticker(ctx context.Context, params *telego.SendStickerParams) (*telego.Message, error)

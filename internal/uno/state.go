@@ -30,6 +30,13 @@ type ColorChoice struct {
 	PreviousColor Color
 	DrawCount     int
 	Initial       bool
+	Bluffing      bool
+}
+
+type BluffInfo struct {
+	Actor    PlayerID
+	Target   PlayerID
+	Bluffing bool
 }
 
 // State is a serializable snapshot, with no locks, clock or Telegram types.
@@ -52,6 +59,7 @@ type State struct {
 	DrawnCardID     CardID
 	DrawCounter     int
 	Pending         *ColorChoice
+	PendingBluff    *BluffInfo
 	Placements      []Placement
 	FinishReason    FinishReason
 }
@@ -69,6 +77,10 @@ func (s State) clone() State {
 	if s.Pending != nil {
 		pending := *s.Pending
 		s.Pending = &pending
+	}
+	if s.PendingBluff != nil {
+		pb := *s.PendingBluff
+		s.PendingBluff = &pb
 	}
 	return s
 }
@@ -108,6 +120,9 @@ func (s State) Validate() error {
 	}
 	if s.Rules.EndPolicy > Placements {
 		return bad("end policy")
+	}
+	if s.PendingBluff != nil && (s.PendingBluff.Actor <= 0 || s.PendingBluff.Target <= 0) {
+		return bad("pending bluff identity")
 	}
 	if len(s.Cards) == 0 || len(s.Players) > 10 {
 		return bad("inventory or participant limit")

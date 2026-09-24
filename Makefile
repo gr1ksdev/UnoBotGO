@@ -1,4 +1,4 @@
-.PHONY: local db up down logs
+.PHONY: local db up down logs simulator
 
 # ──────────────────────────────────────────
 # 3 modos de rodar o bot
@@ -30,3 +30,7 @@ down:
 
 logs:
 	docker compose logs -f
+
+# Simulador local da engine V2 (quantidade e modo são solicitados no terminal)
+simulator:
+	go run ./cmd/simulator

@@ -334,6 +334,22 @@ func (r *Renderer) RenderActionConfirmation(actorID uno.PlayerID, action uno.Act
 		sb.WriteString(fmt.Sprintf("%s passou a vez.", actorLink))
 	case uno.ChooseColor:
 		sb.WriteString(fmt.Sprintf("%s escolheu a cor %s <b>%s</b>!", actorLink, ColorIcon(action.Color), ColorNamePT(action.Color)))
+	case uno.CallBluff:
+		var bluffEv *uno.Event
+		for i := range outcome.Events {
+			if outcome.Events[i].Type == uno.BluffCalled {
+				bluffEv = &outcome.Events[i]
+				break
+			}
+		}
+		if bluffEv != nil {
+			targetLink := r.PlayerLink(bluffEv.TargetID, outcome.View)
+			if bluffEv.Success {
+				sb.WriteString(fmt.Sprintf("Blefe pego! %s recebeu %d cartas!", targetLink, bluffEv.Count))
+			} else {
+				sb.WriteString(fmt.Sprintf("%s não blefou! %s recebeu %d cartas!", targetLink, actorLink, bluffEv.Count))
+			}
+		}
 	}
 
 	// Check for special events
@@ -365,6 +381,7 @@ func (r *Renderer) RenderHelp(botUsername string) string {
 	sb.WriteString("/entrar — Inscreve-se na partida aberta\n")
 	sb.WriteString("/iniciar — Começa a partida (apenas o responsável)\n")
 	sb.WriteString("/estado — Mostra o estado atual da partida\n")
+	sb.WriteString("/reset — Recupera e limpa o estado deste grupo\n")
 	sb.WriteString("/sair — Sai da partida em andamento\n")
 	sb.WriteString("/cancelar — Cancela a partida (apenas o responsável)\n")
 	sb.WriteString("/ajuda — Exibe esta mensagem de ajuda\n\n")
