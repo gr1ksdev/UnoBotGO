@@ -133,3 +133,17 @@ Os comandos Docker acima serão responsabilidade do CI ou de outro host, pois Do
 - A solicitação de publicar `main` e fazer push já foi expressa pelo usuário; a nova aprovação exigida abaixo existe por causa do fluxo obrigatório de `AGENTS.md` antes de qualquer alteração.
 - A publicação no GHCR é disparada pelo push na `main` e só ocorre após o job remoto de validação.
 - A árvore pública incluirá o código-fonte do simulador, mas nunca seus relatórios gerados.
+- Aprovado pelo usuário em 2026-09-24 com: "sim".
+
+## Resultado da implementação
+
+- Pipeline multi-arquitetura enviado para `dev` no commit `c052195`.
+- CI de `dev` concluído com sucesso: `https://github.com/gr1ksdev/UnoBotGO/actions/runs/36033808406`.
+- Árvore pública promovida sobre o histórico independente de `main` no commit `d7ecdb5`.
+- Verificador `public-tree` concluído com sucesso: `https://github.com/gr1ksdev/UnoBotGO/actions/runs/36034149271`.
+- Validação e publicação `main-container` concluídas com sucesso: `https://github.com/gr1ksdev/UnoBotGO/actions/runs/36034149342`.
+- O manifesto `ghcr.io/gr1ksdev/unobotgo:latest` foi consultado diretamente pela API OCI do GHCR e contém:
+  - `linux/amd64`: `sha256:e41a25933168d9b2ccc22f67274031814b21a5c6fc6ebf6cac1ed51c3ffbcd37`
+  - `linux/arm64`: `sha256:d2cf33a2b2bbd59e5bd8d0c3ef8f2d0bd31923af77212d00aa41d926ce02ab11`
+- A árvore pública final passou em testes, vet, build, cross-build estático AMD64/ARM64, whitespace e verificação de caminhos proibidos.
+- `.agent`, `.reports`, relatórios de simulação, fontes V1, Docker legado e arquivos locais não foram publicados na `main`.

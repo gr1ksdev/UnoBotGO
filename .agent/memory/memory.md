@@ -52,6 +52,7 @@
 - O build container passa a usar `linux/amd64,linux/arm64` tanto na validação de `dev` quanto na publicação da `main`.
 - O builder roda em `$BUILDPLATFORM` e gera binário estático conforme `$TARGETOS/$TARGETARCH`, evitando executar o toolchain Go ARM64 por emulação.
 - A promoção da `main` preserva o histórico independente e usa allowlist. Relatórios de simulação, `.agent`, fontes V1 e artefatos locais não entram na árvore pública.
+- Publicação concluída: `dev` em `c052195`, `main` em `d7ecdb5`. Os workflows de árvore pública e container passaram; o manifesto GHCR `latest` foi verificado com variantes `linux/amd64` e `linux/arm64`.
 
 ---
 
