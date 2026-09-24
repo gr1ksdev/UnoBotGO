@@ -371,3 +371,21 @@ A via de recuperação precisa continuar acessível quando o caminho comum falha
 O grupo pode criar uma nova partida imediatamente após o reset. Tarefas da geração anterior são descartadas e o estado removido não pode ser republicado por referências antigas. O mecanismo não recupera processo morto, indisponibilidade global da API ou código externo que ignore cancelamento; esses casos ainda dependem do supervisor do processo e dos timeouts de rede.
 
 ---
+# Decisão: imagem OCI AMD64 e ARM64
+
+## Data
+2026-09-24
+
+## Contexto
+A publicação da `main` gerava somente `linux/amd64`, impedindo o uso direto da mesma tag oficial em servidores ARM64. A branch pública também precisa continuar separada dos artefatos internos existentes em `dev`.
+
+## Decisão tomada
+Construir `linux/amd64` e `linux/arm64` com Buildx, usando `$BUILDPLATFORM` no estágio Go e `$TARGETOS/$TARGETARCH` no cross-compile. Publicar um único manifest list nas tags `latest` e `sha-<commit>`. Continuar promovendo a `main` por allowlist sobre seu histórico próprio.
+
+## Motivo
+Uma referência multi-arquitetura simplifica deploys e evita depender de emulação para compilar o binário. A allowlist mantém código V1, relatórios e memória de agentes fora da distribuição pública.
+
+## Impacto
+Docker seleciona automaticamente a imagem AMD64 ou ARM64. O CI de `dev` passa a validar ambas sem publicar; a `main` publica ambas após os testes. O tempo do build remoto pode aumentar por produzir duas variantes.
+
+---

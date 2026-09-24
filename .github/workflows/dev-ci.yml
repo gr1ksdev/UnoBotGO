@@ -37,7 +37,7 @@ jobs:
         with:
           context: .
           file: Dockerfile.v2
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: false
           tags: unobotgo:dev
           cache-from: type=gha,scope=dev-image

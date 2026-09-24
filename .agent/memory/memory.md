@@ -46,6 +46,15 @@
 
 ---
 
+# Memória atual — publicação limpa e multi-arquitetura — 2026-09-24
+
+- Pedido aprovado: promover a versão V2 atual para a árvore pública de `main` e publicar também para ARM64.
+- O build container passa a usar `linux/amd64,linux/arm64` tanto na validação de `dev` quanto na publicação da `main`.
+- O builder roda em `$BUILDPLATFORM` e gera binário estático conforme `$TARGETOS/$TARGETARCH`, evitando executar o toolchain Go ARM64 por emulação.
+- A promoção da `main` preserva o histórico independente e usa allowlist. Relatórios de simulação, `.agent`, fontes V1 e artefatos locais não entram na árvore pública.
+
+---
+
 # Memória atual — recuperação e reset por grupo — 2026-09-24
 
 - Pedido: evitar que uma falha ou ação lenta deixe um grupo permanentemente sem resposta e fornecer um comando que restaure apenas aquele grupo.

@@ -15,4 +15,5 @@ arquivos exclusivos do V1.
 
 Não faça merge direto de `dev` em `main`: os históricos são independentes e a
 árvore pública não deve receber artefatos internos. A publicação usa as tags
-`latest` e `sha-<commit>` em `ghcr.io/gr1ksdev/unobotgo`.
+`latest` e `sha-<commit>` em `ghcr.io/gr1ksdev/unobotgo`. Cada tag é um manifesto
+OCI com variantes `linux/amd64` e `linux/arm64`.

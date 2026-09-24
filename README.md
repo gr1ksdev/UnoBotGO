@@ -26,8 +26,9 @@ Bot de UNO em Go para o Telegram utilizando modo inline com stickers para visual
 
   A imagem oficial da `main` é publicada em
   `ghcr.io/gr1ksdev/unobotgo:latest` e também recebe uma tag imutável
-  `sha-<commit>`. O servidor precisa apenas de Docker e das variáveis de
-  ambiente descritas em `.env.example`.
+  `sha-<commit>`. Ambas são manifestos multi-arquitetura para `linux/amd64` e
+  `linux/arm64`; o Docker seleciona automaticamente a variante do servidor. O
+  servidor precisa apenas de Docker e das variáveis descritas em `.env.example`.
 
 ### UnoBotGO V1 (Legado)
 - **Executável**: `main.go` (na raiz do repositório)
@@ -104,10 +105,10 @@ escolher outro caminho para o relatório.
 ## Build e distribuição
 
 Commits e pull requests em `dev` executam testes, race detector, vet, build e
-uma construção da imagem sem publicar. A publicação ocorre somente depois da
-promoção da árvore pública para `main`, seguindo o processo descrito em
-`docs/branching.md`. O workflow da `main` publica a imagem no GHCR após as
-validações.
+uma construção AMD64/ARM64 da imagem sem publicar. A publicação ocorre somente
+depois da promoção da árvore pública para `main`, seguindo o processo descrito
+em `docs/branching.md`. O workflow da `main` publica no GHCR um manifesto com as
+duas arquiteturas após as validações.
 
 ---
 

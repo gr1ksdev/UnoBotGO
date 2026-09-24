@@ -1,3 +1,12 @@
+# Contexto atual — publicação multi-arquitetura (2026-09-24)
+
+- O container V2 é compilado para `linux/amd64` e `linux/arm64` nos workflows de `dev` e `main`.
+- `Dockerfile.v2` executa o builder em `$BUILDPLATFORM` e faz cross-compile estático com `TARGETOS`/`TARGETARCH`; o estágio distroless final é específico da plataforma.
+- A `main` mantém histórico e árvore pública independentes. Promoções usam allowlist e excluem `.agent`, `.reports`, V1, arquivos locais e workflow exclusivo de desenvolvimento.
+- As tags `latest` e `sha-<commit>` do GHCR representam manifestos OCI multi-arquitetura.
+
+---
+
 # Contexto atual — recuperação e reset por grupo (2026-09-24)
 
 - A branch `dev` oferece `/reset` para recuperar somente o grupo afetado, sem reiniciar o processo nem tocar em outros chats.
