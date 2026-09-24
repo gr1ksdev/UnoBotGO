@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -389,12 +390,16 @@ func TestInlineHandler_ChoosingColorCleanV1Layout(t *testing.T) {
 	})
 
 	ncResults := mockAPI.AnsweredInlines[len(mockAPI.AnsweredInlines)-1].Results
-	if len(ncResults) == 0 {
-		t.Fatalf("expected non-chooser results")
+	if len(ncResults) != 2 {
+		t.Fatalf("expected 2 non-chooser results (wait + hand summary), got %d", len(ncResults))
 	}
 	waitArt, ok := ncResults[0].(*telego.InlineQueryResultArticle)
 	if !ok || waitArt.Title != "Aguardando escolha de cor" {
 		t.Fatalf("expected 'Aguardando escolha de cor' article, got %+v", ncResults[0])
+	}
+	handArt, ok := ncResults[1].(*telego.InlineQueryResultArticle)
+	if !ok || handArt.Title != "Suas cartas (toque para estado do jogo):" {
+		t.Fatalf("expected 'Suas cartas (toque para estado do jogo):' article, got %+v", ncResults[1])
 	}
 }
 
@@ -517,6 +522,7 @@ func TestInlineHandler_UnoAnnouncedReaction(t *testing.T) {
 	mockAPI := newMockBotAPI()
 	svc, _ := game.NewService()
 	renderer := NewRenderer(NewUserCache(100))
+	renderer.SetBotID(999)
 	tokens := NewTokenStore(1000, 100, time.Now, nil)
 	dispatcher := NewDispatcher(nil, nil)
 	defer dispatcher.Stop(2 * time.Second)
@@ -582,6 +588,29 @@ func TestInlineHandler_UnoAnnouncedReaction(t *testing.T) {
 				if !ok || emojiReaction.Emoji != "🥳" {
 					t.Fatalf("expected 🥳 emoji reaction, got %+v", reaction.Reaction[0])
 				}
+				after, err := svc.PublicView(ctx, gameID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				expectedTarget := int64(999)
+				if after.CurrentTurn == curr {
+					expectedTarget = int64(curr)
+				}
+				mockAPI.mu.Lock()
+				messages := append([]telego.SendMessageParams(nil), mockAPI.SentMessages...)
+				mockAPI.mu.Unlock()
+				found := false
+				for _, msg := range messages {
+					if strings.Contains(msg.Text, "Gritou UNO!") {
+						found = true
+						if !strings.Contains(msg.Text, fmt.Sprintf(`href="tg://user?id=%d"`, expectedTarget)) {
+							t.Fatalf("UNO used previous turn identity: %s", msg.Text)
+						}
+					}
+				}
+				if !found {
+					t.Fatal("missing UNO announcement")
+				}
 				unoAnnouncedTriggered = true
 				break
 			}
@@ -610,5 +639,169 @@ func TestInlineHandler_UnoAnnouncedReaction(t *testing.T) {
 
 	if !unoAnnouncedTriggered {
 		t.Skip("Could not reach 2-to-1 card state within step limit")
+	}
+}
+
+func TestInlineHandler_DynamicRevisionQuery(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, _ := game.NewService()
+	renderer := NewRenderer(NewUserCache(100))
+	tokens := NewTokenStore(100, 10, time.Now, nil)
+	dispatcher := NewDispatcher(nil, nil)
+	defer dispatcher.Stop(2 * time.Second)
+
+	handler := NewInlineHandler(mockAPI, svc, renderer, tokens, time.Minute, dispatcher, nil)
+	ctx := context.Background()
+
+	out, _ := svc.Create(ctx, game.Actor{PlayerID: 10, ChatID: -1001}, game.CreateRequest{ChatName: "Test Chat", Rules: uno.BotRules()})
+	gameID := out.View.GameID
+	_, _ = svc.Apply(ctx, game.Actor{PlayerID: 10, ChatID: -1001}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 10})
+	_, _ = svc.Apply(ctx, game.Actor{PlayerID: 20, ChatID: -1001}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 20})
+	_, _ = svc.Apply(ctx, game.Actor{PlayerID: 10, ChatID: -1001}, gameID, uno.Action{Type: uno.StartGame, PlayerID: 10, DealerID: 10})
+
+	pub, _ := svc.PublicView(ctx, gameID)
+
+	// Send inline query formatted with revision: g_<gameID>_<revision>
+	queryWithRev := fmt.Sprintf("g_%s_%d", gameID, pub.Revision)
+	handler.HandleInlineQuery(ctx, &telego.InlineQuery{
+		ID:    "query_rev_1",
+		From:  telego.User{ID: int64(pub.CurrentTurn), FirstName: "Active"},
+		Query: queryWithRev,
+	})
+
+	if len(mockAPI.AnsweredInlines) != 1 {
+		t.Fatalf("expected 1 answered inline query, got %d", len(mockAPI.AnsweredInlines))
+	}
+	ans := mockAPI.AnsweredInlines[0]
+	if len(ans.Results) == 0 {
+		t.Fatal("expected non-empty results for dynamic revision query")
+	}
+}
+
+func TestSortHand(t *testing.T) {
+	hand := []game.CardView{
+		{Card: uno.Card{ID: "w", Rank: uno.Wild}},
+		{Card: uno.Card{ID: "y1", Color: uno.Yellow, Rank: uno.One}},
+		{Card: uno.Card{ID: "r2", Color: uno.Red, Rank: uno.Two}},
+		{Card: uno.Card{ID: "b3", Color: uno.Blue, Rank: uno.Three}},
+		{Card: uno.Card{ID: "g4", Color: uno.Green, Rank: uno.Four}},
+		{Card: uno.Card{ID: "r1", Color: uno.Red, Rank: uno.One}},
+		{Card: uno.Card{ID: "w4", Rank: uno.WildDrawFour}},
+	}
+	sorted := sortHand(hand)
+
+	expectedIDs := []string{"r1", "r2", "b3", "g4", "y1", "w", "w4"}
+	for i, c := range sorted {
+		if string(c.Card.ID) != expectedIDs[i] {
+			t.Fatalf("at index %d: expected %s, got %s", i, expectedIDs[i], c.Card.ID)
+		}
+	}
+}
+
+func TestInlineHandler_CallBluffSticker(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, _ := game.NewService()
+	renderer := NewRenderer(NewUserCache(100))
+	tokens := NewTokenStore(100, 10, time.Now, nil)
+	dispatcher := NewDispatcher(nil, nil)
+	defer dispatcher.Stop(2 * time.Second)
+
+	handler := NewInlineHandler(mockAPI, svc, renderer, tokens, time.Minute, dispatcher, nil)
+	ctx := context.Background()
+
+	out, _ := svc.Create(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, game.CreateRequest{ChatName: "Bluff Chat", Rules: uno.BotRules()})
+	gameID := out.View.GameID
+	_, _ = svc.Apply(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 1, Revision: 0})
+	_, _ = svc.Apply(ctx, game.Actor{PlayerID: 2, ChatID: -1001}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 2, Revision: 1})
+	_, _ = svc.Apply(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, gameID, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: 2})
+
+	var victim uno.PlayerID
+	for step := 0; step < 120; step++ {
+		pub, err := svc.PublicView(ctx, gameID)
+		if err != nil || pub.Closed {
+			break
+		}
+		if pub.Phase == uno.ChoosingColor {
+			_, _ = svc.Apply(ctx, game.Actor{PlayerID: pub.ColorChooserID, ChatID: -1001}, gameID, uno.Action{
+				Type:     uno.ChooseColor,
+				PlayerID: pub.ColorChooserID,
+				Color:    uno.Blue,
+				Revision: pub.Revision,
+			})
+			afterPub, _ := svc.PublicView(ctx, gameID)
+			if afterPub.TopCard != nil && afterPub.TopCard.Rank == uno.WildDrawFour && afterPub.CanCallBluff {
+				victim = afterPub.CurrentTurn
+				break
+			}
+			continue
+		}
+		curr := pub.CurrentTurn
+		pv, _ := svc.PlayerView(ctx, game.Actor{PlayerID: curr}, gameID)
+		var wildFourID, anyPlayable uno.CardID
+		for _, c := range pv.Hand {
+			if c.Card.Rank == uno.WildDrawFour && c.Playable {
+				wildFourID = c.Card.ID
+				break
+			}
+			if c.Playable && anyPlayable == "" {
+				anyPlayable = c.Card.ID
+			}
+		}
+		if wildFourID != "" && len(pv.Hand) > 1 {
+			_, err = svc.Apply(ctx, game.Actor{PlayerID: curr, ChatID: -1001}, gameID, uno.Action{
+				Type:     uno.PlayCard,
+				PlayerID: curr,
+				CardID:   wildFourID,
+				Revision: pub.Revision,
+			})
+			if err == nil {
+				continue
+			}
+		}
+		if anyPlayable != "" {
+			_, _ = svc.Apply(ctx, game.Actor{PlayerID: curr, ChatID: -1001}, gameID, uno.Action{
+				Type:     uno.PlayCard,
+				PlayerID: curr,
+				CardID:   anyPlayable,
+				Revision: pub.Revision,
+			})
+		} else {
+			if pv.DrawnCardID == "" {
+				_, _ = svc.Apply(ctx, game.Actor{PlayerID: curr, ChatID: -1001}, gameID, uno.Action{
+					Type:     uno.DrawCard,
+					PlayerID: curr,
+					Revision: pub.Revision,
+				})
+			} else {
+				_, _ = svc.Apply(ctx, game.Actor{PlayerID: curr, ChatID: -1001}, gameID, uno.Action{
+					Type:     uno.PassTurn,
+					PlayerID: curr,
+					Revision: pub.Revision,
+				})
+			}
+		}
+	}
+
+	if victim == 0 {
+		t.Skip("Could not reach +4 wild play within step limit")
+	}
+
+	// Victim opens inline query
+	handler.HandleInlineQuery(ctx, &telego.InlineQuery{
+		ID:    "q_victim_bluff",
+		From:  telego.User{ID: int64(victim), FirstName: "Victim"},
+		Query: "g_" + string(gameID),
+	})
+
+	results := mockAPI.AnsweredInlines[len(mockAPI.AnsweredInlines)-1].Results
+	var bluffSticker *telego.InlineQueryResultCachedSticker
+	for _, r := range results {
+		if st, ok := r.(*telego.InlineQueryResultCachedSticker); ok && st.StickerFileID == Stickers["option_bluff"] {
+			bluffSticker = st
+			break
+		}
+	}
+	if bluffSticker == nil {
+		t.Fatal("expected option_bluff sticker in results when CanCallBluff is true")
 	}
 }

@@ -12,11 +12,12 @@ const (
 	DirectionChanged    EventType = "direction_changed"
 	ColorChoiceRequired EventType = "color_choice_required"
 	ColorChosen         EventType = "color_chosen"
-	DrawFourChallenged  EventType = "draw_four_challenged"
 	TurnChanged         EventType = "turn_changed"
 	UnoAnnounced        EventType = "uno_announced"
 	PlayerWon           EventType = "player_won"
 	GameFinished        EventType = "game_finished"
+	BluffCalled         EventType = "bluff_called"
+	RulesChanged        EventType = "rules_changed"
 )
 
 // Event contains public facts only. CardsDrawn never exposes private card IDs.
@@ -29,6 +30,8 @@ type Event struct {
 	Direction int
 	Position  int
 	Reason    FinishReason
+	TargetID  PlayerID
+	Success   bool
 }
 
 type Result struct {

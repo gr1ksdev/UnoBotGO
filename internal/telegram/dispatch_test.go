@@ -141,3 +141,99 @@ func TestDispatcher_ShutdownDrain(t *testing.T) {
 		t.Errorf("expected all 15 tasks to be drained on shutdown, got %d", executed.Load())
 	}
 }
+
+func TestDispatcher_ResetCancelsCurrentAndDiscardsStaleTasks(t *testing.T) {
+	d := NewDispatcher(nil, nil)
+	defer d.Stop(2 * time.Second)
+	chatID := game.ChatID(-200)
+	started := make(chan struct{})
+	canceled := make(chan struct{})
+	fresh := make(chan struct{})
+	otherChat := make(chan struct{})
+	var stale atomic.Int32
+
+	if !d.EnqueueChat(chatID, func(ctx context.Context) {
+		close(started)
+		<-ctx.Done()
+		close(canceled)
+	}) {
+		t.Fatal("failed to enqueue blocking task")
+	}
+	waitDispatchSignal(t, started)
+	if !d.EnqueueChat(chatID, func(context.Context) { stale.Add(1) }) {
+		t.Fatal("failed to enqueue stale task")
+	}
+	d.ResetChat(chatID)
+	if !d.EnqueueChat(chatID, func(context.Context) { close(fresh) }) {
+		t.Fatal("failed to enqueue fresh task")
+	}
+	// -208 hashes to the same worker as -200 and must resume after cancellation.
+	if !d.EnqueueChat(-208, func(context.Context) { close(otherChat) }) {
+		t.Fatal("failed to enqueue other chat")
+	}
+	waitDispatchSignal(t, canceled)
+	waitDispatchSignal(t, fresh)
+	waitDispatchSignal(t, otherChat)
+	if stale.Load() != 0 {
+		t.Fatal("stale task executed after reset")
+	}
+}
+
+func TestDispatcher_RecoveryBypassesSaturatedChatQueue(t *testing.T) {
+	d := NewDispatcher(nil, nil)
+	defer d.Stop(2 * time.Second)
+	chatID := game.ChatID(-300)
+	blocker := make(chan struct{})
+	started := make(chan struct{})
+	if !d.EnqueueChat(chatID, func(context.Context) { close(started); <-blocker }) {
+		t.Fatal("failed to enqueue blocker")
+	}
+	waitDispatchSignal(t, started)
+	for i := 0; i < ChatQueueCapacity; i++ {
+		if !d.EnqueueChat(chatID, func(context.Context) {}) {
+			close(blocker)
+			t.Fatalf("queue saturated early at %d", i)
+		}
+	}
+	recovered := make(chan struct{})
+	if !d.EnqueueRecovery(chatID, func(context.Context) { close(recovered) }) {
+		close(blocker)
+		t.Fatal("recovery queue rejected task")
+	}
+	waitDispatchSignal(t, recovered)
+	close(blocker)
+}
+
+func TestDispatcher_RecoversPanicsInEveryWorkerClass(t *testing.T) {
+	var inlineCalls atomic.Int32
+	inlineDone := make(chan struct{})
+	d := NewDispatcher(nil, func(context.Context, *telego.InlineQuery) {
+		if inlineCalls.Add(1) == 1 {
+			panic("inline boom")
+		}
+		close(inlineDone)
+	})
+	defer d.Stop(2 * time.Second)
+
+	chatDone := make(chan struct{})
+	d.EnqueueChat(-400, func(context.Context) { panic("chat boom") })
+	d.EnqueueChat(-400, func(context.Context) { close(chatDone) })
+	d.EnqueueInline(&telego.InlineQuery{ID: "panic"})
+	d.EnqueueInline(&telego.InlineQuery{ID: "after"})
+	recoveryDone := make(chan struct{})
+	d.EnqueueRecovery(-400, func(context.Context) { panic("recovery boom") })
+	d.EnqueueRecovery(-400, func(context.Context) { close(recoveryDone) })
+
+	waitDispatchSignal(t, chatDone)
+	waitDispatchSignal(t, inlineDone)
+	waitDispatchSignal(t, recoveryDone)
+}
+
+func waitDispatchSignal(t *testing.T, signal <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-signal:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for dispatcher signal")
+	}
+}

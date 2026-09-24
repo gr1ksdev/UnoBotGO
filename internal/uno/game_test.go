@@ -47,7 +47,6 @@ func scenario(t *testing.T, rules Rules, hands [][]Card, top Card, deck []Card) 
 	}
 	return g
 }
-
 func apply(t *testing.T, g *Game, a Action) Result {
 	t.Helper()
 	a.Revision = g.Snapshot().Revision
@@ -631,34 +630,304 @@ func TestSkipTurnAction(t *testing.T) {
 	}
 }
 
-func TestDrawFourChallengeV1Mechanic(t *testing.T) {
-	cases := []struct {
-		name           string
-		actorHand      []Card
-		challengerHand int
-		penaltyPlayer  int
-		penalty        int
-	}{
-		{"true bluff", []Card{card(NoColor, WildDrawFour), card(Red, One)}, 1, 1, 4},
-		{"false bluff", []Card{card(NoColor, WildDrawFour), card(Blue, One)}, 1, 2, 6},
+func TestBotRulesStackWildDrawFour(t *testing.T) {
+	g := scenario(t, BotRules(), [][]Card{
+		{card(NoColor, WildDrawFour), card(Blue, Five)},
+		{card(NoColor, WildDrawFour), card(Blue, Nine)},
+		{card(Green, One), card(Green, Nine)},
+	}, card(Red, Three), nil)
+
+	// Player 1 plays +4
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.Snapshot().Players[0].Hand[0]})
+	apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Red})
+
+	// Verify Player 2 has the turn (NOT skipped!) and DrawCounter is 4
+	s := g.Snapshot()
+	if s.CurrentPlayerID != 2 {
+		t.Fatalf("expected Player 2 to get turn, got %d", s.CurrentPlayerID)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			g := scenario(t, BotRules(), [][]Card{tc.actorHand, {card(Blue, Two)}}, card(Red, Five), nil)
-			apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.Snapshot().Players[0].Hand[0]})
-			apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Red})
-			s := g.Snapshot()
-			if s.CurrentPlayerID != 2 || s.DrawCounter != 4 || s.Challenge == nil {
-				t.Fatalf("challenge not pending: %+v", s)
+	if s.DrawCounter != 4 {
+		t.Fatalf("expected DrawCounter 4, got %d", s.DrawCounter)
+	}
+
+	// Player 2 counters with another +4
+	apply(t, g, Action{Type: PlayCard, PlayerID: 2, CardID: g.Snapshot().Players[1].Hand[0]})
+	apply(t, g, Action{Type: ChooseColor, PlayerID: 2, Color: Green})
+
+	// Verify Player 3 has the turn (NOT skipped!) and DrawCounter is 8
+	s = g.Snapshot()
+	if s.CurrentPlayerID != 3 {
+		t.Fatalf("expected Player 3 to get turn, got %d", s.CurrentPlayerID)
+	}
+	if s.DrawCounter != 8 {
+		t.Fatalf("expected DrawCounter 8, got %d", s.DrawCounter)
+	}
+
+	// Player 3 draws the penalty
+	apply(t, g, Action{Type: DrawCard, PlayerID: 3})
+	s = g.Snapshot()
+	if s.DrawCounter != 0 {
+		t.Fatalf("expected DrawCounter 0 after drawing penalty, got %d", s.DrawCounter)
+	}
+	if len(s.Players[2].Hand) != 10 {
+		t.Fatalf("expected Player 3 to have 10 cards (2 initial + 8 penalty), got %d", len(s.Players[2].Hand))
+	}
+	if s.CurrentPlayerID != 1 {
+		t.Fatalf("expected turn to return to Player 1, got %d", s.CurrentPlayerID)
+	}
+}
+
+func TestV1NoWildFinish(t *testing.T) {
+	// Player 1 has 1 card: Wild. Under BotRules, playing it should fail with ErrCardNotPlayable.
+	g := scenario(t, BotRules(), [][]Card{{card(NoColor, Wild)}, {card(Blue, One)}}, card(Red, Five), nil)
+	rejected(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.Snapshot().Players[0].Hand[0]}, ErrCardNotPlayable)
+
+	// Player 1 has 1 card: WildDrawFour. Under BotRules, playing it should fail with ErrCardNotPlayable.
+	g4 := scenario(t, BotRules(), [][]Card{{card(NoColor, WildDrawFour)}, {card(Blue, One)}}, card(Red, Five), nil)
+	rejected(t, g4, Action{Type: PlayCard, PlayerID: 1, CardID: g4.Snapshot().Players[0].Hand[0]}, ErrCardNotPlayable)
+
+	// Player 1 has 2 cards: Wild and Red Two. Playing Wild should succeed.
+	g2 := scenario(t, BotRules(), [][]Card{{card(NoColor, Wild), card(Red, Two)}, {card(Blue, One)}}, card(Red, Five), nil)
+	r := apply(t, g2, Action{Type: PlayCard, PlayerID: 1, CardID: g2.Snapshot().Players[0].Hand[0]})
+	if !hasEvent(r, UnoAnnounced, 1) {
+		t.Fatal("expected UnoAnnounced event when down to 1 card")
+	}
+}
+
+func TestV1NoWildOnWild(t *testing.T) {
+	// Discard pile top is Wild (color chosen as Red). Player 1 has Wild, WildDrawFour, and Red Seven.
+	hands := [][]Card{{card(NoColor, Wild), card(NoColor, WildDrawFour), card(Red, Seven)}, {card(Blue, One)}}
+	g := scenario(t, BotRules(), hands, card(NoColor, Wild), nil)
+	p1Hand := g.Snapshot().Players[0].Hand
+
+	// Playing Wild on Wild should be rejected.
+	rejected(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: p1Hand[0]}, ErrCardNotPlayable)
+
+	// Playing +4 on Wild should be rejected.
+	rejected(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: p1Hand[1]}, ErrCardNotPlayable)
+
+	// Playing matching color card should succeed.
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: p1Hand[2]})
+	if g.Snapshot().CurrentPlayerID != 2 {
+		t.Fatalf("expected turn to advance to Player 2, got %d", g.Snapshot().CurrentPlayerID)
+	}
+}
+
+func TestV1AllowWildDrawFourAlways(t *testing.T) {
+	// Player 1 has a Red card (active color) and a WildDrawFour.
+	hands := [][]Card{{card(Red, Seven), card(NoColor, WildDrawFour)}, {card(Blue, One)}}
+	g := scenario(t, BotRules(), hands, card(Red, Five), nil)
+	p1Hand := g.Snapshot().Players[0].Hand
+
+	// In official Mattel rules, +4 cannot be played if player holds active color.
+	// In V1 rules (AllowWildDrawFourAlways: true), this is allowed.
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: p1Hand[1]})
+	apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Blue})
+	if g.Snapshot().CurrentPlayerID != 2 {
+		t.Fatalf("expected Player 2 turn, got %d", g.Snapshot().CurrentPlayerID)
+	}
+	if g.Snapshot().DrawCounter != 4 {
+		t.Fatalf("expected DrawCounter 4, got %d", g.Snapshot().DrawCounter)
+	}
+}
+
+func TestV1FreePlayAfterDraw(t *testing.T) {
+	// Top card is Red Five.
+	// Player 1 has Blue Two and Green Three. Deck top is Yellow Four.
+	// None of Player 1's cards or the drawn card match.
+	hands := [][]Card{{card(Blue, Two), card(Green, Three)}, {card(Blue, One)}}
+	deck := []Card{card(Yellow, Four), card(Blue, Nine)}
+	g := scenario(t, BotRules(), hands, card(Red, Five), deck)
+
+	// Player 1 draws 1 card.
+	apply(t, g, Action{Type: DrawCard, PlayerID: 1})
+	s := g.Snapshot()
+
+	// Under V1 rules (FreePlayAfterDraw: true), turn does NOT automatically pass.
+	if s.CurrentPlayerID != 1 {
+		t.Fatalf("expected Player 1 to keep turn after voluntary draw, got %d", s.CurrentPlayerID)
+	}
+	if s.DrawnCardID == "" {
+		t.Fatal("expected DrawnCardID to be recorded")
+	}
+
+	// Player 1 decides to pass.
+	apply(t, g, Action{Type: PassTurn, PlayerID: 1})
+	s = g.Snapshot()
+	if s.CurrentPlayerID != 2 {
+		t.Fatalf("expected turn to advance to Player 2 after passing, got %d", s.CurrentPlayerID)
+	}
+	if s.DrawnCardID != "" {
+		t.Fatal("expected DrawnCardID to be cleared after passing")
+	}
+}
+
+func TestV1PlayAnyCardAfterDraw(t *testing.T) {
+	// Top card is Red Five.
+	// Player 1 has Red Two (playable) and Blue Three. Deck top is Yellow Four (unplayable).
+	hands := [][]Card{{card(Red, Two), card(Blue, Three)}, {card(Blue, One)}}
+	deck := []Card{card(Yellow, Four), card(Blue, Nine)}
+	g := scenario(t, BotRules(), hands, card(Red, Five), deck)
+	redTwoID := g.Snapshot().Players[0].Hand[0]
+
+	// Player 1 draws 1 card.
+	apply(t, g, Action{Type: DrawCard, PlayerID: 1})
+
+	// Player 1 plays Red Two from hand (not the drawn card).
+	// Under V1 FreePlayAfterDraw, this is allowed!
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: redTwoID})
+	s := g.Snapshot()
+	if s.CurrentPlayerID != 2 {
+		t.Fatalf("expected turn to advance to Player 2 after playing card, got %d", s.CurrentPlayerID)
+	}
+	if s.DrawnCardID != "" {
+		t.Fatal("expected DrawnCardID to be cleared after playing")
+	}
+}
+
+func TestCallBluffSuccess(t *testing.T) {
+	// Top card is Red Five.
+	// Player 1 has Red Two (matching active color) and WildDrawFour -> Player 1 IS bluffing!
+	hands := [][]Card{
+		{card(Red, Two), card(NoColor, WildDrawFour)},
+		{card(Blue, One), card(Green, One)},
+		{card(Yellow, One), card(Blue, One)},
+	}
+	g := scenario(t, BotRules(), hands, card(Red, Five), nil)
+	p1Hand := g.Snapshot().Players[0].Hand
+
+	// Player 1 plays +4 and chooses Blue
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: p1Hand[1]})
+	apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Blue})
+
+	s := g.Snapshot()
+	if s.CurrentPlayerID != 2 {
+		t.Fatalf("expected Player 2 turn, got %d", s.CurrentPlayerID)
+	}
+	if s.PendingBluff == nil || !s.PendingBluff.Bluffing {
+		t.Fatalf("expected PendingBluff with Bluffing=true, got %+v", s.PendingBluff)
+	}
+
+	// Player 2 calls bluff!
+	r := apply(t, g, Action{Type: CallBluff, PlayerID: 2})
+	s = g.Snapshot()
+
+	// Verify bluff was caught
+	bluffFound := false
+	for _, ev := range r.Events {
+		if ev.Type == BluffCalled {
+			bluffFound = true
+			if !ev.Success || ev.TargetID != 1 || ev.Count != 4 {
+				t.Fatalf("unexpected BluffCalled event: %+v", ev)
 			}
-			apply(t, g, Action{Type: ChallengeDrawFour, PlayerID: 2})
-			s = g.Snapshot()
-			if s.CurrentPlayerID != 1 || s.DrawCounter != 0 {
-				t.Fatalf("challenge turn state: %+v", s)
+		}
+	}
+	if !bluffFound {
+		t.Fatal("expected BluffCalled event")
+	}
+
+	// Player 1 (the bluffer) drew 4 cards (had 1 card left, now has 5)
+	if len(s.Players[0].Hand) != 5 {
+		t.Fatalf("expected Player 1 to have 5 cards after penalty, got %d", len(s.Players[0].Hand))
+	}
+	// Player 2 did not draw cards (still has 2 cards)
+	if len(s.Players[1].Hand) != 2 {
+		t.Fatalf("expected Player 2 to still have 2 cards, got %d", len(s.Players[1].Hand))
+	}
+	// Turn advanced to Player 3
+	if s.CurrentPlayerID != 3 {
+		t.Fatalf("expected turn to advance to Player 3, got %d", s.CurrentPlayerID)
+	}
+	if s.DrawCounter != 0 {
+		t.Fatalf("expected DrawCounter to be 0, got %d", s.DrawCounter)
+	}
+}
+
+func TestCallBluffFail(t *testing.T) {
+	// Top card is Red Five.
+	// Player 1 has Green Two and WildDrawFour (NO Red cards) -> Player 1 is NOT bluffing!
+	hands := [][]Card{
+		{card(Green, Two), card(NoColor, WildDrawFour)},
+		{card(Blue, One), card(Green, One)},
+		{card(Yellow, One), card(Blue, One)},
+	}
+	g := scenario(t, BotRules(), hands, card(Red, Five), nil)
+	p1Hand := g.Snapshot().Players[0].Hand
+
+	// Player 1 plays +4 and chooses Blue
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: p1Hand[1]})
+	apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Blue})
+
+	s := g.Snapshot()
+	if s.CurrentPlayerID != 2 {
+		t.Fatalf("expected Player 2 turn, got %d", s.CurrentPlayerID)
+	}
+	if s.PendingBluff == nil || s.PendingBluff.Bluffing {
+		t.Fatalf("expected PendingBluff with Bluffing=false, got %+v", s.PendingBluff)
+	}
+
+	// Player 2 calls bluff!
+	r := apply(t, g, Action{Type: CallBluff, PlayerID: 2})
+	s = g.Snapshot()
+
+	// Verify bluff failed
+	bluffFound := false
+	for _, ev := range r.Events {
+		if ev.Type == BluffCalled {
+			bluffFound = true
+			if ev.Success || ev.TargetID != 1 || ev.Count != 6 {
+				t.Fatalf("unexpected BluffCalled event: %+v", ev)
 			}
-			if len(s.Players[tc.penaltyPlayer-1].Hand) != tc.challengerHand+tc.penalty {
-				t.Fatalf("penalty hand=%d", len(s.Players[tc.penaltyPlayer-1].Hand))
-			}
-		})
+		}
+	}
+	if !bluffFound {
+		t.Fatal("expected BluffCalled event")
+	}
+
+	// Player 1 did not draw (still has 1 card)
+	if len(s.Players[0].Hand) != 1 {
+		t.Fatalf("expected Player 1 to still have 1 card, got %d", len(s.Players[0].Hand))
+	}
+	// Player 2 (challenger) drew 6 cards (had 2 cards, now has 8)
+	if len(s.Players[1].Hand) != 8 {
+		t.Fatalf("expected Player 2 to have 8 cards after penalty, got %d", len(s.Players[1].Hand))
+	}
+	// Turn advanced to Player 3
+	if s.CurrentPlayerID != 3 {
+		t.Fatalf("expected turn to advance to Player 3, got %d", s.CurrentPlayerID)
+	}
+	if s.DrawCounter != 0 {
+		t.Fatalf("expected DrawCounter to be 0, got %d", s.DrawCounter)
+	}
+}
+
+func TestSetRulesInLobby(t *testing.T) {
+	g, err := NewGame("test_rules", BotRules())
+	if err != nil {
+		t.Fatalf("failed to create game: %v", err)
+	}
+
+	// Change to Caseiro
+	r, err := g.Apply(Action{Type: SetRules, PlayerID: 1, Revision: 0, Rules: CaseiroRules()})
+	if err != nil {
+		t.Fatalf("failed to apply SetRules: %v", err)
+	}
+	if !hasEvent(r, RulesChanged, 1) {
+		t.Fatal("expected RulesChanged event")
+	}
+	s := g.Snapshot()
+	if !s.Rules.StackWildDrawFourOnTwo || !s.Rules.StackDrawTwoOnWildFour {
+		t.Fatal("expected Caseiro rules to be applied")
+	}
+
+	// Start game
+	_ = apply(t, g, Action{Type: JoinGame, PlayerID: 1})
+	_ = apply(t, g, Action{Type: JoinGame, PlayerID: 2})
+	_ = apply(t, g, Action{Type: StartGame, PlayerID: 1, DealerID: 1})
+
+	// Changing rules after start must fail
+	_, err = g.Apply(Action{Type: SetRules, PlayerID: 1, Revision: g.Snapshot().Revision, Rules: BotRules()})
+	if !errors.Is(err, ErrGameStarted) {
+		t.Fatalf("expected ErrGameStarted after start, got: %v", err)
 	}
 }

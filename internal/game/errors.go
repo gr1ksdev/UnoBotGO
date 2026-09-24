@@ -9,6 +9,7 @@ var (
 	ErrNoActiveGame    = errors.New("no active game in chat")
 	ErrChatOccupied    = errors.New("chat already has an open game")
 	ErrGameClosed      = errors.New("game closed")
+	ErrGameReset       = errors.New("game reset")
 	ErrNotParticipant  = errors.New("not an active participant")
 	ErrIDConflict      = errors.New("game ID collision")
 )

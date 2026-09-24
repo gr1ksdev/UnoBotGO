@@ -2,6 +2,7 @@ package game
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"time"
 
@@ -13,6 +14,9 @@ import (
 type Actor struct {
 	PlayerID uno.PlayerID
 	ChatID   ChatID
+	// ChatAdmin is asserted only by a trusted adapter after checking the
+	// platform role. User-controlled payloads must never set it directly.
+	ChatAdmin bool
 }
 
 type CreateRequest struct {
@@ -23,6 +27,12 @@ type CreateRequest struct {
 type Outcome struct {
 	View   PublicGameView
 	Events []uno.Event
+}
+
+type ResetResult struct {
+	GameIDs        []uno.GameID
+	RemovedActive  bool
+	RemovedHistory int
 }
 
 type config struct{ historyLimit int }
@@ -123,11 +133,11 @@ func authorize(entry *managedGame, actor Actor, kind uno.ActionType) error {
 		if actor.ChatID == 0 {
 			return ErrForbidden
 		}
-	case uno.CancelGame:
+	case uno.CancelGame, uno.SetRules:
 		if actor.ChatID == 0 || actor.PlayerID != entry.ownerID {
 			return ErrForbidden
 		}
-	case uno.PlayCard, uno.DrawCard, uno.PassTurn, uno.ChooseColor, uno.ChallengeDrawFour:
+	case uno.PlayCard, uno.DrawCard, uno.PassTurn, uno.ChooseColor, uno.CallBluff:
 		// Inline actions have no chat context. The engine still validates the actor.
 	default:
 		return uno.ErrInvalidAction
@@ -198,12 +208,82 @@ func (s *Service) FindPlayerGames(ctx context.Context, actor Actor) ([]GameSumma
 	return s.manager.findPlayer(ctx, actor.PlayerID)
 }
 
-// AutoSkipExpired advances turns that exceeded timeout. It is intended for a
-// single application-level scheduler; no clock or goroutine is part of uno.Game.
-func (s *Service) AutoSkipExpired(ctx context.Context, timeout time.Duration) []Outcome {
+// ExpiredTurn identifies a particular revision, not a future turn in the chat.
+// Only a trusted scheduler should submit these candidates, never player input.
+type ExpiredTurn struct {
+	GameID   uno.GameID
+	ChatID   ChatID
+	PlayerID uno.PlayerID
+	Revision uint64
+}
+
+// ExpiredTurns discovers candidates without changing any game. Adapters must
+// enqueue their execution in the same chat queue as player actions.
+func (s *Service) ExpiredTurns(ctx context.Context, timeout time.Duration) []ExpiredTurn {
 	if ctx == nil || timeout <= 0 {
 		return nil
 	}
-	now := time.Now()
-	return s.manager.skipExpired(ctx, timeout, now)
+	return s.manager.expiredTurns(ctx, timeout, time.Now())
+}
+
+// AutoSkipTurn revalidates a candidate and its deadline under the game lock.
+// Obsolete candidates return applied=false and must not produce a notification.
+func (s *Service) AutoSkipTurn(ctx context.Context, candidate ExpiredTurn, timeout time.Duration) (outcome Outcome, applied bool) {
+	if ctx == nil || timeout <= 0 {
+		return Outcome{}, false
+	}
+	return s.manager.skipTurn(ctx, candidate, timeout, time.Now())
+}
+
+// AutoSkipExpired is the synchronous scheduler API. Adapters with chat queues
+// use ExpiredTurns and AutoSkipTurn to serialize mutation AND notification.
+func (s *Service) AutoSkipExpired(ctx context.Context, timeout time.Duration) []Outcome {
+	var outcomes []Outcome
+	for _, candidate := range s.ExpiredTurns(ctx, timeout) {
+		if outcome, applied := s.AutoSkipTurn(ctx, candidate, timeout); applied {
+			outcomes = append(outcomes, outcome)
+		}
+	}
+	return outcomes
+}
+
+// SetRules updates the game rules during the lobby phase.
+func (s *Service) SetRules(ctx context.Context, actor Actor, id uno.GameID, rules uno.Rules) (Outcome, error) {
+	if err := checkContext(ctx); err != nil {
+		return Outcome{}, err
+	}
+	if actor.PlayerID <= 0 || id == "" {
+		return Outcome{}, ErrInvalidArgument
+	}
+	view, err := s.PublicView(ctx, id)
+	if err != nil {
+		return Outcome{}, err
+	}
+	action := uno.Action{
+		Type:     uno.SetRules,
+		PlayerID: actor.PlayerID,
+		Revision: view.Revision,
+		Rules:    rules,
+	}
+	outcome, err := s.Apply(ctx, actor, id, action)
+	if errors.Is(err, uno.ErrStaleRevision) {
+		if freshView, freshErr := s.PublicView(ctx, id); freshErr == nil {
+			action.Revision = freshView.Revision
+			outcome, err = s.Apply(ctx, actor, id, action)
+		}
+	}
+	return outcome, err
+}
+
+// ResetChat is an administrative recovery operation. It removes all active and
+// retained game state for one chat. Authorization accepts the current game
+// owner or a chat administrator verified by a trusted adapter.
+func (s *Service) ResetChat(ctx context.Context, actor Actor) (ResetResult, error) {
+	if err := checkContext(ctx); err != nil {
+		return ResetResult{}, err
+	}
+	if actor.PlayerID <= 0 || actor.ChatID == 0 {
+		return ResetResult{}, ErrInvalidArgument
+	}
+	return s.manager.resetChat(ctx, actor)
 }

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -83,7 +85,9 @@ func (h *InlineHandler) HandleInlineQuery(ctx context.Context, query *telego.Inl
 			results, nextOffset = h.buildGameSelectorResults(ctx, actorID, playerGames, query.Offset)
 		}
 	} else if strings.HasPrefix(rawQuery, "g_") {
-		targetGameID := uno.GameID(strings.TrimPrefix(rawQuery, "g_"))
+		queryBody := strings.TrimPrefix(rawQuery, "g_")
+		gameIDStr := strings.SplitN(queryBody, "_", 2)[0]
+		targetGameID := uno.GameID(gameIDStr)
 		results, nextOffset = h.buildPlayerHandResults(ctx, actorID, targetGameID, query.Offset)
 	} else {
 		// Unknown query format
@@ -155,7 +159,7 @@ func (h *InlineHandler) buildGameSelectorResults(
 					{
 						{
 							Text:                         "🃏 Abrir minha mão",
-							SwitchInlineQueryCurrentChat: stringPtr(fmt.Sprintf("g_%s", g.GameID)),
+							SwitchInlineQueryCurrentChat: stringPtr(fmt.Sprintf("g_%s_%d", g.GameID, g.Revision)),
 						},
 					},
 				},
@@ -180,6 +184,15 @@ func (h *InlineHandler) buildPlayerHandResults(
 	offsetStr string,
 ) ([]telego.InlineQueryResult, string) {
 	view, err := h.service.PlayerView(ctx, game.Actor{PlayerID: actorID}, gameID)
+	if errors.Is(err, game.ErrGameClosed) {
+		return []telego.InlineQueryResult{&telego.InlineQueryResultArticle{
+			Type:                "article",
+			ID:                  "closed_game",
+			Title:               "Partida encerrada",
+			Description:         "Esta partida já foi encerrada.",
+			InputMessageContent: &telego.InputTextMessageContent{MessageText: "Esta partida já foi encerrada."},
+		}}, ""
+	}
 	if err != nil {
 		return []telego.InlineQueryResult{
 			&telego.InlineQueryResultArticle{
@@ -205,12 +218,13 @@ func (h *InlineHandler) buildPlayerHandResults(
 					MessageText: fmt.Sprintf("A partida no grupo <b>%s</b> ainda não foi iniciada. Aguarde o responsável usar /iniciar!", view.Public.ChatName),
 					ParseMode:   "HTML",
 				},
-				ReplyMarkup: makeGameButtons(gameID),
+				ReplyMarkup: makeGameButtons(view.Public),
 			},
 		}, ""
 	}
 
 	var results []telego.InlineQueryResult
+	sortedHand := sortHand(view.Hand)
 
 	// 1. Action controls if it's the player's turn
 	if view.Public.Phase == uno.ChoosingColor {
@@ -245,9 +259,9 @@ func (h *InlineHandler) buildPlayerHandResults(
 			}
 
 			// 5th article: hand summary
-			if len(view.Hand) > 0 {
+			if len(sortedHand) > 0 {
 				var descs []string
-				for _, cv := range view.Hand {
+				for _, cv := range sortedHand {
 					descs = append(descs, CardRepr(cv.Card))
 				}
 				results = append(results, &telego.InlineQueryResultArticle{
@@ -277,12 +291,26 @@ func (h *InlineHandler) buildPlayerHandResults(
 				ParseMode:   "HTML",
 			},
 		})
-	} else if view.Public.Phase == uno.TakingTurn && view.Public.CurrentTurn == actorID {
-		if view.Public.TopCard != nil && view.Public.TopCard.Rank == uno.WildDrawFour && view.Public.DrawCounter > 0 {
-			tok, _ := h.tokens.CreateActionToken(actorID, gameID, view.Public.ChatID, uno.Action{Type: uno.ChallengeDrawFour, PlayerID: actorID, Revision: view.Public.Revision}, h.tokenTTL)
-			results = append(results, &telego.InlineQueryResultArticle{Type: "article", ID: tok, Title: "Chamar blefe do +4", Description: "Desafiar o jogador que lançou o Coringa +4", InputMessageContent: &telego.InputTextMessageContent{MessageText: "Estou chamando o blefe do +4!"}})
+
+		if len(sortedHand) > 0 {
+			var descs []string
+			for _, cv := range sortedHand {
+				descs = append(descs, CardRepr(cv.Card))
+			}
+			results = append(results, &telego.InlineQueryResultArticle{
+				Type:        "article",
+				ID:          fmt.Sprintf("hand_%s_%d", gameID, view.Public.Revision),
+				Title:       "Suas cartas (toque para estado do jogo):",
+				Description: strings.Join(descs, ", "),
+				InputMessageContent: &telego.InputTextMessageContent{
+					MessageText: h.renderer.RenderPublicState(view.Public),
+					ParseMode:   "HTML",
+				},
+			})
 		}
 
+		return results, ""
+	} else if view.Public.Phase == uno.TakingTurn && view.Public.CurrentTurn == actorID {
 		if view.DrawnCardID == "" {
 			// Player can draw
 			tokDraw, _ := h.tokens.CreateActionToken(actorID, gameID, view.Public.ChatID, uno.Action{
@@ -309,6 +337,23 @@ func (h *InlineHandler) buildPlayerHandResults(
 					MessageText: msgText,
 				},
 			})
+
+			if view.Public.CanCallBluff {
+				tokBluff, _ := h.tokens.CreateActionToken(actorID, gameID, view.Public.ChatID, uno.Action{
+					Type:     uno.CallBluff,
+					PlayerID: actorID,
+					Revision: view.Public.Revision,
+				}, h.tokenTTL)
+
+				results = append(results, &telego.InlineQueryResultCachedSticker{
+					Type:          "sticker",
+					ID:            tokBluff,
+					StickerFileID: Stickers["option_bluff"],
+					InputMessageContent: &telego.InputTextMessageContent{
+						MessageText: "Desafiando blefe!",
+					},
+				})
+			}
 		} else {
 			// Player drew already, can pass
 			tokPass, _ := h.tokens.CreateActionToken(actorID, gameID, view.Public.ChatID, uno.Action{
@@ -339,14 +384,14 @@ func (h *InlineHandler) buildPlayerHandResults(
 		}
 	}
 
-	if offset < len(view.Hand) {
+	if offset < len(sortedHand) {
 		end := offset + 40 // Leave room for header + controls (total < 50)
-		if end > len(view.Hand) {
-			end = len(view.Hand)
+		if end > len(sortedHand) {
+			end = len(sortedHand)
 		}
 
 		for i := offset; i < end; i++ {
-			cv := view.Hand[i]
+			cv := sortedHand[i]
 			if cv.Playable {
 				tokPlay, _ := h.tokens.CreateActionToken(actorID, gameID, view.Public.ChatID, uno.Action{
 					Type:     uno.PlayCard,
@@ -387,7 +432,7 @@ func (h *InlineHandler) buildPlayerHandResults(
 		}
 
 		nextOffset := ""
-		if end < len(view.Hand) {
+		if end < len(sortedHand) {
 			if curTok, err := h.tokens.CreateCursorToken(actorID, CursorKindHand, gameID, view.Public.Revision, end, h.tokenTTL); err == nil {
 				nextOffset = curTok
 			}
@@ -423,36 +468,21 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 		actor := game.Actor{PlayerID: actorID, ChatID: actionToken.ChatID}
 		outcome, err := h.service.Apply(taskCtx, actor, actionToken.GameID, actionToken.Action)
 		if err != nil {
-			if errors.Is(err, uno.ErrStaleRevision) {
-				h.tokens.SetActionResult(tokenStr, "stale")
-				staleMsg := fmt.Sprintf("⚠️ %s: Seleção antiga: a partida mudou. Abra Suas cartas novamente.", h.renderer.userCache.FormatLink(actorID))
-				_, _ = h.bot.SendMessage(taskCtx, &telego.SendMessageParams{
-					ChatID:      telego.ChatID{ID: int64(actionToken.ChatID)},
-					Text:        staleMsg,
-					ParseMode:   "HTML",
-					ReplyMarkup: makeGameButtons(actionToken.GameID),
-				})
-			} else {
-				h.tokens.SetActionResult(tokenStr, "rejected")
-				errMsg := fmt.Sprintf("⚠️ %s: Jogada não aceita: %v. Abra Suas cartas novamente.", h.renderer.userCache.FormatLink(actorID), err)
-				_, _ = h.bot.SendMessage(taskCtx, &telego.SendMessageParams{
-					ChatID:      telego.ChatID{ID: int64(actionToken.ChatID)},
-					Text:        errMsg,
-					ParseMode:   "HTML",
-					ReplyMarkup: makeGameButtons(actionToken.GameID),
-				})
-			}
+			h.replyActionError(taskCtx, actorID, tokenStr, actionToken, err)
 			return
 		}
 
 		// Success!
 		h.tokens.SetActionResult(tokenStr, "confirmed")
+		if outcome.View.Closed {
+			h.tokens.InvalidateGame(actionToken.GameID)
+		}
 
 		for _, ev := range outcome.Events {
 			if ev.Type == uno.UnoAnnounced {
 				unoMsg, err := h.bot.SendMessage(taskCtx, &telego.SendMessageParams{
 					ChatID:    telego.ChatID{ID: int64(actionToken.ChatID)},
-					Text:      fmt.Sprintf("%s <b>Gritou UNO!</b>", h.renderer.userCache.FormatLink(ev.PlayerID)),
+					Text:      fmt.Sprintf("%s <b>Gritou UNO!</b>", h.renderer.PlayerLink(ev.PlayerID, outcome.View)),
 					ParseMode: "HTML",
 				})
 				if err == nil && unoMsg != nil {
@@ -472,12 +502,85 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 		}
 
 		confText := h.renderer.RenderActionConfirmation(actorID, actionToken.Action, outcome)
-		_, _ = h.bot.SendMessage(taskCtx, &telego.SendMessageParams{
-			ChatID:      telego.ChatID{ID: int64(actionToken.ChatID)},
-			Text:        confText,
-			ParseMode:   "HTML",
-			ReplyMarkup: makeGameButtons(actionToken.GameID),
-		})
+		params := &telego.SendMessageParams{
+			ChatID:    telego.ChatID{ID: int64(actionToken.ChatID)},
+			Text:      confText,
+			ParseMode: "HTML",
+		}
+		if markup := makeGameButtons(outcome.View); markup != nil {
+			params.ReplyMarkup = markup
+		}
+		_, _ = h.bot.SendMessage(taskCtx, params)
 	})
 	return accepted
+}
+
+// Failed actions use current public context, never the old token's turn.
+func (h *InlineHandler) replyActionError(ctx context.Context, actorID uno.PlayerID, tokenStr string, token ActionToken, actionErr error) {
+	status := "rejected"
+	message := "Jogada não aceita: " + html.EscapeString(actionErr.Error()) + "."
+	if errors.Is(actionErr, uno.ErrStaleRevision) {
+		status = "stale"
+		message = "Seleção antiga: a partida mudou."
+	}
+	h.tokens.SetActionResult(tokenStr, status)
+	view, viewErr := h.service.PublicView(ctx, token.GameID)
+	var markup *telego.InlineKeyboardMarkup
+	switch {
+	case viewErr != nil:
+		view = game.PublicGameView{}
+		message = "Esta partida não está disponível."
+	case view.Closed || view.Phase == uno.Finished:
+		message = "Esta partida já foi encerrada."
+	default:
+		// A player who left or already placed cannot reopen a private hand.
+		if _, err := h.service.PlayerView(ctx, game.Actor{PlayerID: actorID, ChatID: token.ChatID}, token.GameID); err == nil {
+			message += " Abra Suas cartas novamente."
+			markup = makeGameButtons(view)
+		}
+	}
+	params := &telego.SendMessageParams{
+		ChatID:    telego.ChatID{ID: int64(token.ChatID)},
+		Text:      fmt.Sprintf("⚠️ %s: %s", h.renderer.PlayerLink(actorID, view), message),
+		ParseMode: "HTML",
+	}
+	if markup != nil {
+		params.ReplyMarkup = markup
+	}
+	_, _ = h.bot.SendMessage(ctx, params)
+}
+
+func sortHand(hand []game.CardView) []game.CardView {
+	sorted := make([]game.CardView, len(hand))
+	copy(sorted, hand)
+	slices.SortStableFunc(sorted, func(a, b game.CardView) int {
+		ar := colorSortRank(a.Card.Color, a.Card.Rank)
+		br := colorSortRank(b.Card.Color, b.Card.Rank)
+		if ar != br {
+			return ar - br
+		}
+		if a.Card.Rank != b.Card.Rank {
+			return int(a.Card.Rank) - int(b.Card.Rank)
+		}
+		return strings.Compare(string(a.Card.ID), string(b.Card.ID))
+	})
+	return sorted
+}
+
+func colorSortRank(c uno.Color, r uno.Rank) int {
+	if r >= uno.Wild {
+		return 99
+	}
+	switch c {
+	case uno.Red:
+		return 0
+	case uno.Blue:
+		return 1
+	case uno.Green:
+		return 2
+	case uno.Yellow:
+		return 3
+	default:
+		return 98
+	}
 }

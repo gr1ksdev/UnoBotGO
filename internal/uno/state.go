@@ -24,18 +24,19 @@ const (
 
 // ColorChoice records the pre-play evidence needed by a future challenge flow.
 // Initial Wild color choice retains the chooser's turn; played Wild advances it.
-type DrawFourChallenge struct {
-	Actor            PlayerID
-	Target           PlayerID
-	HadMatchingColor bool
-}
-
 type ColorChoice struct {
 	Actor         PlayerID
 	Target        PlayerID
 	PreviousColor Color
 	DrawCount     int
 	Initial       bool
+	Bluffing      bool
+}
+
+type BluffInfo struct {
+	Actor    PlayerID
+	Target   PlayerID
+	Bluffing bool
 }
 
 // State is a serializable snapshot, with no locks, clock or Telegram types.
@@ -58,7 +59,7 @@ type State struct {
 	DrawnCardID     CardID
 	DrawCounter     int
 	Pending         *ColorChoice
-	Challenge       *DrawFourChallenge
+	PendingBluff    *BluffInfo
 	Placements      []Placement
 	FinishReason    FinishReason
 }
@@ -77,9 +78,9 @@ func (s State) clone() State {
 		pending := *s.Pending
 		s.Pending = &pending
 	}
-	if s.Challenge != nil {
-		challenge := *s.Challenge
-		s.Challenge = &challenge
+	if s.PendingBluff != nil {
+		pb := *s.PendingBluff
+		s.PendingBluff = &pb
 	}
 	return s
 }
@@ -119,6 +120,9 @@ func (s State) Validate() error {
 	}
 	if s.Rules.EndPolicy > Placements {
 		return bad("end policy")
+	}
+	if s.PendingBluff != nil && (s.PendingBluff.Actor <= 0 || s.PendingBluff.Target <= 0) {
+		return bad("pending bluff identity")
 	}
 	if len(s.Cards) == 0 || len(s.Players) > 10 {
 		return bad("inventory or participant limit")
@@ -215,7 +219,7 @@ func (s State) Validate() error {
 		}
 	}
 	if s.Phase == Finished {
-		if s.CurrentPlayerID != 0 || s.DrawnCardID != "" || s.Pending != nil || s.Challenge != nil {
+		if s.CurrentPlayerID != 0 || s.DrawnCardID != "" || s.Pending != nil {
 			return bad("finished turn")
 		}
 		if s.FinishReason != FinishedNormally && s.FinishReason != FinishedByDeparture && s.FinishReason != FinishedByCancellation {
@@ -232,11 +236,6 @@ func (s State) Validate() error {
 	}
 	if (s.Phase == ChoosingColor) != (s.Pending != nil) {
 		return bad("pending color phase")
-	}
-	if s.Challenge != nil {
-		if s.Phase != TakingTurn || s.DrawCounter != 4 || s.CurrentPlayerID != s.Challenge.Target || s.Challenge.Actor == 0 || s.Challenge.Target == 0 || !order[s.Challenge.Actor] || !order[s.Challenge.Target] {
-			return bad("draw four challenge")
-		}
 	}
 	if p := s.Pending; p != nil {
 		if p.Actor != s.CurrentPlayerID || !order[p.Actor] || !order[p.Target] || p.Target != s.next(p.Actor, 1) {

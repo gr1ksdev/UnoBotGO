@@ -1,7 +1,9 @@
 package game
 
 import (
+	"context"
 	"errors"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -30,11 +32,27 @@ func TestAutoSkipExpiredTurn(t *testing.T) {
 func position(t *testing.T, s *Service, rules uno.Rules, wild bool) PublicGameView {
 	t.Helper()
 	v := create(t, s, 1, 1, rules)
-	cards := []uno.Card{{ID: "top", Color: uno.Red, Rank: uno.One}, {ID: "a", Color: uno.Red, Rank: uno.Two}, {ID: "b", Color: uno.Red, Rank: uno.Three}, {ID: "c", Color: uno.Blue, Rank: uno.Four}, {ID: "draw", Color: uno.Red, Rank: uno.Five}}
+	cards := []uno.Card{
+		{ID: "top", Color: uno.Red, Rank: uno.One},
+		{ID: "a", Color: uno.Red, Rank: uno.Two},
+		{ID: "extra", Color: uno.Blue, Rank: uno.Nine},
+		{ID: "b", Color: uno.Red, Rank: uno.Three},
+		{ID: "c", Color: uno.Blue, Rank: uno.Four},
+		{ID: "draw", Color: uno.Red, Rank: uno.Five},
+	}
+	p1Hand := []uno.CardID{"a"}
+	drawPile := []uno.CardID{"draw"}
 	if wild {
 		cards[1] = uno.Card{ID: "a", Rank: uno.Wild}
+		if rules.NoWildFinish {
+			p1Hand = append(p1Hand, "extra")
+		} else {
+			drawPile = append(drawPile, "extra")
+		}
+	} else {
+		drawPile = append(drawPile, "extra")
 	}
-	state := uno.State{ID: v.GameID, Revision: 10, Rules: rules, Phase: uno.TakingTurn, Cards: cards, DiscardPile: []uno.CardID{"top"}, DrawPile: []uno.CardID{"draw"}, Players: []uno.Player{{ID: 1, Hand: []uno.CardID{"a"}}, {ID: 2, Hand: []uno.CardID{"b"}}, {ID: 3, Hand: []uno.CardID{"c"}}}, Order: []uno.PlayerID{1, 2, 3}, DealerID: 3, CurrentPlayerID: 1, Direction: 1, ActiveColor: uno.Red}
+	state := uno.State{ID: v.GameID, Revision: 10, Rules: rules, Phase: uno.TakingTurn, Cards: cards, DiscardPile: []uno.CardID{"top"}, DrawPile: drawPile, Players: []uno.Player{{ID: 1, Hand: p1Hand}, {ID: 2, Hand: []uno.CardID{"b"}}, {ID: 3, Hand: []uno.CardID{"c"}}}, Order: []uno.PlayerID{1, 2, 3}, DealerID: 3, CurrentPlayerID: 1, Direction: 1, ActiveColor: uno.Red}
 	engine, err := uno.Restore(state, func([]uno.CardID) {})
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +73,8 @@ func TestPlacementsAndCompletion(t *testing.T) {
 	for _, wild := range []bool{false, true} {
 		t.Run(map[bool]string{false: "number", true: "wild"}[wild], func(t *testing.T) {
 			s := testService(t)
-			v := position(t, s, uno.BotRules(), wild)
+			rules := uno.Rules{EndPolicy: uno.Placements}
+			v := position(t, s, rules, wild)
 			out := act(t, s, v.GameID, Actor{PlayerID: 1}, uno.Action{Type: uno.PlayCard, CardID: "a"})
 			if wild {
 				if out.View.OwnerID != 1 || out.View.ColorChooserID != 1 {
@@ -185,4 +204,144 @@ func TestRejectedActionsPreserveMembership(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertIndexes(t, s)
+}
+
+func expireTurn(t *testing.T, s *Service, id uno.GameID) ExpiredTurn {
+	t.Helper()
+	e, err := s.manager.lockGame(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.turnStarted = time.Now().Add(-time.Hour)
+	e.mu.Unlock()
+	candidates := s.ExpiredTurns(t.Context(), time.Minute)
+	for _, candidate := range candidates {
+		if candidate.GameID == id {
+			return candidate
+		}
+	}
+	t.Fatal("missing expired turn")
+	return ExpiredTurn{}
+}
+
+func TestTerminalGameHasNoTimeout(t *testing.T) {
+	for _, history := range []int{0, 100} {
+		for name, rules := range map[string]uno.Rules{"classic": uno.BotRules(), "caseiro": uno.CaseiroRules()} {
+			t.Run(name+"/history"+strconv.Itoa(history), func(t *testing.T) {
+				s := testService(t, WithHistoryLimit(history))
+				v := position(t, s, rules, false)
+				act(t, s, v.GameID, Actor{PlayerID: 1}, uno.Action{Type: uno.PlayCard, CardID: "a"})
+				candidate := expireTurn(t, s, v.GameID)
+				e := s.manager.byID[v.GameID].entry
+				out := act(t, s, v.GameID, Actor{PlayerID: 2}, uno.Action{Type: uno.PlayCard, CardID: "b"})
+				if !out.View.Closed || out.View.CurrentTurn != 0 || len(out.View.Placements) != 3 || e.engine != nil || !e.turnStarted.IsZero() || eventPresent(out.Events, uno.TurnChanged) {
+					t.Fatalf("incomplete closure: %+v", out)
+				}
+				if out.View.Placements[2].WentOut || out.View.Placements[2].PlayerID != 3 {
+					t.Fatal("last remaining placement")
+				}
+				assertIndexes(t, s)
+				if len(s.ExpiredTurns(t.Context(), time.Nanosecond)) != 0 || len(s.AutoSkipExpired(t.Context(), time.Nanosecond)) != 0 {
+					t.Fatal("finished game scheduled")
+				}
+				if _, applied := s.AutoSkipTurn(t.Context(), candidate, time.Nanosecond); applied {
+					t.Fatal("old candidate acted after victory")
+				}
+				next := create(t, s, v.ChatID, 99, uno.BotRules())
+				if _, applied := s.AutoSkipTurn(t.Context(), candidate, time.Nanosecond); applied {
+					t.Fatal("old candidate acted on replacement game")
+				}
+				view, err := s.PublicView(t.Context(), next.GameID)
+				if err != nil || view.Revision != 0 || view.Phase != uno.Lobby {
+					t.Fatal("replacement changed", err)
+				}
+			})
+		}
+	}
+}
+
+func TestAutoSkipCandidateRevalidation(t *testing.T) {
+	for _, mutation := range []string{"revision", "chat", "player", "game", "deadline", "closed", "color", "cancelled_context", "valid"} {
+		t.Run(mutation, func(t *testing.T) {
+			s := testService(t)
+			v := position(t, s, uno.BotRules(), mutation == "color")
+			candidate := expireTurn(t, s, v.GameID)
+			ctx := t.Context()
+			switch mutation {
+			case "revision":
+				candidate.Revision--
+			case "chat":
+				candidate.ChatID++
+			case "player":
+				candidate.PlayerID++
+			case "game":
+				candidate.GameID = "missing"
+			case "deadline":
+				e, err := s.manager.lockGame(ctx, v.GameID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				e.turnStarted = time.Now()
+				e.mu.Unlock()
+			case "closed":
+				act(t, s, v.GameID, Actor{PlayerID: 1, ChatID: 1}, uno.Action{Type: uno.CancelGame})
+			case "color":
+				act(t, s, v.GameID, Actor{PlayerID: 1}, uno.Action{Type: uno.PlayCard, CardID: "a"})
+				if len(s.ExpiredTurns(ctx, time.Nanosecond)) != 0 {
+					t.Fatal("color choice scheduled")
+				}
+			case "cancelled_context":
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			before, _ := s.PublicView(t.Context(), v.GameID)
+			out, applied := s.AutoSkipTurn(ctx, candidate, time.Minute)
+			after, _ := s.PublicView(t.Context(), v.GameID)
+			if mutation == "valid" {
+				if !applied || out.View.CurrentTurn != 2 || out.View.Revision != before.Revision+1 {
+					t.Fatalf("timeout not applied: %+v", out)
+				}
+				if _, again := s.AutoSkipTurn(ctx, candidate, time.Nanosecond); again {
+					t.Fatal("duplicate candidate applied twice")
+				}
+			} else if applied || !reflect.DeepEqual(before, after) {
+				t.Fatalf("invalid candidate changed game: %+v", out)
+			}
+		})
+	}
+}
+
+func TestTimeoutDiscoveryConcurrentWithClose(t *testing.T) {
+	s := testService(t)
+	for i := 0; i < 40; i++ {
+		v := position(t, s, uno.BotRules(), false)
+		candidate := expireTurn(t, s, v.GameID)
+		start := make(chan struct{})
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			<-start
+			s.ExpiredTurns(t.Context(), time.Minute)
+			s.AutoSkipTurn(t.Context(), candidate, time.Minute)
+		}()
+		close(start)
+		// Apply the current revision under the same application API. A concurrent
+		// timeout may win once; cancellation must then use the refreshed revision.
+		for {
+			view, err := s.PublicView(t.Context(), v.GameID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = s.Apply(t.Context(), Actor{PlayerID: view.OwnerID, ChatID: view.ChatID}, v.GameID, uno.Action{Type: uno.CancelGame, PlayerID: view.OwnerID, Revision: view.Revision})
+			if errors.Is(err, uno.ErrStaleRevision) {
+				continue
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+		<-done
+	}
 }

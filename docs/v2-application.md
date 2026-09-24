@@ -1,5 +1,42 @@
 # UnoBotGO V2 — Milestone 2
 
+> Atualização de 2026-09-23: o contrato de timeout e encerramento vigente está
+> descrito abaixo. As seções da M2 preservam o contexto histórico.
+
+## Timeout e encerramento — milestone corretiva
+
+A engine continua responsável por `GameFinished`. O serviço publica a view final,
+remove os índices ativos, descarta o runtime privado e zera `turnStarted` na mesma
+operação protegida pelo mutex da partida. Não há timer individual nem turno do
+último jogador após encerramento.
+
+O scheduler usa duas operações:
+
+- `ExpiredTurns(ctx, timeout) []ExpiredTurn`: descoberta somente de leitura;
+  candidato contém `GameID`, `ChatID`, `PlayerID` e `Revision`.
+- `AutoSkipTurn(ctx, candidate, timeout) (Outcome, bool)`: revalida candidato,
+  fase, prazo e encerramento sob o mutex, antes de aplicar `SkipTurn`.
+  `false` significa que não houve ação nem deve haver mensagem.
+
+Candidatos são dados internos do scheduler confiável, nunca input de jogadores.
+O adapter enfileira execução e envio da mensagem na mesma tarefa do chat utilizada
+pelas jogadas. Não deve aplicar um timeout fora da fila e enfileirar somente sua
+notificação: esse padrão permitiria anunciar um turno antigo após a vitória.
+Candidatos duplicados, antigos, cancelados, de jogos removidos ou de um jogo
+anterior no mesmo chat não alteram o estado. Saturação da fila não aplica a ação.
+
+`AutoSkipExpired(ctx, timeout)` permanece como wrapper síncrono das duas operações
+para consumidores sem fila. O bot usa as operações separadas. Leituras de runtime,
+`final` e prazo usam exclusivamente o mutex da partida; `indexMu` só protege os
+índices e a cópia de referências.
+
+Regras de cartas preservadas: o Clássico do Telegram usa `BotRules` (placements e
+stacking de +2), enquanto `ClassicRules` da engine usa primeiro vencedor. Wild/+4
+aguardam escolha de cor antes da colocação. Penalidades imediatas continuam sendo
+aplicadas antes do término. Com stacking terminal, não há nova compra automática,
+chance de rebater ou turno adicional; o contador final é preservado como antes.
+
+
 `internal/game` fornece a camada de aplicação entre adapters futuros e
 `internal/uno`. Não inicia Telegram, não substitui o executável V1 e não depende
 de banco, tokens inline, ranking, Match ou timers.
@@ -18,6 +55,7 @@ não copiar a instância nem utilizar seu valor zero.
 | `PlayerView(ctx, Actor, GameID)` | Apenas mão do próprio participante ativo autenticado. |
 | `FindChatGame(ctx, ChatID)` | Resumo da única sessão aberta no chat. |
 | `FindPlayerGames(ctx, Actor)` | Sessões de participação ativa do autor, ordenadas por ChatID/GameID. |
+| `ResetChat(ctx, Actor)` | Remove sessão ativa e histórico do chat; exige responsável da partida ou administrador autenticado pelo adapter. |
 
 `CreateRequest` contém `ChatName` e `uno.Rules`; regras zero equivalem a Classic.
 `WithHistoryLimit(n)` configura retenção de encerrados: padrão 100; zero desativa;
@@ -51,17 +89,20 @@ _ = started
 
 ## Responsável, solicitante e participante
 
-`Actor` é identidade/contexto vindo de um adapter **confiável**. A M2 não verifica
-credenciais Telegram. Nunca construir Actor a partir de um ID alegado no payload
-cliente; o adapter deverá autenticá-lo. `Action.PlayerID` deve coincidir com o
-solicitante real; divergência retorna `ErrForbidden`.
+`Actor` é identidade/contexto vindo de um adapter **confiável**. A camada não
+verifica credenciais Telegram. Nunca construir Actor a partir de um ID alegado no
+payload cliente; o adapter deverá autenticá-lo. `Action.PlayerID` deve coincidir
+com o solicitante real; divergência retorna `ErrForbidden`. `Actor.ChatAdmin`
+também é uma afirmação confiável do adapter, preenchida somente após consultar a
+função administrativa do usuário no chat.
 
 - Create exige PlayerID positivo e ChatID não zero.
 - Join/Leave exigem contexto do chat correspondente.
 - Start/Cancel exigem contexto do chat e `Actor.PlayerID == OwnerID`.
 - Play/Draw/Pass/ChooseColor aceitam ChatID zero para o futuro inline; qualquer
   ChatID fornecido precisa corresponder ao jogo.
-- Não há papel de admin externo nesta milestone. Owner não recebe acesso a mãos.
+- ResetChat aceita o responsável da partida ou `ChatAdmin`; nenhum dos dois recebe
+  acesso a mãos por causa dessa autorização.
 
 O responsável pode iniciar/cancelar sem participar, inclusive cancelar lobby vazio.
 Start escolhe `Order[0]` como dealer quando `DealerID` é zero. Dealer explícito
@@ -116,6 +157,14 @@ Contexto é verificado na entrada e após espera por lock, antes de mutar. Mutex
 padrão não é interrompível: cancelamento não promete retorno imediato durante
 espera. Após engine aceitar a ação, o serviço termina publicação e retorna sucesso
 mesmo se ctx for cancelado nesse intervalo; não simula rollback de ação aceita.
+
+`ResetChat` usa espera de lock sensível ao contexto. Quando autorizado, marca o
+runtime removido como resetado, apaga a sessão ativa, todos os índices de jogadores
+e todos os resumos históricos do chat em uma única seção protegida. Referências
+antigas passam a retornar `ErrGameReset` e não podem publicar novamente nos
+índices. Partidas de outros chats permanecem intactas. Para administradores, o
+reset sem estado é idempotente; sem partida ativa, um usuário comum não possui
+autoridade implícita para limpar o chat.
 
 ## Lifecycle e histórico
 
@@ -175,7 +224,7 @@ Save/Get artificiais ou recovery público. Reiniciar perde sessões e histórico
 
 Erros de aplicação: `ErrInvalidArgument`, `ErrForbidden`, `ErrGameNotFound`,
 `ErrNoActiveGame`, `ErrChatOccupied`, `ErrGameClosed`, `ErrNotParticipant`,
-`ErrIDConflict`. Erros de regras/revision são preservados para `errors.Is`.
+`ErrIDConflict`, `ErrGameReset`. Erros de regras/revision são preservados para `errors.Is`.
 Falhas de Apply retornam Outcome vazio e não alteram estado/índices.
 
 ```bash

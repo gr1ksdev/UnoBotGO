@@ -310,3 +310,117 @@ func TestCommandHandler_ReplyMarkup_OmitsNull(t *testing.T) {
 		t.Errorf("expected JSON to omit reply_markup, but got: %s", string(data))
 	}
 }
+
+func TestCommandHandler_ResetByOwnerInvalidatesStateAndTokens(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, _ := game.NewService()
+	tokens := NewTokenStore(100, 10, time.Now, nil)
+	handler := NewCommandHandler(mockAPI, svc, NewRenderer(NewUserCache(100)), tokens, "unobot", nil)
+	ctx := context.Background()
+	chatID := int64(-2001)
+	owner := int64(10)
+
+	handler.HandleMessage(ctx, &telego.Message{Chat: telego.Chat{ID: chatID, Type: "supergroup", Title: "Reset"}, From: &telego.User{ID: owner}, Text: "/novo"})
+	summary, err := svc.FindChatGame(ctx, game.ChatID(chatID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := tokens.CreateActionToken(uno.PlayerID(owner), summary.GameID, game.ChatID(chatID), uno.Action{PlayerID: uno.PlayerID(owner)}, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler.HandleMessage(ctx, &telego.Message{Chat: telego.Chat{ID: chatID, Type: "supergroup"}, From: &telego.User{ID: owner}, Text: "/reset@UNOBOT"})
+	if !strings.Contains(mockAPI.LastSentMessage(), "Estado deste grupo resetado") {
+		t.Fatalf("unexpected reset reply: %s", mockAPI.LastSentMessage())
+	}
+	if _, err := svc.FindChatGame(ctx, game.ChatID(chatID)); !errors.Is(err, game.ErrNoActiveGame) {
+		t.Fatalf("game survived reset: %v", err)
+	}
+	if _, status := tokens.ConsumeAction(token, uno.PlayerID(owner)); status != ConsumeNotFound {
+		t.Fatalf("old token survived reset: %v", status)
+	}
+	handler.HandleMessage(ctx, &telego.Message{Chat: telego.Chat{ID: chatID, Type: "supergroup", Title: "Reset"}, From: &telego.User{ID: owner}, Text: "/novo"})
+	if _, err := svc.FindChatGame(ctx, game.ChatID(chatID)); err != nil {
+		t.Fatalf("new game failed after reset: %v", err)
+	}
+}
+
+func TestCommandHandler_ResetByAdminAndRejectMember(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		member  telego.ChatMember
+		allowed bool
+	}{
+		{"creator", &telego.ChatMemberOwner{Status: telego.MemberStatusCreator}, true},
+		{"administrator", &telego.ChatMemberAdministrator{Status: telego.MemberStatusAdministrator}, true},
+		{"member", &telego.ChatMemberMember{Status: telego.MemberStatusMember}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			mockAPI := newMockBotAPI()
+			mockAPI.ChatMembers[20] = test.member
+			svc, _ := game.NewService()
+			handler := NewCommandHandler(mockAPI, svc, NewRenderer(NewUserCache(100)), NewTokenStore(100, 10, time.Now, nil), "unobot", nil)
+			ctx := context.Background()
+			chatID := int64(-2100)
+			handler.HandleMessage(ctx, &telego.Message{Chat: telego.Chat{ID: chatID, Type: "supergroup"}, From: &telego.User{ID: 10}, Text: "/novo"})
+			handler.HandleMessage(ctx, &telego.Message{Chat: telego.Chat{ID: chatID, Type: "supergroup"}, From: &telego.User{ID: 20}, Text: "/reset"})
+			_, err := svc.FindChatGame(ctx, game.ChatID(chatID))
+			if test.allowed && !errors.Is(err, game.ErrNoActiveGame) {
+				t.Fatalf("authorized reset left game: %v", err)
+			}
+			if !test.allowed && err != nil {
+				t.Fatalf("denied reset changed game: %v", err)
+			}
+			if !test.allowed && !strings.Contains(mockAPI.LastSentMessage(), "Apenas o responsável") {
+				t.Fatalf("unexpected denial: %s", mockAPI.LastSentMessage())
+			}
+		})
+	}
+}
+
+func TestCommandHandler_AdminResetWithoutGameAndRoleFailure(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	mockAPI.ChatMembers[20] = &telego.ChatMemberAdministrator{Status: telego.MemberStatusAdministrator}
+	svc, _ := game.NewService()
+	handler := NewCommandHandler(mockAPI, svc, NewRenderer(NewUserCache(100)), NewTokenStore(100, 10, time.Now, nil), "unobot", nil)
+	msg := &telego.Message{Chat: telego.Chat{ID: -2200, Type: "supergroup"}, From: &telego.User{ID: 20}, Text: "/reset"}
+	handler.HandleMessage(context.Background(), msg)
+	if !strings.Contains(mockAPI.LastSentMessage(), "fila deste grupo foi renovada") {
+		t.Fatalf("unexpected empty reset reply: %s", mockAPI.LastSentMessage())
+	}
+
+	mockAPI.ChatMemberErr = errors.New("telegram unavailable")
+	msg.Chat.ID = -2201
+	handler.HandleMessage(context.Background(), msg)
+	if !strings.Contains(mockAPI.LastSentMessage(), "confirmar sua permissão") {
+		t.Fatalf("unexpected role failure reply: %s", mockAPI.LastSentMessage())
+	}
+}
+
+func TestCommandHandler_ResetRejectsUnsupportedSendersAndChats(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, _ := game.NewService()
+	handler := NewCommandHandler(mockAPI, svc, NewRenderer(NewUserCache(100)), NewTokenStore(100, 10, time.Now, nil), "unobot", nil)
+	ctx := context.Background()
+
+	handler.HandleReset(ctx, &telego.Message{
+		Chat: telego.Chat{ID: -2300, Type: "supergroup"}, From: &telego.User{ID: 1},
+		SenderChat: &telego.Chat{ID: -2300, Type: "supergroup"}, Text: "/reset",
+	}, nil)
+	if !strings.Contains(mockAPI.LastSentMessage(), "administrador identificável") {
+		t.Fatalf("anonymous reset was not rejected: %s", mockAPI.LastSentMessage())
+	}
+	handler.HandleReset(ctx, &telego.Message{
+		Chat: telego.Chat{ID: -2300, Type: "supergroup"}, From: &telego.User{ID: 1},
+		IsTopicMessage: true, MessageThreadID: 7, Text: "/reset",
+	}, nil)
+	if !strings.Contains(mockAPI.LastSentMessage(), "chat geral") {
+		t.Fatalf("topic reset was not rejected: %s", mockAPI.LastSentMessage())
+	}
+	handler.HandleReset(ctx, &telego.Message{
+		Chat: telego.Chat{ID: 1, Type: "private"}, From: &telego.User{ID: 1}, Text: "/reset",
+	}, nil)
+	if !strings.Contains(mockAPI.LastSentMessage(), "só pode ser utilizado em grupos") {
+		t.Fatalf("private reset was not rejected: %s", mockAPI.LastSentMessage())
+	}
+}

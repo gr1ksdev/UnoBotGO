@@ -72,6 +72,7 @@ func (b *Bot) Run(ctx context.Context) error {
 		return ErrMissingBotUsername
 	}
 	b.username = me.Username
+	b.renderer.SetBotID(me.ID)
 	b.cmdHandler.botUsername = me.Username
 	b.logger.Info("connected to telegram bot", "username", me.Username, "id", me.ID)
 	if !me.SupportsInlineQueries {
@@ -88,7 +89,7 @@ func (b *Bot) Run(ctx context.Context) error {
 	return b.runPolling(ctx)
 }
 func (b *Bot) registerCommands(ctx context.Context) error {
-	commands := []telego.BotCommand{{Command: "novo", Description: "Criar uma nova partida de UNO"}, {Command: "entrar", Description: "Entrar na partida de UNO"}, {Command: "iniciar", Description: "Iniciar a partida (apenas responsável)"}, {Command: "cancelar", Description: "Cancelar a partida (apenas responsável)"}, {Command: "sair", Description: "Sair da partida em andamento"}, {Command: "estado", Description: "Ver estado atual da partida"}, {Command: "ajuda", Description: "Instruções de como jogar"}}
+	commands := []telego.BotCommand{{Command: "novo", Description: "Criar uma nova partida de UNO"}, {Command: "entrar", Description: "Entrar na partida de UNO"}, {Command: "iniciar", Description: "Iniciar a partida (apenas responsável)"}, {Command: "cancelar", Description: "Cancelar a partida (apenas responsável)"}, {Command: "reset", Description: "Recuperar e limpar o estado do grupo"}, {Command: "sair", Description: "Sair da partida em andamento"}, {Command: "estado", Description: "Ver estado atual da partida"}, {Command: "ajuda", Description: "Instruções de como jogar"}}
 	if err := b.api.SetMyCommands(ctx, &telego.SetMyCommandsParams{Commands: commands}); err != nil {
 		b.logger.Warn("failed to register bot commands with Telegram", "error", err.Error())
 	}
@@ -229,15 +230,24 @@ func (b *Bot) autoSkipLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			for _, outcome := range b.service.AutoSkipExpired(ctx, b.turnTimeout) {
-				chatID := outcome.View.ChatID
-				b.dispatcher.EnqueueChat(chatID, func(taskCtx context.Context) {
-					text := "⏱️ O tempo acabou; o turno foi pulado.\n\n" + b.renderer.RenderPublicState(outcome.View)
-					b.cmdHandler.reply(taskCtx, int64(chatID), text, makeGameButtons(outcome.View.GameID))
-				})
+			for _, candidate := range b.service.ExpiredTurns(ctx, b.turnTimeout) {
+				b.enqueueAutoSkip(candidate)
 			}
 		}
 	}
+}
+
+// Mutation and notification share a chat task with all player actions. Discovery
+// outside the queue is read-only; saturation or an obsolete candidate is a no-op.
+func (b *Bot) enqueueAutoSkip(candidate game.ExpiredTurn) bool {
+	return b.dispatcher.EnqueueChat(candidate.ChatID, func(ctx context.Context) {
+		outcome, applied := b.service.AutoSkipTurn(ctx, candidate, b.turnTimeout)
+		if !applied {
+			return
+		}
+		text := "⏱️ O tempo acabou; o turno foi pulado.\n\n" + b.renderer.RenderPublicState(outcome.View)
+		b.cmdHandler.reply(ctx, int64(candidate.ChatID), text, makeGameButtons(outcome.View))
+	})
 }
 func (b *Bot) submitUpdate(ctx context.Context, update telego.Update) bool {
 	if !b.dedupe.reserve(update.UpdateID) {
@@ -252,6 +262,14 @@ func (b *Bot) submitUpdate(ctx context.Context, update telego.Update) bool {
 	return accepted
 }
 func (b *Bot) processUpdate(ctx context.Context, update telego.Update) bool {
+	if update.Message != nil {
+		if command, _, ok := parseBotCommand(update.Message.Text, b.username); ok && command == "reset" {
+			chatID := game.ChatID(update.Message.Chat.ID)
+			return b.dispatcher.EnqueueRecovery(chatID, func(c context.Context) {
+				b.cmdHandler.HandleReset(c, update.Message, func() { b.dispatcher.ResetChat(chatID) })
+			})
+		}
+	}
 	switch {
 	case update.Message != nil:
 		chatID := game.ChatID(update.Message.Chat.ID)

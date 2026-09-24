@@ -1,5 +1,122 @@
 # UnoBotGO V2 — Telegram Adapter (Milestone 3)
 
+> Atualização de 2026-09-23: as regras abaixo descrevem a milestone corretiva.
+> O roteiro histórico da M3 mais adiante contém comportamentos já substituídos.
+
+## Recuperação isolada por grupo
+
+O comando `/reset` existe para recuperar um grupo quando uma chamada anterior
+ficou lenta, bloqueada ou deixou estado inconsistente. Ele percorre uma fila de
+recuperação própria, com dois workers e capacidade limitada, portanto não depende
+de espaço na fila normal particionada por `ChatID`.
+
+Antes de alterar o estado, o adapter autentica o remetente. O responsável pela
+partida ativa pode executar o comando diretamente. Outros usuários precisam ser
+confirmados pela API do Telegram como criador ou administrador do grupo. Mensagens
+privadas, tópicos de fórum e remetentes anônimos são recusados explicitamente.
+
+Após a autorização, o dispatcher cancela o contexto da geração anterior daquele
+chat e incrementa sua geração. Tarefas antigas que ainda estejam nas filas são
+descartadas antes da execução. Uma fila dedicada e limpa passa a atender o grupo,
+permitindo `/novo` imediatamente mesmo se o shard antigo continuar ocupado. O
+serviço remove a partida ativa, os índices de participantes e todo histórico do
+chat; o TokenStore invalida os tokens de cada partida removida. Outros chats não
+são interrompidos.
+
+Cada worker possui uma barreira de recuperação de panic com log do tipo do worker,
+chat e stack trace. Payloads, mãos, tokens e segredos não são incluídos nesse log.
+Cancelamento cooperativo não encerra à força código externo que ignore `context`,
+mas isola esse trabalho da nova geração e impede que ele volte a alterar o estado
+removido pelo serviço.
+
+## Encerramento, contexto inline e menções — milestone corretiva
+
+### Encerramento
+
+A engine já produzia `GameFinished` sem `TurnChanged` ao restar um jogador. O
+problema relatado como "partida não disponível ou você não participa dela" vinha
+do botão `Suas cartas` anexado à confirmação final. Agora os teclados recebem a
+view pública e não oferecem ações em `Closed`/`Finished`. Refresh de uma mensagem
+encerrada envia teclado vazio explicitamente, removendo botões anteriores.
+
+Botões em mensagens históricas não são editados em massa. Ao abrir um deles,
+`ErrGameClosed` produz "Partida encerrada", sem mão ou convite de continuação;
+após descarte do resumo, permanece a resposta genérica de indisponibilidade.
+Erros de ação consultam a view atual e só oferecem `Suas cartas` se o usuário
+continua participante de uma partida aberta. Encerramento natural, cancelamento e
+saída terminal invalidam os tokens existentes daquele jogo; ações já consumidas
+ou consultas concorrentes continuam sujeitas à validação definitiva do serviço.
+
+O scheduler descobre candidatos sem mutação e executa AutoSkip + mensagem dentro
+da fila do chat. Isso impede a publicação tardia de um turno obsoleto após vitória.
+O mesmo código é usado por polling e webhook.
+
+### Por que o contexto permanece visível
+
+`Suas cartas` e o seletor de partidas usam `switch_inline_query_current_chat` com
+`g_<GameID>` (34 caracteres: prefixo + 128 bits em hexadecimal). Esse identificador
+seleciona a partida; não é o token de ação de uso único. A mão exige participação
+validada por `PlayerView`. Tokens de ação permanecem vinculados a usuário, jogo,
+chat, ação, carta/cor, revision e TTL; `ChosenInlineResult` usa o registro do token,
+não a query recebida, para aplicar a ação e escolher o grupo de confirmação.
+
+O botão insere a query no campo de texto. Não existe payload oculto equivalente
+nesse mecanismo. `InlineQuery` e `ChosenInlineResult` não fornecem `chat_id`, e
+`inline_message_id` não permite recuperar o destino por uma API documentada.
+Fontes: [botões](https://core.telegram.org/bots/api#inlinekeyboardbutton),
+[InlineQuery](https://core.telegram.org/bots/api#inlinequery),
+[ChosenInlineResult](https://core.telegram.org/bots/api#choseninlineresult).
+
+Query vazia continua abrindo a mão quando há uma única partida ou o seletor quando
+há várias. Ela não identifica o grupo de origem. Manter o contexto evita seleção
+ambígua para quem joga em vários grupos. Uma representação base64url dos mesmos
+128 bits reduziria o texto, mas continuaria visível e exigiria compatibilidade
+com botões anteriores; não foi introduzida nesta milestone. Não há "última
+partida" global por usuário, mudança de GameID, token ou regra de autorização.
+
+### Destino dos nomes
+
+Após `GetMe`, o BotID é disponibilizado ao renderer antes da entrada de updates.
+`PlayerLink` separa nome exibido de destino e usa a view resultante da ação:
+
+| Estado | Destino |
+|---|---|
+| Lobby, encerrado, cancelado ou sem contexto | BotID para todos |
+| TakingTurn | UserID real só para CurrentTurn; demais apontam ao BotID |
+| ChoosingColor | UserID real só para ColorChooserID; demais apontam ao BotID |
+
+A regra inclui responsável, colocações, entrada/saída, confirmações, UNO, erros e
+timeout. Nomes e usernames exibidos são preservados com escape HTML. Renderer
+isolado sem BotID válido produz texto escapado, sem fabricar link com ID zero.
+Mensagens históricas não têm seus targets reescritos a cada mudança de turno.
+
+A API suporta `tg://user?id=...` em links HTML e seu objeto `User` inclui bots.
+O uso do BotID é fundamentado nesse contrato, com o bot presente no grupo. A
+apresentação e abertura do perfil precisam de homologação nos clientes; não há
+garantia de comportamento visual idêntico em todos eles. Fontes:
+[formatação](https://core.telegram.org/bots/api#formatting-options),
+[User](https://core.telegram.org/bots/api#user).
+
+### Homologação manual pendente
+
+Executar com um bot de teste, repetindo em polling e webhook:
+
+1. Dois jogadores: finalizar com carta numérica, Reverse, Skip, +2, Wild e +4,
+   nos modos Clássico e Caseiro. Conferir efeitos homologados, escolha de cor,
+   colocações e ausência de botão/turno posterior. Com stacking terminal não
+   exigir compra extra nem permitir rebater.
+2. Com TURN_TIMEOUT habilitado, concluir próximo ao vencimento e aguardar:
+   nenhuma mensagem de timeout ou "Vez de" pode surgir após a confirmação final.
+3. Conferir links em lobby, troca de turno, escolha de cor, UNO e encerramento.
+   Testar abertura dos targets em Android, iOS e Desktop; só o responsável atual
+   deve apontar ao jogador real nas novas mensagens.
+4. Participar de dois grupos, usar query vazia e os botões contextuais; confirmar
+   mão e destino corretos. Abrir um botão antigo de jogo encerrado.
+
+Testes automatizados validam payloads, estado, concorrência e ambos os ingressos
+com API mockada; não substituem esta homologação visual real.
+
+
 Este documento descreve a arquitetura, o fluxo de execução, os detalhes de segurança e o roteiro de homologação do adapter Telegram do UnoBotGO V2.
 
 ---
@@ -61,6 +178,9 @@ O UnoBotGO V2 é executado via `./cmd/bot` e consome diretamente a camada de apl
 - **Particionamento por ChatID**:
   - 8 workers com canais de capacidade 32 dedicados às mensagens, comandos e confirmações de ações agrupados pelo `ChatID`.
   - Garante ordem estrita de execução para a mesma partida, eliminando condições de corrida entre comandos e jogadas.
+- **Recuperação por ChatID**:
+  - `/reset` entra por uma fila independente com 2 workers e capacidade 16.
+  - Cada reset troca a geração e o contexto do chat; trabalhos antigos são descartados e comandos novos seguem por uma fila limpa dedicada àquele grupo.
 - **Inline Workers**:
   - 4 workers dedicados a responder consultas inline através de uma fila com capacidade 64.
   - Não bloqueiam nem são bloqueados por requisições de rede no chat de grupo.

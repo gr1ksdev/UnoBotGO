@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
@@ -325,4 +326,112 @@ func TestDefaultService(t *testing.T) {
 		t.Fatal(v)
 	}
 	assertIndexes(t, s)
+}
+
+func TestService_CallBluffAuthorized(t *testing.T) {
+	s, err := NewService()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := t.Context()
+	outcome, err := s.Create(ctx, Actor{PlayerID: 1, ChatID: 100}, CreateRequest{
+		ChatName: "Bluff Chat",
+		Rules:    uno.BotRules(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gameID := outcome.View.GameID
+
+	_, _ = s.Apply(ctx, Actor{PlayerID: 1, ChatID: 100}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 1, Revision: outcome.View.Revision})
+	v1, _ := s.PublicView(ctx, gameID)
+	_, _ = s.Apply(ctx, Actor{PlayerID: 2, ChatID: 100}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 2, Revision: v1.Revision})
+	v2, _ := s.PublicView(ctx, gameID)
+	_, _ = s.Apply(ctx, Actor{PlayerID: 1, ChatID: 100}, gameID, uno.Action{Type: uno.StartGame, PlayerID: 1, DealerID: 1, Revision: v2.Revision})
+
+	vStart, _ := s.PublicView(ctx, gameID)
+
+	// An inline actor with ChatID=0 calling CallBluff must not be rejected by authorize with ErrForbidden
+	_, applyErr := s.Apply(ctx, Actor{PlayerID: vStart.CurrentTurn, ChatID: 0}, gameID, uno.Action{
+		Type:     uno.CallBluff,
+		PlayerID: vStart.CurrentTurn,
+		Revision: vStart.Revision,
+	})
+	if errors.Is(applyErr, ErrForbidden) {
+		t.Fatalf("expected CallBluff to pass service authorization, got: %v", applyErr)
+	}
+}
+
+func TestResetChatOwnerRemovesActiveHistoryAndIndexes(t *testing.T) {
+	s := testService(t)
+	first := create(t, s, -500, 10, uno.BotRules())
+	join(t, s, first, 1)
+	act(t, s, first.GameID, Actor{PlayerID: 10, ChatID: -500}, uno.Action{Type: uno.CancelGame})
+
+	active := create(t, s, -500, 20, uno.CaseiroRules())
+	join(t, s, active, 1)
+	other := create(t, s, -501, 30, uno.BotRules())
+
+	result, err := s.ResetChat(t.Context(), Actor{PlayerID: 20, ChatID: -500})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.RemovedActive || result.RemovedHistory != 1 || len(result.GameIDs) != 2 || !slices.Contains(result.GameIDs, first.GameID) || !slices.Contains(result.GameIDs, active.GameID) {
+		t.Fatalf("unexpected reset result: %+v", result)
+	}
+	if _, err := s.FindChatGame(t.Context(), -500); !errors.Is(err, ErrNoActiveGame) {
+		t.Fatalf("reset chat still active: %v", err)
+	}
+	if _, err := s.PublicView(t.Context(), active.GameID); !errors.Is(err, ErrGameNotFound) {
+		t.Fatalf("active game retained: %v", err)
+	}
+	if games, err := s.FindPlayerGames(t.Context(), Actor{PlayerID: 1}); err != nil || len(games) != 0 {
+		t.Fatalf("player index retained: games=%+v err=%v", games, err)
+	}
+	if summary, err := s.FindChatGame(t.Context(), -501); err != nil || summary.GameID != other.GameID {
+		t.Fatalf("other chat affected: summary=%+v err=%v", summary, err)
+	}
+	if next := create(t, s, -500, 40, uno.BotRules()); next.GameID == "" {
+		t.Fatal("could not create game after reset")
+	}
+	assertIndexes(t, s)
+}
+
+func TestResetChatAuthorizationAndIdempotency(t *testing.T) {
+	s := testService(t)
+	v := create(t, s, -600, 10, uno.BotRules())
+	if _, err := s.ResetChat(t.Context(), Actor{PlayerID: 11, ChatID: -600}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("ordinary member reset: %v", err)
+	}
+	if summary, err := s.FindChatGame(t.Context(), -600); err != nil || summary.GameID != v.GameID {
+		t.Fatal("denied reset changed state")
+	}
+	result, err := s.ResetChat(t.Context(), Actor{PlayerID: 11, ChatID: -600, ChatAdmin: true})
+	if err != nil || !result.RemovedActive {
+		t.Fatalf("admin reset failed: result=%+v err=%v", result, err)
+	}
+	result, err = s.ResetChat(t.Context(), Actor{PlayerID: 11, ChatID: -600, ChatAdmin: true})
+	if err != nil || len(result.GameIDs) != 0 {
+		t.Fatalf("idempotent admin reset failed: result=%+v err=%v", result, err)
+	}
+	if _, err := s.ResetChat(t.Context(), Actor{PlayerID: 12, ChatID: -700}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("non-admin reset without game: %v", err)
+	}
+}
+
+func TestResetChatHonorsContextWhileWaitingForGame(t *testing.T) {
+	s := testService(t)
+	v := create(t, s, -800, 10, uno.BotRules())
+	entry := s.manager.byID[v.GameID].entry
+	entry.mu.Lock()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	_, err := s.ResetChat(ctx, Actor{PlayerID: 10, ChatID: -800})
+	entry.mu.Unlock()
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("got %v, want deadline exceeded", err)
+	}
+	if summary, err := s.FindChatGame(t.Context(), -800); err != nil || summary.GameID != v.GameID {
+		t.Fatal("timed-out reset changed state")
+	}
 }
