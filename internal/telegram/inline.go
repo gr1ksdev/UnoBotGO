@@ -410,15 +410,6 @@ func (h *InlineHandler) buildPlayerHandResults(
 					StickerFileID: stickerID,
 				})
 			} else {
-				if cv.Card.Rank == uno.SwapHands {
-					results = append(results, &telego.InlineQueryResultArticle{
-						Type: "article", ID: fmt.Sprintf("grey_%s_%d", cv.Card.ID, i),
-						Title:               "🔀 Trocar cartas — indisponível agora",
-						Description:         "Esta carta não pode ser jogada agora.",
-						InputMessageContent: &telego.InputTextMessageContent{MessageText: "Esta carta não pode ser jogada agora. Abra suas cartas novamente quando for a sua vez."},
-					})
-					continue
-				}
 				greyStickerID := GetCardStickerGreyID(cv.Card)
 				results = append(results, &telego.InlineQueryResultCachedSticker{
 					Type:          "sticker",

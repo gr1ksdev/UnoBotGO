@@ -14,15 +14,18 @@ espera e o resumo privado da própria mão. Tokens são pessoais, opacos, de uso
 anteriores precisam ser reabertos. O responsável pela escolha recebe a menção
 real; os demais nomes seguem a política de links ao bot.
 
-Sem versão cinza fornecida para esse sticker, uma carta de troca indisponível é
-mostrada como item textual **Trocar cartas — indisponível agora**, sem token de
-jogada. UNO é comunicado para ambos os envolvidos quando aplicável.
+O sticker cinza
+`CAACAgEAAxkBAAER8aRqtlf6ZtRKfAj02K5AnlVcRz_W_AACVAcAAkaGsEXgXGCANqlQKz0E`
+representa a carta indisponível. Ela segue o mesmo fluxo visual das demais
+cartas cinza, com resultado `grey_` e sem token de jogada. UNO é comunicado para
+ambos os envolvidos quando aplicável.
 
-Homologação manual pendente em bot de teste: selecionar Caseiro no lobby,
-confirmar renderização do sticker, jogar a carta, abrir o menu, escolher outro
-participante e verificar novas mãos, cor, contagens e próximo turno. Testes
-locais validam os payloads e o fluxo, mas não a disponibilidade visual do file_id
-na API real do Telegram.
+Homologação manual pendente em cliente Telegram: selecionar Caseiro no lobby,
+confirmar a renderização dos stickers colorido e cinza, jogar a carta, abrir o
+menu, escolher outro participante e verificar novas mãos, cor, contagens e
+próximo turno. O sticker cinza foi aceito pela Bot API como arquivo estático de
+342×512 pixels; testes locais validam o payload e a ausência de ação no resultado
+indisponível.
 
 
 > Atualização de 2026-09-23: as regras abaixo descrevem a milestone corretiva.

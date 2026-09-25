@@ -67,6 +67,9 @@ func TestSwapChoiceMenuFiltersTargetsAndProtectsTokens(t *testing.T) {
 	if GetCardStickerID(uno.Card{Rank: uno.SwapHands}) != "CAACAgEAAxkBAAER8VtqteJsR8-zG10NFeLTIZyxuZYsBQACBwkAAkkSsEU562tb90Ja3D0E" {
 		t.Fatal("wrong sticker")
 	}
+	if GetCardStickerGreyID(uno.Card{Rank: uno.SwapHands}) != "CAACAgEAAxkBAAER8aRqtlf6ZtRKfAj02K5AnlVcRz_W_AACVAcAAkaGsEXgXGCANqlQKz0E" {
+		t.Fatal("wrong unavailable sticker")
+	}
 }
 
 // Draw/pass without playing until the unique swap card is available. This
@@ -193,5 +196,82 @@ func TestSwapInlineFlowExchangesHandsAndRejectsOldSelection(t *testing.T) {
 	status, consumed, found := b.tokens.GetActionStatus(oldChoice.ID)
 	if !found || !consumed || status != "stale" {
 		t.Fatal(status, consumed, found)
+	}
+}
+
+func TestSwapUnavailableUsesGreyStickerWithoutAction(t *testing.T) {
+	svc, err := game.NewService()
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, cardID := readyToSwap(t, svc)
+	actor := view.CurrentTurn
+	pv, err := svc.PlayerView(t.Context(), game.Actor{PlayerID: actor}, view.GameID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pv.DrawnCardID == "" {
+		out, err := svc.Apply(t.Context(), game.Actor{PlayerID: actor}, view.GameID, uno.Action{
+			Type: uno.DrawCard, PlayerID: actor, Revision: view.Revision,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		view = out.View
+	}
+	out, err := svc.Apply(t.Context(), game.Actor{PlayerID: actor}, view.GameID, uno.Action{
+		Type: uno.PassTurn, PlayerID: actor, Revision: view.Revision,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view = out.View
+
+	api := newMockBotAPI()
+	b := New(api, svc, nil, nil, time.Minute, nil)
+	defer b.dispatcher.Stop(time.Second)
+
+	var unavailable *telego.InlineQueryResultCachedSticker
+	offset := ""
+	for {
+		results, next := b.inlineHandler.buildPlayerHandResults(t.Context(), actor, view.GameID, offset)
+		for _, result := range results {
+			sticker, ok := result.(*telego.InlineQueryResultCachedSticker)
+			if ok && sticker.StickerFileID == StickersGrey["swap_hands"] {
+				unavailable = sticker
+				break
+			}
+		}
+		if unavailable != nil || next == "" {
+			break
+		}
+		offset = next
+	}
+	if unavailable == nil {
+		t.Fatalf("missing unavailable sticker for swap card %s", cardID)
+	}
+	if !strings.HasPrefix(unavailable.ID, "grey_") {
+		t.Fatalf("unexpected unavailable result ID %q", unavailable.ID)
+	}
+	if _, _, found := b.tokens.GetActionStatus(unavailable.ID); found {
+		t.Fatal("unavailable sticker created an action token")
+	}
+
+	before, err := svc.PublicView(t.Context(), view.GameID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !b.inlineHandler.HandleChosenInlineResult(t.Context(), &telego.ChosenInlineResult{
+		ResultID: unavailable.ID,
+		From:     telego.User{ID: int64(actor), FirstName: "Chooser"},
+	}) {
+		t.Fatal("unavailable sticker was not handled")
+	}
+	after, err := svc.PublicView(t.Context(), view.GameID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Revision != before.Revision || after.CurrentTurn != before.CurrentTurn {
+		t.Fatal("unavailable sticker changed the game")
 	}
 }

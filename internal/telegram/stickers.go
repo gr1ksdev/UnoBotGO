@@ -69,6 +69,7 @@ var Stickers = map[string]string{
 }
 
 var StickersGrey = map[string]string{
+	"swap_hands":   "CAACAgEAAxkBAAER8aRqtlf6ZtRKfAj02K5AnlVcRz_W_AACVAcAAkaGsEXgXGCANqlQKz0E",
 	"colorchooser": "CAADBAADpQ4AAlfDmFFHGkwyGFeCFQI",
 	"draw_four":    "CAADBAADMRMAAv7amFHvKGLoNyFbNQI",
 	"r_0":          "CAADBAADsBMAAuGdkFHTZ-jl4eNn-gI",
