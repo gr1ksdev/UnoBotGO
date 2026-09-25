@@ -38,8 +38,15 @@ Bot de UNO em Go para o Telegram utilizando modo inline com stickers para visual
 
 ## Comandos do Bot (V2)
 
+No chat privado, `/start` apresenta o bot e oferece um botão para adicioná-lo a
+um grupo. `/help` mostra a lista completa de comandos. O menu do Telegram é
+separado por contexto: o privado exibe apenas `/start` e `/help`, enquanto os
+grupos exibem os comandos de partida.
+
 | Comando | Descrição |
 |---|---|
+| `/start` | Mostra a apresentação e o botão para adicionar o bot a um grupo. |
+| `/help` (ou `/ajuda`) | Exibe os comandos e as instruções de uso. |
 | `/novo` | Cria um lobby de partida no grupo (o criador é o responsável administrativo). |
 | `/entrar` | Inscreve o usuário na partida aberta ou em andamento. |
 | `/iniciar` | Inicia a partida (autorizado apenas para o responsável). |
@@ -47,7 +54,6 @@ Bot de UNO em Go para o Telegram utilizando modo inline com stickers para visual
 | `/sair` | Sai da partida em andamento (transfere responsabilidade se necessário). |
 | `/estado` | Exibe o estado público da partida ativa ou lobby. |
 | `/reset` | Recupera o grupo, cancela trabalhos pendentes e apaga a partida e o histórico daquele grupo (responsável ou administrador). |
-| `/ajuda` | Instruções de como jogar. |
 
 O `/reset` usa uma fila de recuperação separada. Assim, ele continua disponível
 mesmo quando a fila normal do grupo está cheia ou uma operação anterior ficou

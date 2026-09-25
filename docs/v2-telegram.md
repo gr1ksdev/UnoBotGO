@@ -203,7 +203,18 @@ O UnoBotGO V2 é executado via `./cmd/bot` e consome diretamente a camada de apl
 - **Startup seguro**:
   - `GetMe`: valida nome de usuário e flag `SupportsInlineQueries`. Se o modo inline estiver desabilitado, o bot falha no startup orientando o uso do `/setinline` no @BotFather.
   - `GetWebhookInfo`: se houver webhook ativo, falha no startup instruindo o usuário a deletar o webhook manualmente para evitar conflito com long polling.
-  - `SetMyCommands`: registra apenas os comandos implementados no Telegram.
+  - `SetMyCommands`: registra menus por escopo. O privado recebe `/start` e
+    `/help`; grupos recebem comandos de partida e `/help`; o escopo padrão mantém
+    `/help` como fallback.
+- **Apresentação privada**:
+  - `/start` envia boas-vindas, uma descrição curta e um botão para adicionar o
+    bot a grupos usando `https://t.me/<username>?startgroup=true`.
+  - O username vem de `GetMe`; não há nome de bot fixo no texto nem no link.
+  - O payload de grupo `/start@bot true` confirma a adição e orienta `/novo` e
+    `/help`, sem tentar iniciar uma partida inexistente. `/start` sem payload
+    continua como alias compatível de `/iniciar` nos grupos.
+  - `/help` lista comandos em blockquote, mantém `/ajuda` como alias e registra a
+    origem brasileira baseada no `@unopybot`.
 - **Particionamento por ChatID**:
   - 8 workers com canais de capacidade 32 dedicados às mensagens, comandos e confirmações de ações agrupados pelo `ChatID`.
   - Garante ordem estrita de execução para a mesma partida, eliminando condições de corrida entre comandos e jogadas.

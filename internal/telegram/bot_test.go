@@ -3,6 +3,7 @@ package telegram
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -66,6 +67,29 @@ func TestBot_RunAndShutdown(t *testing.T) {
 	}
 	if !foundReset {
 		t.Error("reset command was not registered")
+	}
+	registrations := mockAPI.GetCommandRegistrations()
+	if len(registrations) != 3 {
+		t.Fatalf("expected default, private and group command registrations, got %d", len(registrations))
+	}
+	wantByScope := map[string][]string{
+		telego.ScopeTypeDefault:         {"help"},
+		telego.ScopeTypeAllPrivateChats: {"start", "help"},
+		telego.ScopeTypeAllGroupChats:   {"novo", "entrar", "iniciar", "estado", "sair", "cancelar", "reset", "help"},
+	}
+	for _, registration := range registrations {
+		scope := registration.Scope.ScopeType()
+		want, ok := wantByScope[scope]
+		if !ok {
+			t.Fatalf("unexpected command scope %q", scope)
+		}
+		got := make([]string, len(registration.Commands))
+		for i := range registration.Commands {
+			got[i] = registration.Commands[i].Command
+		}
+		if !slices.Equal(got, want) {
+			t.Fatalf("commands for %s = %v, want %v", scope, got, want)
+		}
 	}
 
 	// Send an update through long polling

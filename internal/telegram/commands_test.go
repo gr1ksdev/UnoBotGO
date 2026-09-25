@@ -234,7 +234,7 @@ func TestCommandHandler_FiltersAndAliases(t *testing.T) {
 		From: &telego.User{ID: 100, FirstName: "User"},
 		Text: "/ajuda",
 	})
-	if !strings.Contains(mockAPI.LastSentMessage(), "Como Jogar") {
+	if !strings.Contains(mockAPI.LastSentMessage(), "UnoBotGO — Comandos") {
 		t.Fatalf("expected help text in private chat, got: %s", mockAPI.LastSentMessage())
 	}
 
@@ -270,6 +270,69 @@ func TestCommandHandler_FiltersAndAliases(t *testing.T) {
 	gView, _ := svc.PublicView(ctx, gSummary.GameID)
 	if len(gView.Players) != 0 {
 		t.Fatalf("expected 0 players in lobby, got %d", len(gView.Players))
+	}
+}
+
+func TestCommandHandler_PrivateStartAndHelp(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, _ := game.NewService()
+	handler := NewCommandHandler(mockAPI, svc, NewRenderer(NewUserCache(100)), NewTokenStore(100, 10, time.Now, nil), "DynamicBot_42", nil)
+	private := telego.Chat{ID: 100, Type: "private"}
+	user := &telego.User{ID: 100, FirstName: "User"}
+
+	handler.HandleMessage(t.Context(), &telego.Message{Chat: private, From: user, Text: "/start"})
+	if len(mockAPI.SentMessages) != 1 {
+		t.Fatalf("expected one welcome message, got %d", len(mockAPI.SentMessages))
+	}
+	welcome := mockAPI.SentMessages[0]
+	if !strings.Contains(welcome.Text, "Bem-vindo ao UnoBotGO") || !strings.Contains(welcome.Text, "/help") {
+		t.Fatalf("unexpected welcome text: %s", welcome.Text)
+	}
+	for _, forbidden := range []string{"V2", "Golang", "desenvolvida em Go"} {
+		if strings.Contains(welcome.Text, forbidden) {
+			t.Fatalf("welcome contains %q: %s", forbidden, welcome.Text)
+		}
+	}
+	markup, ok := welcome.ReplyMarkup.(*telego.InlineKeyboardMarkup)
+	if !ok || markup == nil || len(markup.InlineKeyboard) != 1 || len(markup.InlineKeyboard[0]) != 1 {
+		t.Fatalf("unexpected welcome keyboard: %#v", welcome.ReplyMarkup)
+	}
+	button := markup.InlineKeyboard[0][0]
+	if button.Text != "➕ Adicionar a um grupo" || button.URL != "https://t.me/dynamicbot_42?startgroup=true" {
+		t.Fatalf("unexpected add-to-group button: %#v", button)
+	}
+
+	handler.HandleMessage(t.Context(), &telego.Message{Chat: private, From: user, Text: "/help"})
+	if len(mockAPI.SentMessages) != 2 {
+		t.Fatalf("expected help response, got %d messages", len(mockAPI.SentMessages))
+	}
+	help := mockAPI.SentMessages[1]
+	if help.ReplyMarkup != nil {
+		t.Fatalf("help should not repeat the start keyboard: %#v", help.ReplyMarkup)
+	}
+	for _, expected := range []string{"<blockquote>", "</blockquote>", "<b>/novo</b>", "<b>/reset</b>", "@dynamicbot_42", "versão brasileira", "Go (Golang)", "@unopybot"} {
+		if !strings.Contains(help.Text, expected) {
+			t.Fatalf("help is missing %q: %s", expected, help.Text)
+		}
+	}
+}
+
+func TestCommandHandler_StartGroupDeepLinkDoesNotStartGame(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, _ := game.NewService()
+	handler := NewCommandHandler(mockAPI, svc, NewRenderer(nil), NewTokenStore(100, 10, time.Now, nil), "dynamicbot_42", nil)
+	chat := telego.Chat{ID: -10042, Type: "supergroup", Title: "New Group"}
+
+	handler.HandleMessage(t.Context(), &telego.Message{
+		Chat: chat,
+		From: &telego.User{ID: 42, FirstName: "User"},
+		Text: "/start@DynamicBot_42 true",
+	})
+	if !strings.Contains(mockAPI.LastSentMessage(), "UnoBotGO adicionado") || !strings.Contains(mockAPI.LastSentMessage(), "/novo") {
+		t.Fatalf("unexpected startgroup response: %s", mockAPI.LastSentMessage())
+	}
+	if _, err := svc.FindChatGame(t.Context(), game.ChatID(chat.ID)); !errors.Is(err, game.ErrNoActiveGame) {
+		t.Fatalf("startgroup payload created or started a game: %v", err)
 	}
 }
 

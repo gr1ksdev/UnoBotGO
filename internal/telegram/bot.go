@@ -89,9 +89,36 @@ func (b *Bot) Run(ctx context.Context) error {
 	return b.runPolling(ctx)
 }
 func (b *Bot) registerCommands(ctx context.Context) error {
-	commands := []telego.BotCommand{{Command: "novo", Description: "Criar uma nova partida de UNO"}, {Command: "entrar", Description: "Entrar na partida de UNO"}, {Command: "iniciar", Description: "Iniciar a partida (apenas responsável)"}, {Command: "cancelar", Description: "Cancelar a partida (apenas responsável)"}, {Command: "reset", Description: "Recuperar e limpar o estado do grupo"}, {Command: "sair", Description: "Sair da partida em andamento"}, {Command: "estado", Description: "Ver estado atual da partida"}, {Command: "ajuda", Description: "Instruções de como jogar"}}
-	if err := b.api.SetMyCommands(ctx, &telego.SetMyCommandsParams{Commands: commands}); err != nil {
-		b.logger.Warn("failed to register bot commands with Telegram", "error", err.Error())
+	registrations := []telego.SetMyCommandsParams{
+		{
+			Commands: []telego.BotCommand{{Command: "help", Description: "Ver comandos e instruções"}},
+			Scope:    &telego.BotCommandScopeDefault{Type: telego.ScopeTypeDefault},
+		},
+		{
+			Commands: []telego.BotCommand{
+				{Command: "start", Description: "Conhecer o UnoBotGO"},
+				{Command: "help", Description: "Ver comandos e instruções"},
+			},
+			Scope: &telego.BotCommandScopeAllPrivateChats{Type: telego.ScopeTypeAllPrivateChats},
+		},
+		{
+			Commands: []telego.BotCommand{
+				{Command: "novo", Description: "Criar uma nova partida de UNO"},
+				{Command: "entrar", Description: "Entrar na partida de UNO"},
+				{Command: "iniciar", Description: "Iniciar a partida"},
+				{Command: "estado", Description: "Ver o estado atual da partida"},
+				{Command: "sair", Description: "Sair da partida em andamento"},
+				{Command: "cancelar", Description: "Cancelar a partida"},
+				{Command: "reset", Description: "Recuperar e limpar o grupo"},
+				{Command: "help", Description: "Ver comandos e instruções"},
+			},
+			Scope: &telego.BotCommandScopeAllGroupChats{Type: telego.ScopeTypeAllGroupChats},
+		},
+	}
+	for i := range registrations {
+		if err := b.api.SetMyCommands(ctx, &registrations[i]); err != nil {
+			b.logger.Warn("failed to register bot commands with Telegram", "scope", registrations[i].Scope.ScopeType(), "error", err.Error())
+		}
 	}
 	return nil
 }

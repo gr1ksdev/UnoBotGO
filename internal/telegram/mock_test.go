@@ -22,15 +22,16 @@ type mockBotAPI struct {
 	ChatMemberErr      error
 	ChatMembers        map[int64]telego.ChatMember
 
-	SentMessages       []telego.SendMessageParams
-	SentStickers       []telego.SendStickerParams
-	SentReactions      []telego.SetMessageReactionParams
-	EditedMessages     []telego.EditMessageTextParams
-	EditedMarkups      []telego.EditMessageReplyMarkupParams
-	AnsweredInlines    []telego.AnswerInlineQueryParams
-	AnsweredCallbacks  []telego.AnswerCallbackQueryParams
-	RegisteredCommands []telego.BotCommand
-	SentMessageSignal  chan struct{}
+	SentMessages         []telego.SendMessageParams
+	SentStickers         []telego.SendStickerParams
+	SentReactions        []telego.SetMessageReactionParams
+	EditedMessages       []telego.EditMessageTextParams
+	EditedMarkups        []telego.EditMessageReplyMarkupParams
+	AnsweredInlines      []telego.AnswerInlineQueryParams
+	AnsweredCallbacks    []telego.AnswerCallbackQueryParams
+	RegisteredCommands   []telego.BotCommand
+	CommandRegistrations []telego.SetMyCommandsParams
+	SentMessageSignal    chan struct{}
 
 	UpdatesChan chan telego.Update
 }
@@ -95,6 +96,7 @@ func (m *mockBotAPI) SetMyCommands(ctx context.Context, params *telego.SetMyComm
 	defer m.mu.Unlock()
 	if params != nil {
 		m.RegisteredCommands = params.Commands
+		m.CommandRegistrations = append(m.CommandRegistrations, *params)
 	}
 	return m.CommandsErr
 }
@@ -202,6 +204,14 @@ func (m *mockBotAPI) GetRegisteredCommands() []telego.BotCommand {
 	defer m.mu.Unlock()
 	res := make([]telego.BotCommand, len(m.RegisteredCommands))
 	copy(res, m.RegisteredCommands)
+	return res
+}
+
+func (m *mockBotAPI) GetCommandRegistrations() []telego.SetMyCommandsParams {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	res := make([]telego.SetMyCommandsParams, len(m.CommandRegistrations))
+	copy(res, m.CommandRegistrations)
 	return res
 }
 

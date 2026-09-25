@@ -380,30 +380,38 @@ func (r *Renderer) RenderActionConfirmation(actorID uno.PlayerID, action uno.Act
 }
 
 // RenderHelp returns standard help text in Portuguese.
+func (r *Renderer) RenderWelcome() string {
+	return "👋 <b>Bem-vindo ao UnoBotGO!</b>\n\n" +
+		"Jogue UNO com seus amigos diretamente nos grupos do Telegram. Crie partidas, escolha o modo de jogo e use sua mão pelo menu privado.\n\n" +
+		"Use /help para conhecer todos os comandos."
+}
+
 func (r *Renderer) RenderHelp(botUsername string) string {
 	var sb strings.Builder
-	sb.WriteString("📖 <b>UnoBotGO — Como Jogar</b>\n\n")
-	sb.WriteString("UnoBotGO V2 permite jogar UNO diretamente em grupos pelo Telegram!\n\n")
-	sb.WriteString("<b>Comandos principais (em grupos):</b>\n")
-	sb.WriteString("/novo — Cria uma nova partida com regras clássicas e colocações\n")
-	sb.WriteString("/entrar — Inscreve-se na partida aberta\n")
-	sb.WriteString("/iniciar — Começa a partida (apenas o responsável)\n")
-	sb.WriteString("/estado — Mostra o estado atual da partida\n")
-	sb.WriteString("/reset — Recupera e limpa o estado deste grupo\n")
-	sb.WriteString("/sair — Sai da partida em andamento\n")
-	sb.WriteString("/cancelar — Cancela a partida (apenas o responsável)\n")
-	sb.WriteString("/ajuda — Exibe esta mensagem de ajuda\n\n")
+	sb.WriteString("📖 <b>UnoBotGO — Comandos</b>\n\n")
+	sb.WriteString("<blockquote>")
+	sb.WriteString("<b>/start</b> — Mostra a apresentação do bot no privado.\n")
+	sb.WriteString("<b>/help</b> — Exibe esta ajuda. O comando /ajuda é um alias.\n")
+	sb.WriteString("<b>/novo</b> — Cria uma partida no grupo.\n")
+	sb.WriteString("<b>/entrar</b> — Entra na partida aberta ou em andamento.\n")
+	sb.WriteString("<b>/iniciar</b> — Inicia a partida quando houver pelo menos dois jogadores.\n")
+	sb.WriteString("<b>/estado</b> — Mostra o lobby ou o estado atual da partida.\n")
+	sb.WriteString("<b>/sair</b> — Sai da partida em andamento.\n")
+	sb.WriteString("<b>/cancelar</b> — Cancela a partida. O comando /kill é um alias.\n")
+	sb.WriteString("<b>/reset</b> — Recupera o grupo e limpa sua partida e histórico.")
+	sb.WriteString("</blockquote>\n\n")
 
 	sb.WriteString("<b>Como jogar suas cartas:</b>\n")
 	sb.WriteString("Quando for a sua vez, clique no botão <b>Suas cartas</b> ou digite no chat:\n")
 	if botUsername != "" {
-		sb.WriteString(fmt.Sprintf("<code>@%s</code>\n\n", botUsername))
+		sb.WriteString(fmt.Sprintf("<code>@%s</code>\n\n", html.EscapeString(strings.TrimPrefix(botUsername, "@"))))
 	} else {
 		sb.WriteString("<code>@seubot</code>\n\n")
 	}
 	sb.WriteString("Sua mão privada aparecerá no menu inline. Toque em uma carta jogável (colorida) para jogá-la! ")
 	sb.WriteString("No modo caseiro, a carta 🔀 Trocar cartas permite escolher outro jogador em <b>Suas cartas</b> e trocar as mãos inteiras, mantendo a cor da mesa. ")
-	sb.WriteString("A confirmação oficial e o estado atualizado serão enviados no grupo da partida.")
+	sb.WriteString("A confirmação oficial e o estado atualizado serão enviados no grupo da partida.\n\n")
+	sb.WriteString("🇧🇷 Esta é uma versão brasileira desenvolvida em Go (Golang), baseada no @unopybot.")
 
 	return sb.String()
 }

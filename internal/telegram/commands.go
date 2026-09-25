@@ -87,6 +87,19 @@ func makeGameButtons(view game.PublicGameView) *telego.InlineKeyboardMarkup {
 	}
 }
 
+func makePrivateStartButtons(botUsername string) *telego.InlineKeyboardMarkup {
+	username := strings.TrimPrefix(strings.TrimSpace(botUsername), "@")
+	if username == "" {
+		return nil
+	}
+	return &telego.InlineKeyboardMarkup{
+		InlineKeyboard: [][]telego.InlineKeyboardButton{{{
+			Text: "➕ Adicionar a um grupo",
+			URL:  fmt.Sprintf("https://t.me/%s?startgroup=true", username),
+		}}},
+	}
+}
+
 func (h *CommandHandler) reply(ctx context.Context, chatID int64, text string, markup *telego.InlineKeyboardMarkup) {
 	params := &telego.SendMessageParams{
 		ChatID:    telego.ChatID{ID: chatID},
@@ -139,10 +152,12 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 	// Private chat command handling
 	if !isGroup {
 		switch cmdName {
-		case "start", "ajuda", "help":
+		case "start":
+			h.reply(ctx, msg.Chat.ID, h.renderer.RenderWelcome(), makePrivateStartButtons(h.botUsername))
+		case "ajuda", "help":
 			h.reply(ctx, msg.Chat.ID, h.renderer.RenderHelp(h.botUsername), nil)
 		default:
-			h.reply(ctx, msg.Chat.ID, "⚠️ Este comando só pode ser utilizado em grupos. Adicione o bot a um grupo para jogar!\n\nUse /ajuda para mais instruções.", nil)
+			h.reply(ctx, msg.Chat.ID, "⚠️ Este comando só pode ser utilizado em grupos. Adicione o bot a um grupo para jogar!\n\nUse /help para mais instruções.", nil)
 		}
 		return
 	}
@@ -157,7 +172,13 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		h.handleNovo(ctx, actorID, chatID, msg.Chat.Title, mode)
 	case "entrar":
 		h.handleEntrar(ctx, actorID, chatID)
-	case "iniciar", "start":
+	case "start":
+		if len(fields) > 1 && fields[1] == "true" {
+			h.reply(ctx, msg.Chat.ID, "👋 <b>UnoBotGO adicionado!</b>\n\nUse /novo para criar uma partida ou /help para conhecer os comandos.", nil)
+			return
+		}
+		h.handleIniciar(ctx, actorID, chatID)
+	case "iniciar":
 		h.handleIniciar(ctx, actorID, chatID)
 	case "cancelar", "kill":
 		h.handleCancelar(ctx, actorID, chatID)

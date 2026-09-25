@@ -64,6 +64,27 @@ func TestCardRepr(t *testing.T) {
 	}
 }
 
+func TestRenderer_WelcomeAndHelp(t *testing.T) {
+	renderer := NewRenderer(nil)
+	welcome := renderer.RenderWelcome()
+	if !strings.Contains(welcome, "Bem-vindo ao UnoBotGO") || !strings.Contains(welcome, "/help") {
+		t.Fatalf("unexpected welcome: %s", welcome)
+	}
+	if strings.Contains(welcome, "V2") || strings.Contains(welcome, "Golang") || strings.Contains(welcome, "desenvolvida em Go") {
+		t.Fatalf("welcome exposed implementation details: %s", welcome)
+	}
+
+	help := renderer.RenderHelp("ExampleBot")
+	if strings.Count(help, "<blockquote>") != 1 || strings.Count(help, "</blockquote>") != 1 {
+		t.Fatalf("help blockquote is malformed: %s", help)
+	}
+	for _, expected := range []string{"<b>/start</b>", "<b>/help</b>", "<b>/novo</b>", "<b>/reset</b>", "@ExampleBot", "Go (Golang)", "@unopybot"} {
+		if !strings.Contains(help, expected) {
+			t.Fatalf("help is missing %q: %s", expected, help)
+		}
+	}
+}
+
 func TestRenderer_RenderLobbyAndState(t *testing.T) {
 	cache := NewUserCache(10)
 	cache.Put(10, "Alice", "alice")
