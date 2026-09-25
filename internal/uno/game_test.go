@@ -613,11 +613,25 @@ func TestCaseiroPenaltyResponses(t *testing.T) {
 	}
 	apply(t, g, Action{Type: ChooseColor, PlayerID: 2, Color: Red})
 	s := g.Snapshot()
-	if s.CurrentPlayerID != 3 || s.DrawCounter != 4 {
-		t.Fatalf("expected target turn with accumulated +4: %+v", s)
+	if s.CurrentPlayerID != 3 || s.DrawCounter != 6 {
+		t.Fatalf("expected target turn with accumulated +6: %+v", s)
 	}
 	if err := g.CanPlay(3, s.Players[2].Hand[0]); err != nil {
 		t.Fatalf("matching +2 should answer +4 in caseiro: %v", err)
+	}
+	apply(t, g, Action{Type: PlayCard, PlayerID: 3, CardID: s.Players[2].Hand[0]})
+	s = g.Snapshot()
+	if s.CurrentPlayerID != 1 || s.DrawCounter != 8 {
+		t.Fatalf("expected next target with accumulated +8: %+v", s)
+	}
+	handBefore := len(s.Players[0].Hand)
+	r := apply(t, g, Action{Type: DrawCard, PlayerID: 1})
+	s = g.Snapshot()
+	if s.DrawCounter != 0 || len(s.Players[0].Hand) != handBefore+8 {
+		t.Fatalf("expected player 1 to draw all 8 cards: %+v", s)
+	}
+	if !hasEvent(r, CardsDrawn, 1) {
+		t.Fatal("expected CardsDrawn event for the full caseiro penalty")
 	}
 }
 
