@@ -1,5 +1,10 @@
 # UnoBotGO V2 — engine (Milestone 1)
 
+## Atualização — apresentação e empilhamento Caseiro (2026-09-25)
+
+- O estado público do Telegram indica a direção somente pelas setas entre os
+  jogadores. A linha textual `Direção: ...` foi removida por ser redundante.
+
 ## Atualização — Trocar cartas no Caseiro (2026-09-25)
 
 Esta seção descreve a feature atual da V2; as seções da Milestone 1 abaixo

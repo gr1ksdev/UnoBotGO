@@ -246,13 +246,6 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 		sb.WriteString(fmt.Sprintf("Cor ativa: %s <b>%s</b>\n", ColorIcon(view.ActiveColor), ColorNamePT(view.ActiveColor)))
 	}
 
-	// Direction
-	dir := "➡️ Sentido horário"
-	if view.Direction < 0 {
-		dir = "⬅️ Sentido anti-horário (Invertido)"
-	}
-	sb.WriteString(fmt.Sprintf("Direção: %s\n\n", dir))
-
 	if view.DrawCounter > 0 {
 		sb.WriteString(fmt.Sprintf("⚠️ <b>Penalidade acumulada: comprar %d cartas!</b>\n\n", view.DrawCounter))
 	}

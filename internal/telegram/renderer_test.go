@@ -139,6 +139,22 @@ func TestRenderer_RenderLobbyAndState(t *testing.T) {
 	if !strings.Contains(stateText, "💚 5") {
 		t.Errorf("expected top card in state text: %s", stateText)
 	}
+	if strings.Contains(stateText, "Direção:") || strings.Contains(stateText, "Sentido horário") {
+		t.Errorf("expected no redundant direction line: %s", stateText)
+	}
+	if !strings.Contains(stateText, " ➡️ ") {
+		t.Errorf("expected clockwise direction between players: %s", stateText)
+	}
+
+	reverseView := playView
+	reverseView.Direction = -1
+	reverseText := renderer.RenderPublicState(reverseView)
+	if strings.Contains(reverseText, "Direção:") || strings.Contains(reverseText, "Sentido anti-horário") {
+		t.Errorf("expected no redundant reverse direction line: %s", reverseText)
+	}
+	if !strings.Contains(reverseText, " ⬅️ ") {
+		t.Errorf("expected counter-clockwise direction between players: %s", reverseText)
+	}
 }
 
 func TestRenderer_RenderActionConfirmation(t *testing.T) {
