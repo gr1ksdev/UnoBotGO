@@ -6,12 +6,14 @@
 - PlayCard descarta a carta e abre ChoosingPlayer. ChoosePlayer/TargetID troca todas as cartas restantes com outro participante ativo e avança o turno mantendo cor, ordem e direção.
 - Restrições aprovadas: não finalizar com a carta, não jogar sobre coringa e não responder penalidades. UNO é anunciado após a troca para cada envolvido com uma carta.
 - Autor não sai nem tem turno pulado por timeout enquanto escolhe; demais podem sair/entrar e revisões antigas são recusadas. Cancelamento e encerramento por saída funcionam na fase nova.
-- Serviço autoriza a ação inline e expõe PlayerChooserID sem mãos alheias. Telegram reutiliza tokens pessoais de uso único e revisão; menu lista nomes/contagens. Sem sticker cinza, a carta indisponível aparece como item textual sem ação.
+- Serviço autoriza a ação inline e expõe PlayerChooserID sem mãos alheias. Telegram reutiliza tokens pessoais de uso único e revisão; menu lista nomes/contagens. A carta indisponível usa o sticker cinza `CAACAgEAAxkBAAER8aRqtlf6ZtRKfAj02K5AnlVcRz_W_AACVAcAAkaGsEXgXGCANqlQKz0E`, com resultado `grey_` sem token de ação.
+- O asset fonte da variante indisponível está em `assets/stickers/swap_hands_grey.png` (PNG RGBA, 342×512, 206642 bytes). O Telegram confirmou o sticker como estático; testes garantem que o resultado cinza não altera revisão nem turno.
 - Alternar modo no lobby reconstrói apenas o deck padrão. State.CustomDeck preserva decks de WithDeck entre mudanças e serialização; regra incompatível com deck especial injetado é recusada.
 - Simulador escolhe a menor mão ativa (desempate por ordem), descreve escolha/troca e contabiliza HandSwaps.
 - Validações aprovadas: go test ./..., go build ./..., go vet ./..., go test -race ./internal/uno ./internal/game ./internal/telegram ./internal/simulation e git diff --check.
 - Simulações seed 20260924, 4 jogadores: caseiro terminou em 119 ações (incluindo troca), clássico em 37 ações. Relatórios em .reports/simulations/.
 - Homologação visual/disponibilidade do file_id no Telegram real pendente. Nenhum deploy ou commit realizado nesta tarefa.
+- Sticker cinza registrado e enviado ao usuário `7595607953`; validação desta correção: testes Telegram focados 20 vezes, `go test ./...`, `go vet ./...`, `go build ./...` e `git diff --check` aprovados.
 
 ---
 
@@ -68,7 +70,20 @@
 - Relato confirmado: `+2 → +4` mantinha 2 durante a escolha de cor, mas `choose` substituía o contador por 4.
 - Correção: ao resolver um `+4` empilhável, somar `Pending.DrawCount` ao `DrawCounter` existente.
 - Resultado: `+2 → +4 = 6`; `+2 → +4 → +2 = 8`; a compra remove todas as oito cartas pendentes.
-- Escopo definido pelo usuário: manter modos e composição do baralho sem mudanças. Ambos continuam usando `ClassicDeck()`.
+- A correção de soma não mudou o inventário então vigente; depois, a feature Trocar cartas passou a acrescentar uma `SwapHands` somente ao Caseiro, totalizando 109 cartas contra 108 do Clássico.
+- Ajuste aprovado em 2026-09-25: no Caseiro, `+4 → +4` passa a ser recusado. `+2 → +4` e o `+2` da cor escolhida sobre `+4` permanecem válidos. `BotRules()`/modo Clássico continua permitindo `+4 → +4`.
+- A linha textual `Direção: ...` foi removida do estado público; as setas entre jogadores continuam mostrando o sentido atual.
+
+---
+
+# Memória atual — comandos privados e ajuda — 2026-09-25
+
+- `/start` privado foi separado de `/help`: boas-vindas curtas, sem V2/Golang, com link para adicionar o bot a um grupo.
+- O botão usa `https://t.me/<username>?startgroup=true`, com username preenchido por `GetMe` no startup.
+- Como o Telegram entrega esse deep link no grupo como `/start@bot true`, o payload `true` recebe uma mensagem de orientação e não tenta iniciar partida. `/start` sem payload mantém o alias histórico de `/iniciar`.
+- `/help` apresenta comandos em `<blockquote>`, usa o username atual nas instruções inline e credita a versão brasileira em Go (Golang) baseada no `@unopybot`.
+- `/ajuda` e `/kill` continuam aceitos como aliases; `/start` continua compatível como alias de `/iniciar` em grupos.
+- Os menus do Telegram são separados nos escopos padrão, privado e grupos.
 
 ---
 

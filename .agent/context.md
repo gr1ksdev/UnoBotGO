@@ -6,7 +6,8 @@
 - PlayCard descarta a carta e abre ChoosingPlayer. ChoosePlayer/TargetID troca todas as cartas restantes com outro participante ativo e avança o turno mantendo cor, ordem e direção.
 - Restrições aprovadas: não finalizar com a carta, não jogar sobre coringa e não responder penalidades. UNO é anunciado após a troca para cada envolvido com uma carta.
 - Autor não sai nem tem turno pulado por timeout enquanto escolhe; demais podem sair/entrar e revisões antigas são recusadas. Cancelamento e encerramento por saída funcionam na fase nova.
-- Serviço autoriza a ação inline e expõe PlayerChooserID sem mãos alheias. Telegram reutiliza tokens pessoais de uso único e revisão; menu lista nomes/contagens. Sem sticker cinza, a carta indisponível aparece como item textual sem ação.
+- Serviço autoriza a ação inline e expõe PlayerChooserID sem mãos alheias. Telegram reutiliza tokens pessoais de uso único e revisão; menu lista nomes/contagens. A carta indisponível usa o sticker cinza `CAACAgEAAxkBAAER8aRqtlf6ZtRKfAj02K5AnlVcRz_W_AACVAcAAkaGsEXgXGCANqlQKz0E`, com resultado `grey_` sem token de ação.
+- O asset fonte da variante indisponível está em `assets/stickers/swap_hands_grey.png` (PNG RGBA, 342×512, 206642 bytes). O Telegram confirmou o sticker como estático; testes garantem que o resultado cinza não altera revisão nem turno.
 - Alternar modo no lobby reconstrói apenas o deck padrão. State.CustomDeck preserva decks de WithDeck entre mudanças e serialização; regra incompatível com deck especial injetado é recusada.
 - Simulador escolhe a menor mão ativa (desempate por ordem), descreve escolha/troca e contabiliza HandSwaps.
 - Validações aprovadas: go test ./..., go build ./..., go vet ./..., go test -race ./internal/uno ./internal/game ./internal/telegram ./internal/simulation e git diff --check.
@@ -19,7 +20,21 @@
 
 - No modo Caseiro, o `+4` jogado sobre penalidade `+2` preserva o contador anterior: após a escolha de cor, `DrawCounter` passa de 2 para 6.
 - A cadeia `+2 → +4 → +2` acumula 8 e a compra consome a penalidade completa.
-- Modos e baralho não foram alterados. Clássico e Caseiro continuam usando o mesmo `ClassicDeck` de 108 cartas.
+- Desde 2026-09-25, o Caseiro recusa `+4 → +4`. A resposta cruzada `+4 → +2` permanece válida quando o `+2` corresponde à cor escolhida; o modo Clássico mantém `+4 → +4`.
+- Esta regra não altera inventário: o Clássico permanece com 108 cartas e o Caseiro com 109 por causa da única `SwapHands`.
+
+# Contexto atual — direção no estado Telegram (2026-09-25)
+
+- `RenderPublicState` não imprime mais a linha textual `Direção: ...`.
+- O sentido continua indicado na lista **Jogadores em jogo** pelos separadores `➡️` e `⬅️`, inclusive após Reverse.
+
+# Contexto atual — comandos privados Telegram (2026-09-25)
+
+- `/start` no privado possui apresentação curta sem versão/stack, indica `/help` e mostra `➕ Adicionar a um grupo`.
+- O deep link usa o username retornado por `GetMe`; reiniciar o processo absorve mudanças feitas no BotFather.
+- O payload `startgroup=true` é tratado como confirmação de adição no grupo e orienta `/novo`/`/help`; não aciona o alias `/iniciar`.
+- `/help` usa blockquote para documentar comandos e termina com a origem brasileira em Go (Golang), baseada no `@unopybot`. `/ajuda` permanece como alias.
+- Menus registrados por escopo: padrão `/help`; privado `/start`, `/help`; grupos comandos de partida e `/help`.
 
 ---
 

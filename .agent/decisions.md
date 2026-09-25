@@ -426,3 +426,60 @@ Empilhamento representa uma única penalidade acumulada. Resolver a escolha de c
 `+2 → +4` passa a 6 e pode continuar acumulando. O Clássico não passa a aceitar combinações cruzadas, pois a validação de jogabilidade e suas flags não mudaram.
 
 ---
+
+# Decisão: sticker cinza para Trocar cartas
+
+## Data
+2026-09-25
+
+## Contexto
+A carta Trocar cartas não possuía variante visual desabilitada. Quando não era jogável, o adapter inline substituía somente essa carta por um artigo textual, diferente das demais cartas da mão.
+
+## Decisão tomada
+Criar uma variante estática cinza da arte existente, registrá-la pela Bot API com o file ID `CAACAgEAAxkBAAER8aRqtlf6ZtRKfAj02K5AnlVcRz_W_AACVAcAAkaGsEXgXGCANqlQKz0E` e usar o fluxo genérico de `InlineQueryResultCachedSticker` indisponível. O resultado mantém prefixo `grey_` e não recebe token de ação.
+
+## Motivo
+Manter consistência visual na mão e conservar a mesma proteção já usada pelas outras cartas indisponíveis.
+
+## Impacto
+A carta indisponível aparece escurecida e sua seleção não executa jogada. Regras, frequência e sticker colorido permanecem iguais.
+
+---
+
+# Decisão: bloquear +4 sobre +4 somente no Caseiro
+
+## Data
+2026-09-25
+
+## Contexto
+O Caseiro herdava de `BotRules` a permissão de responder uma penalidade `+4` com outro `+4`. A mensagem pública também repetia a direção em uma linha textual e nas setas da lista de jogadores.
+
+## Decisão tomada
+Sobrescrever `StackWildDrawFour` para `false` em `CaseiroRules`, preservando as flags independentes de respostas cruzadas. Remover a linha textual de direção e manter `➡️`/`⬅️` entre os jogadores. Não alterar `BotRules`.
+
+## Motivo
+Aplicar a regra solicitada apenas ao modo citado e retirar informação visual duplicada sem esconder o sentido da rodada.
+
+## Impacto
+No Caseiro, `+4 → +4` é indisponível, enquanto `+2 → +4` e `+4 → +2` continuam válidos. O modo Clássico mantém seu comportamento. O estado Telegram fica mais compacto.
+
+---
+
+# Decisão: comandos Telegram por contexto
+
+## Data
+2026-09-25
+
+## Contexto
+O chat privado reutilizava a ajuda completa como resposta de `/start`, e o menu padrão expunha comandos de grupo em todos os contextos. Não havia acesso direto para adicionar o bot a um grupo.
+
+## Decisão tomada
+Separar `/start` de `/help`, gerar o deep link de grupo com o username retornado por `GetMe` e registrar comandos nos escopos padrão, privado e grupos. Tratar o payload `startgroup=true` como confirmação de adição, sem iniciar partida. Manter `/ajuda`, `/kill` e `/start` sem payload em grupo como aliases compatíveis.
+
+## Motivo
+Dar ao primeiro contato uma apresentação curta, manter a ajuda legível e mostrar em cada chat somente os comandos relevantes.
+
+## Impacto
+O privado mostra `/start` e `/help`; os grupos mostram comandos de partida e `/help`. Mudanças de username passam a exigir apenas reinício do bot, sem alteração de código.
+
+---
