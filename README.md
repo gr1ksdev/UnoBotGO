@@ -57,6 +57,14 @@ comando não afeta partidas de outros grupos.
 
 ---
 
+## Trocar cartas no modo caseiro
+
+Selecione **Caseiro** no lobby para jogar com uma carta extra **🔀 Trocar cartas**
+(109 cartas no total). Ao jogá-la, abra **Suas cartas** e escolha outro participante
+no menu: vocês trocam as mãos inteiras restantes, a cor da mesa é mantida e a vez
+passa normalmente. A carta não pode finalizar a mão, ser jogada sobre coringa ou
+responder a uma penalidade +2/+4. O modo clássico mantém suas 108 cartas.
+
 ## Testes Automatizados
 
 O projeto conta com uma suíte abrangente de testes unitários e de integração com cobertura de concorrência e race detector:
@@ -95,7 +103,7 @@ go run ./cmd/simulator --players 4 --mode caseiro --seed 20260924 --quiet
 Cada execução mostra a semente utilizada e grava um relatório Markdown em
 `.reports/simulations/`. O relatório reúne colocações, estatísticas gerais e por
 jogador, possíveis erros e uma linha do tempo que explica bloqueios, reversões,
-coringas, +2, +4, empilhamentos, penalidades e desafios de blefe ocorridos. Ele
+coringas, trocas de mãos, +2, +4, empilhamentos, penalidades e desafios de blefe ocorridos. Ele
 também informa início, fim e tempo total, além do histórico completo de todas as
 ações, eventos da engine e estado da mesa depois de cada jogada.
 

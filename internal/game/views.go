@@ -26,26 +26,27 @@ const (
 // PublicGameView has no hands, draw pile or full inventory. OwnerID is metadata,
 // not a participant; Players contains only users explicitly registered via Join.
 type PublicGameView struct {
-	GameID         uno.GameID
-	ChatID         ChatID
-	ChatName       string
-	CreatorID      uno.PlayerID
-	OwnerID        uno.PlayerID
-	Revision       uint64
-	Phase          uno.Phase
-	Rules          uno.Rules
-	CurrentTurn    uno.PlayerID
-	Direction      int
-	ActiveColor    uno.Color
-	TopCard        *uno.Card
-	ColorChooserID uno.PlayerID
-	DrawCounter    int
-	Players        []PublicPlayer
-	Order          []uno.PlayerID
-	Placements     []uno.Placement
-	Closed         bool
-	CloseReason    CloseReason
-	CanCallBluff   bool
+	GameID          uno.GameID
+	ChatID          ChatID
+	ChatName        string
+	CreatorID       uno.PlayerID
+	OwnerID         uno.PlayerID
+	Revision        uint64
+	Phase           uno.Phase
+	Rules           uno.Rules
+	CurrentTurn     uno.PlayerID
+	Direction       int
+	ActiveColor     uno.Color
+	TopCard         *uno.Card
+	PlayerChooserID uno.PlayerID
+	ColorChooserID  uno.PlayerID
+	DrawCounter     int
+	Players         []PublicPlayer
+	Order           []uno.PlayerID
+	Placements      []uno.Placement
+	Closed          bool
+	CloseReason     CloseReason
+	CanCallBluff    bool
 }
 
 type CardView struct {
@@ -108,6 +109,9 @@ func publicView(entry *managedGame, state uno.State) PublicGameView {
 				break
 			}
 		}
+	}
+	if state.Phase == uno.ChoosingPlayer {
+		v.PlayerChooserID = state.CurrentPlayerID
 	}
 	if state.Pending != nil {
 		v.ColorChooserID = state.Pending.Actor

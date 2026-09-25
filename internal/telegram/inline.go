@@ -227,6 +227,9 @@ func (h *InlineHandler) buildPlayerHandResults(
 	sortedHand := sortHand(view.Hand)
 
 	// 1. Action controls if it's the player's turn
+	if view.Public.Phase == uno.ChoosingPlayer {
+		return h.playerChoiceResults(actorID, view), ""
+	}
 	if view.Public.Phase == uno.ChoosingColor {
 		if view.Public.ColorChooserID == actorID {
 			// 4 color articles
@@ -407,6 +410,15 @@ func (h *InlineHandler) buildPlayerHandResults(
 					StickerFileID: stickerID,
 				})
 			} else {
+				if cv.Card.Rank == uno.SwapHands {
+					results = append(results, &telego.InlineQueryResultArticle{
+						Type: "article", ID: fmt.Sprintf("grey_%s_%d", cv.Card.ID, i),
+						Title:               "🔀 Trocar cartas — indisponível agora",
+						Description:         "Esta carta não pode ser jogada agora.",
+						InputMessageContent: &telego.InputTextMessageContent{MessageText: "Esta carta não pode ser jogada agora. Abra suas cartas novamente quando for a sua vez."},
+					})
+					continue
+				}
 				greyStickerID := GetCardStickerGreyID(cv.Card)
 				results = append(results, &telego.InlineQueryResultCachedSticker{
 					Type:          "sticker",
@@ -497,7 +509,6 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 						},
 					})
 				}
-				break
 			}
 		}
 
@@ -583,4 +594,48 @@ func colorSortRank(c uno.Color, r uno.Rank) int {
 	default:
 		return 98
 	}
+}
+
+// playerChoiceResults shares the wildcard's inline selection flow. Only names
+// and public counts identify targets; no opponent's hand is exposed.
+func (h *InlineHandler) playerChoiceResults(actorID uno.PlayerID, view game.PlayerGameView) []telego.InlineQueryResult {
+	var results []telego.InlineQueryResult
+	if view.Public.PlayerChooserID == actorID {
+		for _, player := range view.Public.Players {
+			if !player.Active || player.ID == actorID {
+				continue
+			}
+			token, err := h.tokens.CreateActionToken(actorID, view.Public.GameID, view.Public.ChatID, uno.Action{
+				Type: uno.ChoosePlayer, PlayerID: actorID, TargetID: player.ID, Revision: view.Public.Revision,
+			}, h.tokenTTL)
+			if err != nil {
+				continue
+			}
+			name := h.renderer.userCache.GetRawName(player.ID)
+			results = append(results, &telego.InlineQueryResultArticle{
+				Type: "article", ID: token, Title: "Trocar cartas com " + name,
+				Description:         fmt.Sprintf("%d carta(s)", player.CardCount),
+				InputMessageContent: &telego.InputTextMessageContent{MessageText: "Escolhendo " + name + " para trocar cartas."},
+			})
+		}
+	} else {
+		results = append(results, &telego.InlineQueryResultArticle{
+			Type: "article", ID: fmt.Sprintf("wait_%s_%d", view.Public.GameID, view.Public.Revision),
+			Title:               "Aguardando escolha de jogador",
+			Description:         h.renderer.userCache.GetRawName(view.Public.PlayerChooserID) + " está escolhendo com quem trocar cartas.",
+			InputMessageContent: &telego.InputTextMessageContent{MessageText: h.renderer.RenderPublicState(view.Public), ParseMode: "HTML"},
+		})
+	}
+	var descriptions []string
+	for _, card := range sortHand(view.Hand) {
+		descriptions = append(descriptions, CardRepr(card.Card))
+	}
+	if len(descriptions) > 0 {
+		results = append(results, &telego.InlineQueryResultArticle{
+			Type: "article", ID: fmt.Sprintf("hand_%s_%d", view.Public.GameID, view.Public.Revision),
+			Title: "Suas cartas (toque para estado do jogo):", Description: strings.Join(descriptions, ", "),
+			InputMessageContent: &telego.InputTextMessageContent{MessageText: h.renderer.RenderPublicState(view.Public), ParseMode: "HTML"},
+		})
+	}
+	return results
 }

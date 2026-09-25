@@ -1,5 +1,19 @@
 # UnoBotGO V2 — Milestone 2
 
+## Troca de mãos — 2026-09-25
+
+`ChoosePlayer` é autorizada como ação inline, vinculada ao `Actor.PlayerID` real,
+à partida e à revisão. A engine valida turno, fase e alvo ativo; o serviço aplica
+a troca sob o mutex da partida. `PublicGameView.PlayerChooserID` identifica quem
+escolhe, enquanto `Players` fornece os alvos ativos e suas contagens públicas.
+Cada `PlayerView` passa a refletir somente a nova mão do próprio solicitante.
+Nenhum ID de carta trocada é publicado em eventos ou na view pública.
+
+`ChoosingPlayer` não é elegível para timeout, assim como a escolha de cor.
+Após confirmar a troca, o próximo turno recebe um prazo novo. Seleções antigas
+são recusadas pela revisão, mesmo quando a carta ainda existe na partida.
+
+
 > Atualização de 2026-09-23: o contrato de timeout e encerramento vigente está
 > descrito abaixo. As seções da M2 preservam o contexto histórico.
 
@@ -99,7 +113,7 @@ função administrativa do usuário no chat.
 - Create exige PlayerID positivo e ChatID não zero.
 - Join/Leave exigem contexto do chat correspondente.
 - Start/Cancel exigem contexto do chat e `Actor.PlayerID == OwnerID`.
-- Play/Draw/Pass/ChooseColor aceitam ChatID zero para o futuro inline; qualquer
+- Play/Draw/Pass/ChooseColor/ChoosePlayer/CallBluff aceitam ChatID zero para o futuro inline; qualquer
   ChatID fornecido precisa corresponder ao jogo.
 - ResetChat aceita o responsável da partida ou `ChatAdmin`; nenhum dos dois recebe
   acesso a mãos por causa dessa autorização.

@@ -133,6 +133,8 @@ func RankName(rank uno.Rank) string {
 		return "🔄 Inverter"
 	case uno.Skip:
 		return "🚫 Pular"
+	case uno.SwapHands:
+		return "🔀 Trocar cartas"
 	case uno.Wild:
 		return "🌈 Coringa"
 	case uno.WildDrawFour:
@@ -170,6 +172,8 @@ func (r *Renderer) PlayerLink(id uno.PlayerID, view game.PublicGameView) string 
 		switch view.Phase {
 		case uno.TakingTurn:
 			responsible = view.CurrentTurn
+		case uno.ChoosingPlayer:
+			responsible = view.PlayerChooserID
 		case uno.ChoosingColor:
 			responsible = view.ColorChooserID
 		}
@@ -295,7 +299,9 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 	sb.WriteString("\n\n")
 
 	// Phase / Turn
-	if view.Phase == uno.ChoosingColor {
+	if view.Phase == uno.ChoosingPlayer {
+		sb.WriteString(fmt.Sprintf("🔀 <b>Aguardando %s escolher um jogador para trocar cartas!</b>", r.PlayerLink(view.PlayerChooserID, view)))
+	} else if view.Phase == uno.ChoosingColor {
 		sb.WriteString(fmt.Sprintf("🎨 <b>Aguardando %s escolher a cor!</b>", r.PlayerLink(view.ColorChooserID, view)))
 	} else if view.CurrentTurn > 0 {
 		sb.WriteString(fmt.Sprintf("👉 Vez de: %s", r.PlayerLink(view.CurrentTurn, view)))
@@ -332,6 +338,8 @@ func (r *Renderer) RenderActionConfirmation(actorID uno.PlayerID, action uno.Act
 		sb.WriteString(fmt.Sprintf("%s comprou %d %s.", actorLink, count, cardWord))
 	case uno.PassTurn:
 		sb.WriteString(fmt.Sprintf("%s passou a vez.", actorLink))
+	case uno.ChoosePlayer:
+		sb.WriteString(fmt.Sprintf("🔀 %s trocou todas as cartas com %s!", actorLink, r.PlayerLink(action.TargetID, outcome.View)))
 	case uno.ChooseColor:
 		sb.WriteString(fmt.Sprintf("%s escolheu a cor %s <b>%s</b>!", actorLink, ColorIcon(action.Color), ColorNamePT(action.Color)))
 	case uno.CallBluff:
@@ -394,6 +402,7 @@ func (r *Renderer) RenderHelp(botUsername string) string {
 		sb.WriteString("<code>@seubot</code>\n\n")
 	}
 	sb.WriteString("Sua mão privada aparecerá no menu inline. Toque em uma carta jogável (colorida) para jogá-la! ")
+	sb.WriteString("No modo caseiro, a carta 🔀 Trocar cartas permite escolher outro jogador em <b>Suas cartas</b> e trocar as mãos inteiras, mantendo a cor da mesa. ")
 	sb.WriteString("A confirmação oficial e o estado atualizado serão enviados no grupo da partida.")
 
 	return sb.String()

@@ -14,21 +14,27 @@ type Game struct {
 }
 
 type setup struct {
-	deck    []Card
-	shuffle Shuffler
+	customDeck bool
+	deck       []Card
+	shuffle    Shuffler
 }
 type Option func(*setup)
 
 // WithDeck supplies an exact inventory, including its draw order. Combine with
 // WithShuffler for deterministic play. The input is copied by NewGame.
-func WithDeck(cards []Card) Option         { return func(s *setup) { s.deck = slices.Clone(cards) } }
+func WithDeck(cards []Card) Option {
+	return func(s *setup) {
+		s.deck = slices.Clone(cards)
+		s.customDeck = true
+	}
+}
 func WithShuffler(shuffle Shuffler) Option { return func(s *setup) { s.shuffle = shuffle } }
 
 func NewGame(id GameID, rules Rules, options ...Option) (*Game, error) {
 	if rules.EndPolicy > Placements {
 		return nil, ErrInvalidRules
 	}
-	cfg := setup{deck: ClassicDeck(), shuffle: randomShuffle}
+	cfg := setup{deck: deckForRules(rules), shuffle: randomShuffle}
 	for _, option := range options {
 		if option != nil {
 			option(&cfg)
@@ -37,7 +43,7 @@ func NewGame(id GameID, rules Rules, options ...Option) (*Game, error) {
 	if cfg.shuffle == nil {
 		cfg.shuffle = randomShuffle
 	}
-	s := State{ID: id, Rules: rules, Direction: 1, Cards: slices.Clone(cfg.deck)}
+	s := State{ID: id, Rules: rules, CustomDeck: cfg.customDeck, Direction: 1, Cards: slices.Clone(cfg.deck)}
 	for _, card := range s.Cards {
 		s.DrawPile = append(s.DrawPile, card.ID)
 	}
@@ -73,10 +79,10 @@ func (g *Game) Apply(a Action) (Result, error) {
 	if g.state.Revision == math.MaxUint64 {
 		return Result{}, ErrInvalidState
 	}
-	if a.PlayerID <= 0 || a.Type < JoinGame || a.Type > SetRules {
+	if a.PlayerID <= 0 || a.Type < JoinGame || a.Type > ChoosePlayer {
 		return Result{}, ErrInvalidAction
 	}
-	if (a.Type != PlayCard && a.CardID != "") || (a.Type != ChooseColor && a.Color != NoColor) || (a.Type != StartGame && a.DealerID != 0) {
+	if (a.Type != PlayCard && a.CardID != "") || (a.Type != ChooseColor && a.Color != NoColor) || (a.Type != StartGame && a.DealerID != 0) || (a.Type != ChoosePlayer && a.TargetID != 0) {
 		return Result{}, ErrInvalidAction
 	}
 	s := g.state.clone()
@@ -120,6 +126,19 @@ func (g *Game) setRules(s *State, a Action, events *[]Event) error {
 	if a.Rules.EndPolicy > Placements {
 		return ErrInvalidRules
 	}
+	if !s.CustomDeck {
+		s.Cards = deckForRules(a.Rules)
+		s.DrawPile = make([]CardID, 0, len(s.Cards))
+		for _, card := range s.Cards {
+			s.DrawPile = append(s.DrawPile, card.ID)
+		}
+	} else if !a.Rules.AllowSwapHands {
+		for _, card := range s.Cards {
+			if card.Rank == SwapHands {
+				return ErrInvalidRules
+			}
+		}
+	}
 	s.Rules = a.Rules
 	*events = append(*events, Event{Type: RulesChanged, PlayerID: a.PlayerID})
 	return nil
@@ -162,6 +181,9 @@ func (g *Game) join(s *State, id PlayerID, events *[]Event) error {
 }
 
 func (g *Game) leave(s *State, id PlayerID, events *[]Event) error {
+	if s.Phase == ChoosingPlayer && s.CurrentPlayerID == id {
+		return ErrPlayerChoiceRequired
+	}
 	if s.Pending != nil && s.Pending.Actor == id {
 		return ErrColorChoiceRequired
 	}
@@ -232,7 +254,7 @@ func (g *Game) start(s *State, dealer PlayerID, events *[]Event) error {
 		if s.Rules.NumberedStart && c.Rank >= Skip {
 			continue
 		}
-		if c.Rank != WildDrawFour {
+		if c.Rank != WildDrawFour && c.Rank != SwapHands {
 			top = c
 			skipped = i > 0
 			s.DrawPile = slices.Delete(s.DrawPile, i, i+1)
@@ -293,6 +315,12 @@ func (g *Game) takeAction(s *State, a Action, events *[]Event) error {
 	}
 	if a.PlayerID != s.CurrentPlayerID {
 		return ErrNotYourTurn
+	}
+	if s.Phase == ChoosingPlayer {
+		if a.Type != ChoosePlayer {
+			return ErrPlayerChoiceRequired
+		}
+		return g.swapHands(s, a.TargetID, events)
 	}
 	if s.Pending != nil {
 		if a.Type != ChooseColor {
@@ -376,6 +404,9 @@ func playable(s *State, player PlayerID, id CardID) error {
 	if s.Pending != nil {
 		return ErrColorChoiceRequired
 	}
+	if s.Phase == ChoosingPlayer {
+		return ErrPlayerChoiceRequired
+	}
 	card, ok := s.card(id)
 	if !ok {
 		return ErrCardNotFound
@@ -384,6 +415,9 @@ func playable(s *State, player PlayerID, id CardID) error {
 		return ErrCardNotOwned
 	}
 	if !s.Rules.FreePlayAfterDraw && s.DrawnCardID != "" && s.DrawnCardID != id {
+		return ErrCardNotPlayable
+	}
+	if card.Rank == SwapHands && (!s.Rules.AllowSwapHands || len(p.Hand) == 1) {
 		return ErrCardNotPlayable
 	}
 	if s.Rules.NoWildFinish && len(p.Hand) == 1 && card.Rank >= Wild {
@@ -428,7 +462,7 @@ func playable(s *State, player PlayerID, id CardID) error {
 		}
 		return nil
 	}
-	if card.Rank == Wild {
+	if card.Rank == Wild || card.Rank == SwapHands {
 		return nil
 	}
 	if card.Color == s.ActiveColor || card.Rank == top.Rank {
@@ -450,6 +484,11 @@ func (g *Game) play(s *State, id CardID, events *[]Event) error {
 	s.DiscardPile = append(s.DiscardPile, id)
 	s.DrawnCardID = ""
 	*events = append(*events, Event{Type: CardPlayed, PlayerID: actor, CardID: id})
+	if card.Rank == SwapHands {
+		s.Phase = ChoosingPlayer
+		*events = append(*events, Event{Type: PlayerChoiceRequired, PlayerID: actor})
+		return nil
+	}
 	if len(p.Hand) == 1 {
 		*events = append(*events, Event{Type: UnoAnnounced, PlayerID: actor})
 	}
@@ -626,5 +665,25 @@ func (g *Game) bluff(s *State, challenger PlayerID, events *[]Event) error {
 	}
 	next := s.next(challenger, 1)
 	changeTurn(s, next, events)
+	return nil
+}
+
+// swapHands commits only after the chooser and target have been validated.
+func (g *Game) swapHands(s *State, target PlayerID, events *[]Event) error {
+	actor := s.CurrentPlayerID
+	other := s.player(target)
+	if target == actor || other == nil || other.Status != Playing {
+		return ErrInvalidSwapTarget
+	}
+	player := s.player(actor)
+	player.Hand, other.Hand = other.Hand, player.Hand
+	s.Phase = TakingTurn
+	*events = append(*events, Event{Type: HandsSwapped, PlayerID: actor, TargetID: target})
+	for _, p := range []*Player{player, other} {
+		if len(p.Hand) == 1 {
+			*events = append(*events, Event{Type: UnoAnnounced, PlayerID: p.ID})
+		}
+	}
+	changeTurn(s, s.next(actor, 1), events)
 	return nil
 }

@@ -1,5 +1,36 @@
 # UnoBotGO V2 — engine (Milestone 1)
 
+## Atualização — Trocar cartas no Caseiro (2026-09-25)
+
+Esta seção descreve a feature atual da V2; as seções da Milestone 1 abaixo
+registram o contrato inicial e não substituem as regras atuais dos modos do bot.
+
+- `CaseiroRules()` habilita `AllowSwapHands`; o inventário padrão recebe uma
+  `SwapHands` sem cor, totalizando 109 cartas. `ClassicDeck()` e os modos
+  `ClassicRules()`/`BotRules()` continuam com 108, sem a nova carta.
+- Jogar `SwapHands` descarta a carta e abre `ChoosingPlayer`. O jogador atual
+  permanece responsável. `ChoosePlayer` exige `TargetID` de outro jogador ativo.
+  A troca inclui todas as cartas restantes de ambos, preservando cor ativa,
+  assentos e direção, e então avança o turno normalmente.
+- A carta segue as restrições de coringa do caseiro: não pode ser a última carta,
+  não pode ser jogada sobre coringa (incluindo outra troca) e não responde a
+  penalidades pendentes. Não aparece como carta inicial da mesa.
+- UNO é anunciado após a troca para cada um dos dois jogadores que ficar com uma
+  carta. Não há anúncio provisório ao descartar a carta de troca.
+- Enquanto escolhe, o autor não pode jogar, comprar, passar ou sair. Os demais
+  podem sair, e novos participantes podem entrar conforme as regras existentes.
+  A revisão muda, invalidando seleções antigas. Cancelamento e encerramento por
+  saída continuam disponíveis; o timer não pula a escolha.
+- `PlayerChoiceRequired` e `HandsSwapped` são eventos públicos. O segundo contém
+  apenas os IDs dos participantes, sem revelar suas mãos.
+- Alternar modo no lobby reconstrói somente o inventário padrão, antes da
+  distribuição. `WithDeck` marca `State.CustomDeck` e preserva inventário/ordem
+  personalizados, inclusive após serializar/restaurar snapshots. Desabilitar a
+  regra com uma carta de troca num deck personalizado é recusado atomicamente.
+- Ranks, ações e fases novas foram acrescentados ao fim das enumerações, mantendo
+  os valores anteriores. Snapshots com a nova carta exigem uma versão compatível.
+
+
 A mão do jogador é privada e acessada digitando @usernamebot no campo de mensagem do Telegram.
 
 Esta milestone entrega apenas `internal/uno`. O adapter Telegram ainda é o V1;
@@ -18,7 +49,7 @@ r, err := g.Apply(uno.Action{Type: uno.JoinGame, PlayerID: 1, Revision: 0})
 _ = r
 ```
 
-- `NewGame(id, rules, options...)` cria um lobby com inventário Classic de 108 cartas.
+- `NewGame(id, rules, options...)` cria um lobby com 108 cartas, ou 109 quando `AllowSwapHands` está habilitada.
 - `Apply(Action) (Result, error)` é a única entrada para mutações.
 - `StartGame` exige `DealerID` de um participante ativo e ao menos dois jogadores.
 - `Snapshot()` fornece uma cópia profunda serializável; **contém mãos privadas**.

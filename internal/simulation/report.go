@@ -30,6 +30,7 @@ type Stats struct {
 	CardsDrawn       int
 	Skips            int
 	Reverses         int
+	HandSwaps        int
 	Wilds            int
 	WildDrawFours    int
 	DrawTwos         int
@@ -86,6 +87,8 @@ func CollectStats(result Result) Stats {
 				stats.PenaltyEvents++
 				player.PenaltiesReceived++
 			}
+		case uno.ChoosePlayer:
+			stats.HandSwaps++
 		case uno.CallBluff:
 			stats.BluffsCalled++
 			player.BluffsCalled++
@@ -147,11 +150,16 @@ func ExplainStep(step Step) []string {
 			return []string{fmt.Sprintf("%s jogou %s: o sentido mudou para %s.", player, CardName(*step.Card), direction)}
 		case uno.DrawTwo:
 			return []string{fmt.Sprintf("%s jogou %s: a penalidade pendente passou a %d carta(s).%s", player, CardName(*step.Card), step.After.DrawCounter, stack)}
+		case uno.SwapHands:
+			return []string{fmt.Sprintf("%s jogou Trocar cartas e deve escolher outro jogador; a cor ativa permanece %s.", player, ColorName(step.After.ActiveColor))}
 		case uno.Wild:
 			return []string{fmt.Sprintf("%s jogou Coringa e deve escolher a nova cor ativa.", player)}
 		case uno.WildDrawFour:
 			return []string{fmt.Sprintf("%s jogou Coringa +4: após escolher a cor, o próximo jogador poderá responder conforme o modo ou receber a penalidade.%s", player, stack)}
 		}
+	}
+	if step.Action.Type == uno.ChoosePlayer {
+		return []string{fmt.Sprintf("%s trocou todas as cartas com %s; a cor ativa permanece %s.", player, PlayerName(step.Action.TargetID), ColorName(step.After.ActiveColor))}
 	}
 	if step.Action.Type == uno.ChooseColor {
 		return []string{fmt.Sprintf("%s escolheu %s como nova cor ativa; a penalidade pendente agora é de %d carta(s).", player, ColorName(step.Action.Color), step.After.DrawCounter)}
@@ -208,7 +216,7 @@ func RenderMarkdown(result Result) string {
 		{"Ações de jogo", stats.GameplayActions}, {"Cartas jogadas", stats.CardsPlayed},
 		{"Ações de compra", stats.DrawActions}, {"Cartas compradas", stats.CardsDrawn},
 		{"Bloqueios", stats.Skips}, {"Reversões", stats.Reverses}, {"Coringas", stats.Wilds},
-		{"+2", stats.DrawTwos}, {"Coringas +4", stats.WildDrawFours}, {"Empilhamentos", stats.Stacks},
+		{"Trocas de mãos", stats.HandSwaps}, {"+2", stats.DrawTwos}, {"Coringas +4", stats.WildDrawFours}, {"Empilhamentos", stats.Stacks},
 		{"Penalidades recebidas", stats.PenaltyEvents}, {"Blefes desafiados", stats.BluffsCalled},
 		{"Blefes descobertos", stats.BluffsCaught}, {"Anúncios de UNO", stats.UnoAnnouncements},
 	}
@@ -307,6 +315,8 @@ func DescribeStep(step Step) string {
 		return fmt.Sprintf("%s comprou %d carta(s)", player, eventCount(step.Events, uno.CardsDrawn))
 	case uno.PassTurn:
 		return player + " passou a vez"
+	case uno.ChoosePlayer:
+		return fmt.Sprintf("%s trocou todas as cartas com %s", player, PlayerName(step.Action.TargetID))
 	case uno.ChooseColor:
 		return fmt.Sprintf("%s escolheu %s", player, ColorName(step.Action.Color))
 	case uno.CallBluff:
@@ -327,6 +337,8 @@ func ActionName(action uno.ActionType) string {
 		return "comprar"
 	case uno.PassTurn:
 		return "passar"
+	case uno.ChoosePlayer:
+		return "escolher jogador"
 	case uno.ChooseColor:
 		return "escolher cor"
 	case uno.CallBluff:
@@ -359,6 +371,8 @@ func CardName(card uno.Card) string {
 		return ColorName(card.Color) + " Reversão"
 	case uno.DrawTwo:
 		return ColorName(card.Color) + " +2"
+	case uno.SwapHands:
+		return "Trocar cartas"
 	case uno.Wild:
 		return "Coringa"
 	case uno.WildDrawFour:
@@ -422,6 +436,10 @@ func describeEvents(events []uno.Event) string {
 				direction = "anti-horário"
 			}
 			descriptions = append(descriptions, "sentido alterado para "+direction)
+		case uno.PlayerChoiceRequired:
+			descriptions = append(descriptions, PlayerName(event.PlayerID)+" deve escolher um jogador")
+		case uno.HandsSwapped:
+			descriptions = append(descriptions, PlayerName(event.PlayerID)+" trocou todas as cartas com "+PlayerName(event.TargetID))
 		case uno.ColorChoiceRequired:
 			descriptions = append(descriptions, PlayerName(event.PlayerID)+" deve escolher uma cor")
 		case uno.ColorChosen:
@@ -482,6 +500,8 @@ func phaseName(phase uno.Phase) string {
 		return "lobby"
 	case uno.TakingTurn:
 		return "em jogo"
+	case uno.ChoosingPlayer:
+		return "escolhendo jogador"
 	case uno.ChoosingColor:
 		return "escolhendo cor"
 	case uno.Finished:

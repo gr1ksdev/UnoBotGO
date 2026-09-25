@@ -9,19 +9,20 @@ const (
 )
 
 type Rules struct {
-	EndPolicy     EndPolicy
-	AllowLateJoin bool
-	NumberedStart bool
-	StackDrawTwo           bool
-	StackWildDrawFour      bool
+	EndPolicy         EndPolicy
+	AllowLateJoin     bool
+	NumberedStart     bool
+	StackDrawTwo      bool
+	StackWildDrawFour bool
 	// Caseiro permits a Wild Draw Four to answer a pending Draw Two and a
 	// Draw Two of the chosen colour to answer a pending Wild Draw Four.
-	StackWildDrawFourOnTwo bool
-	StackDrawTwoOnWildFour bool
-	NoWildFinish           bool
-	NoWildOnWild           bool
+	StackWildDrawFourOnTwo  bool
+	StackDrawTwoOnWildFour  bool
+	NoWildFinish            bool
+	NoWildOnWild            bool
 	AllowWildDrawFourAlways bool
-	FreePlayAfterDraw      bool
+	AllowSwapHands          bool
+	FreePlayAfterDraw       bool
 }
 
 func ClassicRules() Rules { return Rules{EndPolicy: FirstWinner} }
@@ -40,11 +41,12 @@ func BotRules() Rules {
 }
 
 // CaseiroRules preserves the homologated bot lifecycle while enabling the
-// two explicit V1 house-rule responses for accumulated penalties.
+// V1 responses for accumulated penalties and the house-only hand swap card.
 func CaseiroRules() Rules {
 	r := BotRules()
 	r.StackWildDrawFourOnTwo = true
 	r.StackDrawTwoOnWildFour = true
+	r.AllowSwapHands = true
 	return r
 }
 

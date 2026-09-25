@@ -63,7 +63,15 @@ func readyToFinish(t *testing.T, svc *game.Service, chat game.ChatID, rules uno.
 			t.Fatal(err)
 		}
 		action := uno.Action{PlayerID: view.CurrentTurn, Revision: view.Revision}
-		if view.Phase == uno.ChoosingColor {
+		if view.Phase == uno.ChoosingPlayer {
+			action.Type = uno.ChoosePlayer
+			for _, id := range view.Order {
+				if id != view.CurrentTurn {
+					action.TargetID = id
+					break
+				}
+			}
+		} else if view.Phase == uno.ChoosingColor {
 			action.Type, action.Color = uno.ChooseColor, uno.Red
 			if len(pv.Hand) == 0 {
 				return view, action

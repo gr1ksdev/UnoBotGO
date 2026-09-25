@@ -12,6 +12,7 @@ const (
 	TakingTurn
 	ChoosingColor
 	Finished
+	ChoosingPlayer
 )
 
 type FinishReason string
@@ -40,13 +41,15 @@ type BluffInfo struct {
 }
 
 // State is a serializable snapshot, with no locks, clock or Telegram types.
-// Cards is the immutable inventory; piles/hands contain physical IDs.
+// Cards is immutable after starting; lobby rule changes may rebuild the default
+// inventory. Piles/hands contain physical IDs.
 // Order contains active seats only; Players retains historical participants.
 type State struct {
 	ID              GameID
 	Revision        uint64
 	Rules           Rules
 	Phase           Phase
+	CustomDeck      bool // Explicit WithDeck inventory; preserved across lobby rule changes.
 	Cards           []Card
 	DrawPile        []CardID
 	DiscardPile     []CardID
@@ -115,7 +118,7 @@ func (s *State) next(id PlayerID, steps int) PlayerID {
 // Validate checks structural invariants for tests, debug and recovery.
 func (s State) Validate() error {
 	bad := func(message string) error { return fmt.Errorf("%w: %s", ErrInvalidState, message) }
-	if s.ID == "" || s.Phase > Finished || (s.Direction != 1 && s.Direction != -1) || s.DrawCounter < 0 {
+	if s.ID == "" || s.Phase > ChoosingPlayer || (s.Direction != 1 && s.Direction != -1) || s.DrawCounter < 0 {
 		return bad("identity, phase, direction or draw counter")
 	}
 	if s.Rules.EndPolicy > Placements {
@@ -129,7 +132,7 @@ func (s State) Validate() error {
 	}
 	inventory := make(map[CardID]Card, len(s.Cards))
 	for _, c := range s.Cards {
-		if _, exists := inventory[c.ID]; exists || !c.valid() {
+		if _, exists := inventory[c.ID]; exists || !c.valid() || (c.Rank == SwapHands && !s.Rules.AllowSwapHands) {
 			return bad("invalid or duplicate physical card")
 		}
 		inventory[c.ID] = c
@@ -202,14 +205,14 @@ func (s State) Validate() error {
 			}
 		}
 	}
-	if s.Phase == TakingTurn || s.Phase == ChoosingColor {
+	if s.Phase == TakingTurn || s.Phase == ChoosingColor || s.Phase == ChoosingPlayer {
 		if len(s.Order) < 2 || !order[s.CurrentPlayerID] || len(s.DiscardPile) == 0 {
 			return bad("active game")
 		}
 		if _, ok := players[s.DealerID]; !ok {
 			return bad("dealer")
 		}
-		if s.Phase == TakingTurn && !s.ActiveColor.valid() {
+		if s.Phase != ChoosingColor && !s.ActiveColor.valid() {
 			return bad("active color")
 		}
 		for _, p := range players {
@@ -234,6 +237,12 @@ func (s State) Validate() error {
 	} else if s.FinishReason != "" {
 		return bad("premature finish reason")
 	}
+	if s.Phase == ChoosingPlayer {
+		top := inventory[s.DiscardPile[len(s.DiscardPile)-1]]
+		if !s.Rules.AllowSwapHands || top.Rank != SwapHands || s.DrawCounter != 0 || s.PendingBluff != nil {
+			return bad("pending player choice")
+		}
+	}
 	if (s.Phase == ChoosingColor) != (s.Pending != nil) {
 		return bad("pending color phase")
 	}
@@ -242,7 +251,7 @@ func (s State) Validate() error {
 			return bad("pending actors")
 		}
 		top := inventory[s.DiscardPile[len(s.DiscardPile)-1]]
-		if top.Rank < Wild || (p.DrawCount != 0 && p.DrawCount != 4) || (top.Rank == WildDrawFour) != (p.DrawCount == 4) {
+		if (top.Rank != Wild && top.Rank != WildDrawFour) || (p.DrawCount != 0 && p.DrawCount != 4) || (top.Rank == WildDrawFour) != (p.DrawCount == 4) {
 			return bad("pending wild")
 		}
 		if p.Initial && (top.Rank != Wild || p.PreviousColor != NoColor) {

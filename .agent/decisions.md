@@ -1,3 +1,22 @@
+# Decisão: Troca de mãos como escolha de jogador exclusiva do caseiro
+
+## Data
+2026-09-25
+
+## Contexto
+O usuário pediu uma carta com sticker próprio que troca mãos completas após seleção de jogador em menu semelhante ao coringa, apenas no modo caseiro. Aprovou o plano com "sim".
+
+## Decisão tomada
+Adicionar uma carta SwapHands no baralho caseiro (109 cartas), controlada por AllowSwapHands. Criar ChoosingPlayer e ChoosePlayer/TargetID, mantendo a cor ativa e as restrições de coringa do modo. Proibir uso como última carta. Trocar mãos restantes atomicamente e só então anunciar UNO. Seleção usa tokens existentes com validação de ator/revisão e alvo ativo. Preservar inventários injetados com CustomDeck serializável; reconstruir apenas o padrão quando o modo muda no lobby.
+
+## Motivo
+A escolha de jogador tem semântica distinta da escolha de cor. Uma fase própria impede confusão entre alvos, mantém invariantes e permite reaproveitar segurança e apresentação inline existentes sem publicar mãos. Preservar decks injetados mantém testes determinísticos e contratos de inventário.
+
+## Impacto
+Novos valores são anexados às enumerações para preservar os antigos. Snapshots da feature exigem código compatível. Seeds do caseiro mudam de trajetória pelo inventário maior. Clássico e executável V1 permanecem com o comportamento anterior. Simulador, views, documentação e testes cobrem a nova fase. Homologação visual do sticker real continua pendente.
+
+---
+
 # Decisões
 
 # Decisão: Autorização da ação CallBluff no Service da aplicação
