@@ -46,6 +46,15 @@
 
 ---
 
+# Memória atual — correção da penalidade cruzada Caseiro — 2026-09-24
+
+- Relato confirmado: `+2 → +4` mantinha 2 durante a escolha de cor, mas `choose` substituía o contador por 4.
+- Correção: ao resolver um `+4` empilhável, somar `Pending.DrawCount` ao `DrawCounter` existente.
+- Resultado: `+2 → +4 = 6`; `+2 → +4 → +2 = 8`; a compra remove todas as oito cartas pendentes.
+- Escopo definido pelo usuário: manter modos e composição do baralho sem mudanças. Ambos continuam usando `ClassicDeck()`.
+
+---
+
 # Memória atual — publicação limpa e multi-arquitetura — 2026-09-24
 
 - Pedido aprovado: promover a versão V2 atual para a árvore pública de `main` e publicar também para ARM64.

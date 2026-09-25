@@ -389,3 +389,21 @@ Uma referência multi-arquitetura simplifica deploys e evita depender de emulaç
 Docker seleciona automaticamente a imagem AMD64 ou ARM64. O CI de `dev` passa a validar ambas sem publicar; a `main` publica ambas após os testes. O tempo do build remoto pode aumentar por produzir duas variantes.
 
 ---
+# Decisão: preservar contador no empilhamento cruzado Caseiro
+
+## Data
+2026-09-24
+
+## Contexto
+Ao responder um `+2` com `+4` no modo Caseiro, a engine permitia a jogada, mas substituía a penalidade pendente de 2 por 4 durante a escolha de cor.
+
+## Decisão tomada
+Somar o valor do `+4` ao `DrawCounter` existente quando qualquer regra compatível de empilhamento do `+4` estiver ativa. Manter os modos e o baralho sem alterações.
+
+## Motivo
+Empilhamento representa uma única penalidade acumulada. Resolver a escolha de cor não deve apagar cartas já pendentes.
+
+## Impacto
+`+2 → +4` passa a 6 e pode continuar acumulando. O Clássico não passa a aceitar combinações cruzadas, pois a validação de jogabilidade e suas flags não mudaram.
+
+---

@@ -1,3 +1,11 @@
+# Contexto atual — penalidade cruzada Caseiro (2026-09-24)
+
+- No modo Caseiro, o `+4` jogado sobre penalidade `+2` preserva o contador anterior: após a escolha de cor, `DrawCounter` passa de 2 para 6.
+- A cadeia `+2 → +4 → +2` acumula 8 e a compra consome a penalidade completa.
+- Modos e baralho não foram alterados. Clássico e Caseiro continuam usando o mesmo `ClassicDeck` de 108 cartas.
+
+---
+
 # Contexto atual — publicação multi-arquitetura (2026-09-24)
 
 - O container V2 é compilado para `linux/amd64` e `linux/arm64` nos workflows de `dev` e `main`.

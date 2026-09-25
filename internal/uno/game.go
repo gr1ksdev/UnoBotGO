@@ -521,17 +521,8 @@ func (g *Game) choose(s *State, color Color, events *[]Event) error {
 	}
 	next := pending.Target
 	if pending.DrawCount != 0 {
-		if s.Rules.StackWildDrawFour || s.Rules.StackDrawTwoOnWildFour {
-			if len(s.DiscardPile) > 1 {
-				prevTop, _ := s.card(s.DiscardPile[len(s.DiscardPile)-2])
-				if prevTop.Rank == WildDrawFour {
-					s.DrawCounter += pending.DrawCount
-				} else {
-					s.DrawCounter = pending.DrawCount
-				}
-			} else {
-				s.DrawCounter = pending.DrawCount
-			}
+		if s.Rules.StackWildDrawFour || s.Rules.StackWildDrawFourOnTwo || s.Rules.StackDrawTwoOnWildFour {
+			s.DrawCounter += pending.DrawCount
 			s.PendingBluff = &BluffInfo{Actor: pending.Actor, Target: next, Bluffing: pending.Bluffing}
 		} else {
 			if err := g.penalty(s, next, pending.DrawCount, events); err != nil {
