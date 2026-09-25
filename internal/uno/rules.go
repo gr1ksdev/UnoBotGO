@@ -44,6 +44,7 @@ func BotRules() Rules {
 // V1 responses for accumulated penalties and the house-only hand swap card.
 func CaseiroRules() Rules {
 	r := BotRules()
+	r.StackWildDrawFour = false
 	r.StackWildDrawFourOnTwo = true
 	r.StackDrawTwoOnWildFour = true
 	r.AllowSwapHands = true

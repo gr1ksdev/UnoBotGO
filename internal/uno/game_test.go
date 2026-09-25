@@ -635,6 +635,35 @@ func TestCaseiroPenaltyResponses(t *testing.T) {
 	}
 }
 
+func TestCaseiroRejectsWildDrawFourOnWildDrawFour(t *testing.T) {
+	g := scenario(t, CaseiroRules(), [][]Card{
+		{card(NoColor, WildDrawFour), card(Blue, Five)},
+		{card(NoColor, WildDrawFour), card(Red, DrawTwo), card(Blue, Nine)},
+		{card(Green, One), card(Green, Nine)},
+	}, card(Red, Three), nil)
+
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.Snapshot().Players[0].Hand[0]})
+	apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Red})
+	s := g.Snapshot()
+	if s.CurrentPlayerID != 2 || s.DrawCounter != 4 {
+		t.Fatalf("expected player 2 with a pending +4 penalty: %+v", s)
+	}
+
+	rejected(t, g, Action{Type: PlayCard, PlayerID: 2, CardID: s.Players[1].Hand[0], Revision: s.Revision}, ErrCardNotPlayable)
+	s = g.Snapshot()
+	if s.CurrentPlayerID != 2 || s.DrawCounter != 4 {
+		t.Fatalf("rejected +4 changed the pending penalty: %+v", s)
+	}
+	if err := g.CanPlay(2, s.Players[1].Hand[1]); err != nil {
+		t.Fatalf("matching +2 should still answer +4 in caseiro: %v", err)
+	}
+	apply(t, g, Action{Type: PlayCard, PlayerID: 2, CardID: s.Players[1].Hand[1]})
+	s = g.Snapshot()
+	if s.CurrentPlayerID != 3 || s.DrawCounter != 6 {
+		t.Fatalf("expected crossed +2 response to accumulate 6: %+v", s)
+	}
+}
+
 func TestSkipTurnAction(t *testing.T) {
 	g := scenario(t, BotRules(), [][]Card{{card(Red, One)}, {card(Blue, Two)}}, card(Green, Three), nil)
 	r := apply(t, g, Action{Type: SkipTurn, PlayerID: 1})

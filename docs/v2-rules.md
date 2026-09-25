@@ -4,6 +4,11 @@
 
 - O estado público do Telegram indica a direção somente pelas setas entre os
   jogadores. A linha textual `Direção: ...` foi removida por ser redundante.
+- No modo Caseiro, um `+4` não pode responder a outro `+4`. A carta aparece como
+  indisponível enquanto essa penalidade estiver pendente.
+- As respostas cruzadas do Caseiro permanecem: `+2 → +4` acumula seis cartas e
+  um `+2` da cor escolhida pode responder a um `+4`.
+- O modo Clássico preserva sua configuração vigente de `+4 → +4`.
 
 ## Atualização — Trocar cartas no Caseiro (2026-09-25)
 
