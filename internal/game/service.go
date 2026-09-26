@@ -97,10 +97,18 @@ func (s *Service) Apply(ctx context.Context, actor Actor, id uno.GameID, action 
 	if err := authorize(entry, actor, action.Type); err != nil {
 		return Outcome{}, err
 	}
-	if action.Type == uno.JoinGame && entry.locked {
-		return Outcome{}, ErrRoomLocked
-	}
 	before := entry.engine.Snapshot()
+	if action.Type == uno.JoinGame {
+		if before.HasPlacement(action.PlayerID) {
+			return Outcome{}, uno.ErrAlreadyFinished
+		}
+		if p := before.Player(action.PlayerID); p != nil && p.Status == uno.Playing {
+			return Outcome{}, uno.ErrAlreadyJoined
+		}
+		if entry.locked {
+			return Outcome{}, ErrRoomLocked
+		}
+	}
 	if action.Revision != before.Revision {
 		return Outcome{}, uno.ErrStaleRevision
 	}

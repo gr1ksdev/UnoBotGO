@@ -1,3 +1,24 @@
+# Correção de blefe em +4 sobre +2 no Caseiro e reentrada na mesma partida — 2026-09-26 (somente dev)
+
+- Pedido do usuário aprovado no plano: `corrigir-blefe-caseiro-e-reentrada_2026-09-26_13-48.md`.
+- Blefe em +4 como counter de +2 no Caseiro:
+  - `internal/uno/game.go` identifica especificamente `stackedOnDrawTwo := s.DrawCounter > 0 && top.Rank == DrawTwo && s.Rules.StackWildDrawFourOnTwo`.
+  - Nesses casos, `DrawFourChallengeable = false` e `bluffing = false` são passados via `ColorChoice` para a fase de escolha de cor e para o estado da engine (`State.DrawFourChallengeable`).
+  - Em `choose()`, `s.PendingBluff` e `s.DrawFourChallengeable` só são preenchidos se `pending.DrawFourChallengeable` for verdadeiro.
+  - A ação `CallBluff` em `takeAction` rejeita com `ErrInvalidAction` se `!s.DrawFourChallengeable || s.PendingBluff == nil`, impedindo ações forçadas ou callbacks com tokens obsoletos.
+  - Na camada de visão (`internal/game/views.go`), `CanCallBluff` exige `state.DrawFourChallengeable`, garantindo que botões/stickers de desafio não sejam exibidos para o próximo jogador.
+  - O blefe de +4 normal fora de stacking permanece 100% inalterado e o modo Clássico (`ClassicRules`) não é afetado.
+- Reentrada de jogador após `/sair` vs Colocação:
+  - Jogador que usou `/sair` sem ter colocado (`HasPlacement(id) == false` e status `Left`) pode reentrar na partida ativa via `/entrar` caso a sala esteja aberta.
+  - O retorno reutiliza exatamente o algoritmo existente de late join (compra 7 novas cartas da pilha com `g.draw(s, 7)` e entra na cauda lógica da ordem de turnos). O registro histórico em `s.Players` é reutilizado em vez de duplicado, preservando os invariantes de `s.Validate()`.
+  - Jogador que já conquistou colocação (`WentOut` / presente em `Placements`) fica definitivamente impedido de reentrar (`uno.ErrAlreadyFinished`), exibindo `"🏁 Você já terminou esta partida e não pode entrar novamente."`.
+  - Precedência rigorosa no Join (`internal/game/service.go`): Placed (`ErrAlreadyFinished`) -> Ativo (`ErrAlreadyJoined`) -> Trancado (`ErrRoomLocked`) -> Admissão.
+  - Se a sala estiver trancada (`RoomLocked`), tanto novo jogador quanto jogador que deu `/sair` recebem `"🔒 Esta partida está trancada e não aceita novos jogadores."`. Ao destrancar (`/destrancar`), a reentrada funciona normalmente.
+  - Unicidade garantida: nenhum `PlayerID` aparece duplicado em `Placements` nem em `Players`.
+- Testes automatizados cobrem os cenários 1 a 5 de blefe e testes de ciclo de vida/reentrada com salas abertas e trancadas.
+
+---
+
 # Resolução do sticker cinza de Trocar cartas — 2026-09-26
 
 - Plano aprovado com "sim": `corrigir-sticker-cinza-troca-maos_2026-09-26_00-15.md`.

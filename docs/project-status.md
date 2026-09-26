@@ -47,6 +47,8 @@ A coluna Implementado considera a dev; Main indica a presença na base pública 
 | Comandos privados reorganizados | Sim | Boas-vindas, ajuda, escopos | Telegram: pendente | Não | /start, /help e botão adicionar ao grupo |
 | Correção de falso tópico | Sim | Threads comuns e tópicos reais | Grupo afetado: pendente | Não | Apenas IsTopicMessage identifica tópico |
 | Gameplay UX Polish | Sim, dev | Ordem, lock, renderer e regressões | Telegram: pendente | Não | Pronta para homologação manual |
+| Blefe em +4 sobre +2 | Sim, dev | Counter legal não desafiável | Telegram: pendente | Não | Caseiro: +4 sobre +2 não é blefe |
+| Reentrada e colocação | Sim, dev | Late join após saída vs finalizados | Telegram: pendente | Não | Reentrada de quem saiu; colocado bloqueado |
 | /dar | Sim, com tag | Testes debugcards e exclusão normal | Não certificada; uso de desenvolvimento | Não | Fora do produto/build padrão |
 
 ## Transportes e evidência real
@@ -158,6 +160,14 @@ Diferenças de produto confirmadas pelas árvores Git, sem promoção nesta mile
 - Boas-vindas privadas, `/help` por contexto, escopos de comandos e botão de grupo
   com username obtido automaticamente do bot.
 - Correção que evita classificar threads comuns como tópicos de fórum.
+- Blefe em +4 como counter de +2 no Caseiro: o +4 jogado sob `StackWildDrawFourOnTwo`
+  não é sujeito ao desafio de blefe nem acusa infração por cor anterior. Opção/sticker
+  de blefe omitida e chamadas forçadas rejeitadas com segurança.
+- Reentrada e colocações: jogador que usou `/sair` sem colocação pode reentrar via
+  `/entrar` com sala aberta (recebendo nova mão e cauda lógica); se trancada, recebe
+  aviso de sala trancada. Jogadores já colocados (`WentOut` / presente em `Placements`)
+  são definitivamente bloqueados (`ErrAlreadyFinished`). Precedência no Join: colocado ->
+  ativo -> trancado. Unicidade de colocações garantida.
 - Ferramenta de desenvolvimento `/dar`, somente em build explícito com tag.
 
 Não foi encontrada funcionalidade de jogo exclusiva da main. Seu check `public-tree`

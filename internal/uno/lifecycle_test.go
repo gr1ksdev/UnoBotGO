@@ -30,7 +30,14 @@ func TestLateJoinAndDeparture(t *testing.T) {
 			if s.DiscardPile[len(s.DiscardPile)-1] != top || len(s.DiscardPile) != 8 || s.Players[3].Status != Left {
 				t.Fatal("departed cards not recycled below top")
 			}
+			apply(t, g, Action{Type: JoinGame, PlayerID: 4})
+			s = g.Snapshot()
+			if s.Players[3].Status != Playing || len(s.Players[3].Hand) != 7 {
+				t.Fatal("rejoined player status or hand")
+			}
 			rejected(t, g, Action{Type: JoinGame, PlayerID: 4, Revision: s.Revision}, ErrAlreadyJoined)
+			apply(t, g, Action{Type: LeaveGame, PlayerID: 4})
+			s = g.Snapshot()
 			expected := s.next(1, 1)
 			apply(t, g, Action{Type: LeaveGame, PlayerID: 1})
 			if g.Snapshot().CurrentPlayerID != expected || g.Snapshot().Phase != TakingTurn {
@@ -47,7 +54,7 @@ func TestPlacementPolicy(t *testing.T) {
 	if s.Phase != TakingTurn || s.CurrentPlayerID != 2 || len(s.Placements) != 1 || s.Players[0].Status != WentOut {
 		t.Fatal("did not continue after first placement")
 	}
-	rejected(t, g, Action{Type: JoinGame, PlayerID: 1, Revision: s.Revision}, ErrAlreadyJoined)
+	rejected(t, g, Action{Type: JoinGame, PlayerID: 1, Revision: s.Revision}, ErrAlreadyFinished)
 	copy := g.Snapshot()
 	copy.Placements[0].PlayerID = 99
 	if g.Snapshot().Placements[0].PlayerID != 1 {

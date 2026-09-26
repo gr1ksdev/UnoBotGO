@@ -145,16 +145,27 @@ func (g *Game) setRules(s *State, a Action, events *[]Event) error {
 }
 
 func (g *Game) join(s *State, id PlayerID, events *[]Event) error {
-	if s.player(id) != nil {
+	if s.HasPlacement(id) {
+		return ErrAlreadyFinished
+	}
+	if p := s.player(id); p != nil && p.Status == Playing {
 		return ErrAlreadyJoined
 	}
-	if len(s.Players) >= 10 {
+	if s.player(id) == nil && len(s.Players) >= 10 {
 		return ErrPlayerLimit
 	}
 	if s.Phase != Lobby && !s.Rules.AllowLateJoin {
 		return ErrLobbyClosed
 	}
-	p := Player{ID: id}
+	var p *Player
+	if existing := s.player(id); existing != nil {
+		p = existing
+		p.Status = Playing
+		p.Hand = nil
+	} else {
+		s.Players = append(s.Players, Player{ID: id, Status: Playing})
+		p = &s.Players[len(s.Players)-1]
+	}
 	if s.Phase != Lobby {
 		cards, err := g.draw(s, 7)
 		if err != nil {
@@ -162,7 +173,6 @@ func (g *Game) join(s *State, id PlayerID, events *[]Event) error {
 		}
 		p.Hand = cards
 	}
-	s.Players = append(s.Players, p)
 	if s.Phase == Lobby {
 		s.Order = append(s.Order, id)
 	} else {
@@ -213,6 +223,7 @@ func (g *Game) leave(s *State, id PlayerID, events *[]Event) error {
 	}
 	if s.PendingBluff != nil && (s.PendingBluff.Actor == id || s.PendingBluff.Target == id) {
 		s.PendingBluff = nil
+		s.DrawFourChallengeable = false
 	}
 	if s.CurrentPlayerID == id {
 		changeTurn(s, next, events)
@@ -341,6 +352,7 @@ func (g *Game) takeAction(s *State, a Action, events *[]Event) error {
 		return g.play(s, a.CardID, events)
 	case DrawCard:
 		s.PendingBluff = nil
+		s.DrawFourChallengeable = false
 		if s.DrawnCardID != "" {
 			return ErrAlreadyDrawn
 		}
@@ -370,7 +382,7 @@ func (g *Game) takeAction(s *State, a Action, events *[]Event) error {
 		}
 		return nil
 	case CallBluff:
-		if s.PendingBluff == nil || s.PendingBluff.Target != a.PlayerID || s.DrawCounter == 0 {
+		if s.PendingBluff == nil || !s.DrawFourChallengeable || s.PendingBluff.Target != a.PlayerID || s.DrawCounter == 0 {
 			return ErrInvalidAction
 		}
 		return g.bluff(s, a.PlayerID, events)
@@ -473,11 +485,14 @@ func playable(s *State, player PlayerID, id CardID) error {
 
 func (g *Game) play(s *State, id CardID, events *[]Event) error {
 	s.PendingBluff = nil
+	s.DrawFourChallengeable = false
 	actor := s.CurrentPlayerID
 	if err := playable(s, actor, id); err != nil {
 		return err
 	}
 	card, _ := s.card(id)
+	top, _ := s.card(s.DiscardPile[len(s.DiscardPile)-1])
+	stackedOnDrawTwo := s.DrawCounter > 0 && top.Rank == DrawTwo && s.Rules.StackWildDrawFourOnTwo
 	p := s.player(actor)
 	i := slices.Index(p.Hand, id)
 	p.Hand = slices.Delete(p.Hand, i, i+1)
@@ -495,22 +510,30 @@ func (g *Game) play(s *State, id CardID, events *[]Event) error {
 	if card.Rank >= Wild {
 		count := 0
 		bluffing := false
+		challengeable := false
 		if card.Rank == WildDrawFour {
 			count = 4
-			for _, hid := range p.Hand {
-				c, ok := s.card(hid)
-				if ok && c.Color == s.ActiveColor {
-					bluffing = true
-					break
+			if stackedOnDrawTwo {
+				challengeable = false
+				bluffing = false
+			} else {
+				challengeable = true
+				for _, hid := range p.Hand {
+					c, ok := s.card(hid)
+					if ok && c.Color == s.ActiveColor {
+						bluffing = true
+						break
+					}
 				}
 			}
 		}
 		s.Pending = &ColorChoice{
-			Actor:         actor,
-			Target:        s.next(actor, 1),
-			PreviousColor: s.ActiveColor,
-			DrawCount:     count,
-			Bluffing:      bluffing,
+			Actor:                 actor,
+			Target:                s.next(actor, 1),
+			PreviousColor:         s.ActiveColor,
+			DrawCount:             count,
+			Bluffing:              bluffing,
+			DrawFourChallengeable: challengeable,
 		}
 		s.Phase = ChoosingColor
 		*events = append(*events, Event{Type: ColorChoiceRequired, PlayerID: actor})
@@ -562,7 +585,13 @@ func (g *Game) choose(s *State, color Color, events *[]Event) error {
 	if pending.DrawCount != 0 {
 		if s.Rules.StackWildDrawFour || s.Rules.StackWildDrawFourOnTwo || s.Rules.StackDrawTwoOnWildFour {
 			s.DrawCounter += pending.DrawCount
-			s.PendingBluff = &BluffInfo{Actor: pending.Actor, Target: next, Bluffing: pending.Bluffing}
+			if pending.DrawFourChallengeable {
+				s.DrawFourChallengeable = true
+				s.PendingBluff = &BluffInfo{Actor: pending.Actor, Target: next, Bluffing: pending.Bluffing}
+			} else {
+				s.DrawFourChallengeable = false
+				s.PendingBluff = nil
+			}
 		} else {
 			if err := g.penalty(s, next, pending.DrawCount, events); err != nil {
 				return err
@@ -627,6 +656,7 @@ func finish(s *State, reason FinishReason, events *[]Event) {
 	s.DrawnCardID = ""
 	s.Pending = nil
 	s.PendingBluff = nil
+	s.DrawFourChallengeable = false
 	s.FinishReason = reason
 	*events = append(*events, Event{Type: GameFinished, Reason: reason})
 }
@@ -634,6 +664,7 @@ func finish(s *State, reason FinishReason, events *[]Event) {
 func (g *Game) bluff(s *State, challenger PlayerID, events *[]Event) error {
 	bluff := *s.PendingBluff
 	s.PendingBluff = nil
+	s.DrawFourChallengeable = false
 	if bluff.Bluffing {
 		count := s.DrawCounter
 		cards, err := g.draw(s, count)

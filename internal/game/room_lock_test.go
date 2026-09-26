@@ -3,6 +3,7 @@ package game
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 	"testing"
@@ -214,4 +215,119 @@ func TestRoomLockNaturalCompletionAndOwnerTransfer(t *testing.T) {
 		t.Fatal("final summary lost session metadata")
 	}
 	assertIndexes(t, s)
+}
+
+func TestJoinPrecedenceWithRoomLock(t *testing.T) {
+	s := testService(t)
+	rules := uno.BotRules()
+	v := create(t, s, 10, 99, rules)
+
+	// Build a valid state with P1 placed, and P2, P3, P4 active in game
+	state := uno.State{
+		ID:              v.GameID,
+		Rules:           rules,
+		Phase:           uno.TakingTurn,
+		Direction:       1,
+		DealerID:        4,
+		CurrentPlayerID: 2,
+		ActiveColor:     uno.Red,
+		Placements:      []uno.Placement{{PlayerID: 1, Position: 1, WentOut: true}},
+		Order:           []uno.PlayerID{2, 3, 4},
+	}
+	add := func(c uno.Card) uno.CardID {
+		c.ID = uno.CardID(fmt.Sprintf("card_%d", len(state.Cards)+1))
+		state.Cards = append(state.Cards, c)
+		return c.ID
+	}
+	// P1 has WentOut (hand is nil)
+	state.Players = append(state.Players, uno.Player{ID: 1, Status: uno.WentOut})
+	// P2, P3, P4 have 2 cards each
+	for id := uno.PlayerID(2); id <= 4; id++ {
+		p := uno.Player{ID: id, Status: uno.Playing}
+		p.Hand = append(p.Hand, add(uno.Card{Color: uno.Red, Rank: uno.One}), add(uno.Card{Color: uno.Blue, Rank: uno.Two}))
+		state.Players = append(state.Players, p)
+	}
+	state.DiscardPile = []uno.CardID{add(uno.Card{Color: uno.Red, Rank: uno.Five})}
+	for range 24 {
+		state.DrawPile = append(state.DrawPile, add(uno.Card{Color: uno.Blue, Rank: uno.Nine}))
+	}
+
+	eng, err := uno.Restore(state, func([]uno.CardID) {})
+	if err != nil {
+		t.Fatalf("failed to restore test state: %v", err)
+	}
+
+	entry := s.manager.byID[v.GameID].entry
+	entry.mu.Lock()
+	entry.engine = eng
+	entry.mu.Unlock()
+
+	// Verify P1 has placement
+	curView, _ := s.PublicView(t.Context(), v.GameID)
+	if len(curView.Placements) != 1 || curView.Placements[0].PlayerID != 1 {
+		t.Fatalf("expected P1 placement, got %+v", curView.Placements)
+	}
+
+	// P2 leaves the game via LeaveGame
+	act(t, s, v.GameID, Actor{PlayerID: 2, ChatID: 10}, uno.Action{Type: uno.LeaveGame, PlayerID: 2})
+
+	// Now lock the room
+	owner := Actor{PlayerID: 99, ChatID: 10}
+	_, _, err = s.SetLocked(t.Context(), owner, v.GameID, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	curView, _ = s.PublicView(t.Context(), v.GameID)
+
+	// Precedence 1: P1 (finished/placed) attempts JoinGame on locked room
+	// MUST return uno.ErrAlreadyFinished (NOT ErrRoomLocked)
+	_, errP1 := s.Apply(t.Context(), Actor{PlayerID: 1, ChatID: 10}, v.GameID, uno.Action{Type: uno.JoinGame, PlayerID: 1, Revision: curView.Revision})
+	if !errors.Is(errP1, uno.ErrAlreadyFinished) {
+		t.Fatalf("expected ErrAlreadyFinished for placed player on locked room, got: %v", errP1)
+	}
+
+	// Precedence 2: P3 (active playing) attempts JoinGame on locked room
+	// MUST return uno.ErrAlreadyJoined (NOT ErrRoomLocked)
+	_, errP3 := s.Apply(t.Context(), Actor{PlayerID: 3, ChatID: 10}, v.GameID, uno.Action{Type: uno.JoinGame, PlayerID: 3, Revision: curView.Revision})
+	if !errors.Is(errP3, uno.ErrAlreadyJoined) {
+		t.Fatalf("expected ErrAlreadyJoined for active player on locked room, got: %v", errP3)
+	}
+
+	// Precedence 3: P2 (left without placement) attempts JoinGame on locked room
+	// MUST return ErrRoomLocked
+	_, errP2 := s.Apply(t.Context(), Actor{PlayerID: 2, ChatID: 10}, v.GameID, uno.Action{Type: uno.JoinGame, PlayerID: 2, Revision: curView.Revision})
+	if !errors.Is(errP2, ErrRoomLocked) {
+		t.Fatalf("expected ErrRoomLocked for departed player on locked room, got: %v", errP2)
+	}
+
+	// Precedence 3b: Brand new player P5 attempts JoinGame on locked room
+	// MUST return ErrRoomLocked
+	_, errP5 := s.Apply(t.Context(), Actor{PlayerID: 5, ChatID: 10}, v.GameID, uno.Action{Type: uno.JoinGame, PlayerID: 5, Revision: curView.Revision})
+	if !errors.Is(errP5, ErrRoomLocked) {
+		t.Fatalf("expected ErrRoomLocked for new player on locked room, got: %v", errP5)
+	}
+
+	// Unlock room
+	_, _, err = s.SetLocked(t.Context(), owner, v.GameID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	curView, _ = s.PublicView(t.Context(), v.GameID)
+
+	// Now P2 (who left) re-enters the unlocked room -> MUST succeed!
+	outP2, errP2Unlock := s.Apply(t.Context(), Actor{PlayerID: 2, ChatID: 10}, v.GameID, uno.Action{Type: uno.JoinGame, PlayerID: 2, Revision: curView.Revision})
+	if errP2Unlock != nil {
+		t.Fatalf("expected departed player to re-enter unlocked room, got: %v", errP2Unlock)
+	}
+	if outP2.View.Revision <= curView.Revision {
+		t.Fatal("revision should advance on re-entry")
+	}
+
+	// But P1 (who finished) STILL cannot enter unlocked room
+	_, errP1Unlock := s.Apply(t.Context(), Actor{PlayerID: 1, ChatID: 10}, v.GameID, uno.Action{Type: uno.JoinGame, PlayerID: 1, Revision: outP2.View.Revision})
+	if !errors.Is(errP1Unlock, uno.ErrAlreadyFinished) {
+		t.Fatalf("expected ErrAlreadyFinished for placed player on unlocked room, got: %v", errP1Unlock)
+	}
 }

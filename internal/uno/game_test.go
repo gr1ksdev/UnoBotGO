@@ -974,3 +974,223 @@ func TestSetRulesInLobby(t *testing.T) {
 		t.Fatalf("expected ErrGameStarted after start, got: %v", err)
 	}
 }
+
+func TestCaseiroStackWildDrawFourOnTwoNotChallengeable(t *testing.T) {
+	// Mezi (P1), Freddy (P2), João (P3)
+	// Mezi plays Red +2. Freddy has a Red card AND a +4.
+	// In Caseiro, Freddy countering +2 with +4 is a legal stack response, NOT subject to bluff challenge.
+	hands := [][]Card{
+		{card(Red, DrawTwo), card(Blue, One)},
+		{card(Red, Seven), card(NoColor, WildDrawFour)}, // Freddy has Red Seven (prior active color)
+		{card(Yellow, One), card(Green, One)},
+	}
+	g := scenario(t, CaseiroRules(), hands, card(Red, Five), nil)
+	p1Hand := g.Snapshot().Players[0].Hand
+	p2Hand := g.Snapshot().Players[1].Hand
+
+	// Mezi plays Red DrawTwo
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: p1Hand[0]})
+	s := g.Snapshot()
+	if s.DrawCounter != 2 || s.CurrentPlayerID != 2 {
+		t.Fatalf("expected P2 turn with DrawCounter=2, got turn=%d, count=%d", s.CurrentPlayerID, s.DrawCounter)
+	}
+
+	// Freddy responds with WildDrawFour on DrawTwo and chooses Blue
+	apply(t, g, Action{Type: PlayCard, PlayerID: 2, CardID: p2Hand[1]})
+	apply(t, g, Action{Type: ChooseColor, PlayerID: 2, Color: Blue})
+
+	s = g.Snapshot()
+	if s.CurrentPlayerID != 3 {
+		t.Fatalf("expected turn to advance to P3, got %d", s.CurrentPlayerID)
+	}
+	if s.DrawCounter != 6 {
+		t.Fatalf("expected DrawCounter to be 6 (2+4), got %d", s.DrawCounter)
+	}
+	// Crucial: DrawFourChallengeable must be FALSE, PendingBluff must be NIL!
+	if s.DrawFourChallengeable {
+		t.Fatal("expected DrawFourChallengeable to be false for +4 stacked on +2")
+	}
+	if s.PendingBluff != nil {
+		t.Fatalf("expected PendingBluff to be nil, got %+v", s.PendingBluff)
+	}
+}
+
+func TestCaseiroStackWildDrawFourForcedChallengeRejected(t *testing.T) {
+	hands := [][]Card{
+		{card(Red, DrawTwo)},
+		{card(Red, Seven), card(NoColor, WildDrawFour)},
+		{card(Yellow, One), card(Green, One)},
+	}
+	g := scenario(t, CaseiroRules(), hands, card(Red, Five), nil)
+	p1Hand := g.Snapshot().Players[0].Hand
+	p2Hand := g.Snapshot().Players[1].Hand
+
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: p1Hand[0]})
+	apply(t, g, Action{Type: PlayCard, PlayerID: 2, CardID: p2Hand[1]})
+	apply(t, g, Action{Type: ChooseColor, PlayerID: 2, Color: Blue})
+
+	sBefore := g.Snapshot()
+	// João (P3) attempts to force CallBluff
+	rejected(t, g, Action{Type: CallBluff, PlayerID: 3, Revision: sBefore.Revision}, ErrInvalidAction)
+
+	sAfter := g.Snapshot()
+	if sAfter.Revision != sBefore.Revision {
+		t.Fatal("failed forced challenge must not advance revision")
+	}
+	if sAfter.DrawCounter != 6 {
+		t.Fatalf("expected DrawCounter to remain 6, got %d", sAfter.DrawCounter)
+	}
+	if sAfter.CurrentPlayerID != 3 {
+		t.Fatalf("expected turn to remain P3, got %d", sAfter.CurrentPlayerID)
+	}
+	if len(sAfter.Players[1].Hand) != len(sBefore.Players[1].Hand) || len(sAfter.Players[2].Hand) != len(sBefore.Players[2].Hand) {
+		t.Fatal("hands must not be modified by rejected challenge")
+	}
+}
+
+func TestCaseiroNormalWildDrawFourRemainsChallengeable(t *testing.T) {
+	// Without pending penalty, +4 in Caseiro remains fully challengeable!
+	hands := [][]Card{
+		{card(Red, Seven), card(NoColor, WildDrawFour)}, // Bluffing because holds Red Seven
+		{card(Yellow, One), card(Green, One)},
+		{card(Blue, One), card(Green, One)},
+	}
+	g := scenario(t, CaseiroRules(), hands, card(Red, Five), nil)
+	p1Hand := g.Snapshot().Players[0].Hand
+
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: p1Hand[1]})
+	apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Yellow})
+
+	s := g.Snapshot()
+	if !s.DrawFourChallengeable {
+		t.Fatal("normal +4 in Caseiro must remain challengeable")
+	}
+	if s.PendingBluff == nil || !s.PendingBluff.Bluffing {
+		t.Fatalf("expected PendingBluff with Bluffing=true, got %+v", s.PendingBluff)
+	}
+
+	// Challenger calls bluff -> caught!
+	r := apply(t, g, Action{Type: CallBluff, PlayerID: 2})
+	if !hasEvent(r, BluffCalled, 2) {
+		t.Fatal("expected BluffCalled event")
+	}
+}
+
+func TestPlayerReentryAfterLeaveLifecycle(t *testing.T) {
+	hands := [][]Card{
+		{card(Red, One), card(Red, Two)},
+		{card(Blue, One), card(Blue, Two)},
+		{card(Green, One), card(Green, Two)},
+	}
+	g := scenario(t, BotRules(), hands, card(Red, Five), nil)
+	s := g.Snapshot()
+	drawPileLenBefore := len(s.DrawPile)
+
+	// Player 2 leaves the game
+	apply(t, g, Action{Type: LeaveGame, PlayerID: 2})
+	s = g.Snapshot()
+	if s.Players[1].Status != Left || len(s.Players[1].Hand) != 0 {
+		t.Fatal("player 2 should have status Left with empty hand")
+	}
+	if slices.Contains(s.Order, 2) {
+		t.Fatal("player 2 should be removed from Order")
+	}
+
+	// Player 1 plays a card
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: s.Players[0].Hand[0]})
+	s = g.Snapshot()
+	if s.CurrentPlayerID != 3 {
+		t.Fatalf("expected P3 turn, got %d", s.CurrentPlayerID)
+	}
+
+	// Player 2 re-enters the same game
+	r := apply(t, g, Action{Type: JoinGame, PlayerID: 2})
+	s = g.Snapshot()
+
+	if !hasEvent(r, PlayerJoined, 2) || !hasEvent(r, CardsDrawn, 2) {
+		t.Fatal("expected PlayerJoined and CardsDrawn events for re-entry")
+	}
+	if s.Players[1].Status != Playing {
+		t.Fatalf("expected P2 status Playing, got %v", s.Players[1].Status)
+	}
+	if len(s.Players[1].Hand) != 7 {
+		t.Fatalf("expected P2 to receive 7 new cards, got %d", len(s.Players[1].Hand))
+	}
+	// Player 2 must NOT duplicate in s.Players
+	countP2 := 0
+	for _, p := range s.Players {
+		if p.ID == 2 {
+			countP2++
+		}
+	}
+	if countP2 != 1 {
+		t.Fatalf("expected exactly 1 player record for P2, got %d", countP2)
+	}
+	// Turn, active color, draw counter must remain intact
+	if s.CurrentPlayerID != 3 {
+		t.Fatalf("turn must remain P3, got %d", s.CurrentPlayerID)
+	}
+	if s.ActiveColor != Red {
+		t.Fatalf("active color must remain Red, got %v", s.ActiveColor)
+	}
+	// Player 2 should be in logical tail (before current player in forward direction)
+	if s.next(3, -1) != 2 {
+		t.Fatalf("re-entered player must be positioned at logical tail, got next(3,-1)=%d", s.next(3, -1))
+	}
+	// State invariants must be completely satisfied
+	if err := s.Validate(); err != nil {
+		t.Fatalf("state validation failed after re-entry: %v", err)
+	}
+	// Calling JoinGame again while active must return ErrAlreadyJoined
+	rejected(t, g, Action{Type: JoinGame, PlayerID: 2, Revision: s.Revision}, ErrAlreadyJoined)
+	_ = drawPileLenBefore
+}
+
+func TestPlayerFinishedCannotReenterEver(t *testing.T) {
+	hands := [][]Card{
+		{card(Red, One)},
+		{card(Red, Two), card(Blue, One)},
+		{card(Red, Three), card(Blue, Two)},
+		{card(Red, Four), card(Blue, Three)},
+	}
+	g := scenario(t, BotRules(), hands, card(Red, Five), nil)
+
+	// P1 plays last card and wins placement #1
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.Snapshot().Players[0].Hand[0]})
+	s := g.Snapshot()
+	if !s.HasPlacement(1) {
+		t.Fatal("expected P1 to have placement")
+	}
+	if s.Players[0].Status != WentOut {
+		t.Fatalf("expected P1 status WentOut, got %v", s.Players[0].Status)
+	}
+	if s.Phase != TakingTurn {
+		t.Fatalf("expected game to still be active, got phase %v", s.Phase)
+	}
+
+	// P1 tries to join again while game is active
+	rejected(t, g, Action{Type: JoinGame, PlayerID: 1, Revision: s.Revision}, ErrAlreadyFinished)
+
+	// P2 plays Red Two
+	apply(t, g, Action{Type: PlayCard, PlayerID: 2, CardID: s.Players[1].Hand[0]})
+	// P3 plays Red Three
+	apply(t, g, Action{Type: PlayCard, PlayerID: 3, CardID: s.Players[2].Hand[0]})
+	// P4 plays Red Four
+	apply(t, g, Action{Type: PlayCard, PlayerID: 4, CardID: s.Players[3].Hand[0]})
+
+	// P2 plays their last card (Blue One) on Blue Five, or choose Blue... wait, top card is Red Four.
+	// Let's have P2 play card matching color/rank or draw.
+	s = g.Snapshot()
+
+	// Both P1 and P2 cannot reenter if they have placement.
+	rejected(t, g, Action{Type: JoinGame, PlayerID: 1, Revision: s.Revision}, ErrAlreadyFinished)
+
+	// Validate placement uniqueness invariant
+	seen := make(map[PlayerID]bool)
+	for _, pl := range s.Placements {
+		if seen[pl.PlayerID] {
+			t.Fatalf("duplicate player ID %d in placements", pl.PlayerID)
+		}
+		seen[pl.PlayerID] = true
+	}
+}

@@ -26,12 +26,13 @@ const (
 // ColorChoice records the pre-play evidence needed by a future challenge flow.
 // Initial Wild color choice retains the chooser's turn; played Wild advances it.
 type ColorChoice struct {
-	Actor         PlayerID
-	Target        PlayerID
-	PreviousColor Color
-	DrawCount     int
-	Initial       bool
-	Bluffing      bool
+	Actor                 PlayerID
+	Target                PlayerID
+	PreviousColor         Color
+	DrawCount             int
+	Initial               bool
+	Bluffing              bool
+	DrawFourChallengeable bool
 }
 
 type BluffInfo struct {
@@ -45,26 +46,27 @@ type BluffInfo struct {
 // inventory. Piles/hands contain physical IDs.
 // Order contains active seats only; Players retains historical participants.
 type State struct {
-	ID              GameID
-	Revision        uint64
-	Rules           Rules
-	Phase           Phase
-	CustomDeck      bool // Explicit WithDeck inventory; preserved across lobby rule changes.
-	Cards           []Card
-	DrawPile        []CardID
-	DiscardPile     []CardID
-	Players         []Player
-	Order           []PlayerID
-	DealerID        PlayerID
-	CurrentPlayerID PlayerID
-	Direction       int
-	ActiveColor     Color
-	DrawnCardID     CardID
-	DrawCounter     int
-	Pending         *ColorChoice
-	PendingBluff    *BluffInfo
-	Placements      []Placement
-	FinishReason    FinishReason
+	ID                    GameID
+	Revision              uint64
+	Rules                 Rules
+	Phase                 Phase
+	CustomDeck            bool // Explicit WithDeck inventory; preserved across lobby rule changes.
+	Cards                 []Card
+	DrawPile              []CardID
+	DiscardPile           []CardID
+	Players               []Player
+	Order                 []PlayerID
+	DealerID              PlayerID
+	CurrentPlayerID       PlayerID
+	Direction             int
+	ActiveColor           Color
+	DrawnCardID           CardID
+	DrawCounter           int
+	Pending               *ColorChoice
+	PendingBluff          *BluffInfo
+	DrawFourChallengeable bool
+	Placements            []Placement
+	FinishReason          FinishReason
 }
 
 func (s State) clone() State {
@@ -86,6 +88,24 @@ func (s State) clone() State {
 		s.PendingBluff = &pb
 	}
 	return s
+}
+
+func (s State) HasPlacement(id PlayerID) bool {
+	for _, pl := range s.Placements {
+		if pl.PlayerID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (s State) Player(id PlayerID) *Player {
+	for i := range s.Players {
+		if s.Players[i].ID == id {
+			return &s.Players[i]
+		}
+	}
+	return nil
 }
 
 func (s *State) player(id PlayerID) *Player {

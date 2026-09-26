@@ -8,6 +8,7 @@ var (
 	ErrInvalidRules         = errors.New("invalid rules")
 	ErrUnknownPlayer        = errors.New("unknown player")
 	ErrAlreadyJoined        = errors.New("player already registered")
+	ErrAlreadyFinished      = errors.New("player already finished")
 	ErrPlayerLimit          = errors.New("player limit reached")
 	ErrNotEnoughPlayers     = errors.New("not enough players")
 	ErrLobbyClosed          = errors.New("late join disabled")

@@ -3,6 +3,7 @@ package game
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"testing"
@@ -359,6 +360,78 @@ func TestService_CallBluffAuthorized(t *testing.T) {
 	})
 	if errors.Is(applyErr, ErrForbidden) {
 		t.Fatalf("expected CallBluff to pass service authorization, got: %v", applyErr)
+	}
+}
+
+func TestCaseiroStackedDrawFourViewsNotCanCallBluff(t *testing.T) {
+	s := testService(t)
+	rules := uno.CaseiroRules()
+	v := create(t, s, 200, 99, rules)
+
+	state := uno.State{
+		ID:              v.GameID,
+		Rules:           rules,
+		Phase:           uno.TakingTurn,
+		Direction:       1,
+		DealerID:        3,
+		CurrentPlayerID: 1,
+		ActiveColor:     uno.Red,
+		Order:           []uno.PlayerID{1, 2, 3},
+	}
+	add := func(c uno.Card) uno.CardID {
+		c.ID = uno.CardID(fmt.Sprintf("card_%d", len(state.Cards)+1))
+		state.Cards = append(state.Cards, c)
+		return c.ID
+	}
+	p1Hand := []uno.CardID{add(uno.Card{Color: uno.Red, Rank: uno.DrawTwo})}
+	p2Hand := []uno.CardID{add(uno.Card{Color: uno.NoColor, Rank: uno.WildDrawFour}), add(uno.Card{Color: uno.Red, Rank: uno.Seven})}
+	p3Hand := []uno.CardID{add(uno.Card{Color: uno.Green, Rank: uno.One})}
+
+	state.Players = []uno.Player{
+		{ID: 1, Status: uno.Playing, Hand: p1Hand},
+		{ID: 2, Status: uno.Playing, Hand: p2Hand},
+		{ID: 3, Status: uno.Playing, Hand: p3Hand},
+	}
+	state.DiscardPile = []uno.CardID{add(uno.Card{Color: uno.Red, Rank: uno.Five})}
+	for range 24 {
+		state.DrawPile = append(state.DrawPile, add(uno.Card{Color: uno.Blue, Rank: uno.Nine}))
+	}
+
+	eng, err := uno.Restore(state, func([]uno.CardID) {})
+	if err != nil {
+		t.Fatalf("failed to restore test state: %v", err)
+	}
+
+	entry := s.manager.byID[v.GameID].entry
+	entry.mu.Lock()
+	entry.engine = eng
+	entry.mu.Unlock()
+
+	// P1 plays Red DrawTwo
+	act(t, s, v.GameID, Actor{PlayerID: 1, ChatID: 0}, uno.Action{Type: uno.PlayCard, PlayerID: 1, CardID: p1Hand[0]})
+
+	// P2 responds with WildDrawFour on DrawTwo and chooses Blue
+	act(t, s, v.GameID, Actor{PlayerID: 2, ChatID: 0}, uno.Action{Type: uno.PlayCard, PlayerID: 2, CardID: p2Hand[0]})
+	act(t, s, v.GameID, Actor{PlayerID: 2, ChatID: 0}, uno.Action{Type: uno.ChooseColor, PlayerID: 2, Color: uno.Blue})
+
+	view, err := s.PublicView(t.Context(), v.GameID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// CanCallBluff must be false because +4 was played on +2
+	if view.CanCallBluff {
+		t.Fatal("CanCallBluff must be false when +4 was played on +2 in Caseiro")
+	}
+
+	// Forced CallBluff from P3 must be rejected with ErrInvalidAction
+	_, applyErr := s.Apply(t.Context(), Actor{PlayerID: 3, ChatID: 0}, v.GameID, uno.Action{
+		Type:     uno.CallBluff,
+		PlayerID: 3,
+		Revision: view.Revision,
+	})
+	if !errors.Is(applyErr, uno.ErrInvalidAction) {
+		t.Fatalf("expected ErrInvalidAction for forced CallBluff, got: %v", applyErr)
 	}
 }
 

@@ -118,7 +118,7 @@ func publicView(entry *managedGame, state uno.State) PublicGameView {
 	if state.Pending != nil {
 		v.ColorChooserID = state.Pending.Actor
 	}
-	if state.PendingBluff != nil && state.CurrentPlayerID == state.PendingBluff.Target && state.DrawCounter > 0 {
+	if state.PendingBluff != nil && state.DrawFourChallengeable && state.CurrentPlayerID == state.PendingBluff.Target && state.DrawCounter > 0 {
 		v.CanCallBluff = true
 	}
 	return v

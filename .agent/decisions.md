@@ -1,3 +1,27 @@
+# Decisão: desabilitar desafio de blefe para +4 contra +2 no Caseiro e regras de reentrada
+
+## Data
+2026-09-26
+
+## Contexto
+Durante a homologação real do UnoBotGO V2 no Telegram foram encontrados dois comportamentos inconsistentes:
+1. No modo Caseiro, quando um jogador responde a um +2 com um +4 (jogada válida pelo stacking `StackWildDrawFourOnTwo`), se o jogador possuir uma carta da cor anterior, o sistema considerava a jogada blefe culpado em caso de desafio. No entanto, nessa situação o +4 é um counter legal e não uma jogada sob a restrição clássica de Wild Draw Four.
+2. Um jogador que saía da partida com `/sair` ficava banido permanentemente de voltar (`ErrAlreadyJoined`), mesmo com a sala aberta, enquanto um jogador com colocação recebia o mesmo erro genérico sem distinção.
+
+## Decisão tomada
+1. Identificar na engine se o `WildDrawFour` foi jogado como counter de +2 pendente sob `StackWildDrawFourOnTwo`. Nesses casos, definir `DrawFourChallengeable = false` e `Bluffing = false`, omitir a opção de blefe nas views/inline e rejeitar com `ErrInvalidAction` tentativas de desafio forçado.
+2. Permitir que jogadores que saíram (`Status == Left`) e não possuem colocação reentrem via `/entrar` caso a sala esteja aberta, recebendo nova mão de 7 cartas e sendo alocados na cauda lógica da ordem existente (algoritmo padrão de late join), sem criar registros duplicados em `s.Players`.
+3. Bloquear permanentemente jogadores que já conquistaram colocação (`WentOut` / presente em `Placements`) com erro explícito `ErrAlreadyFinished` e mensagem informativa: `"🏁 Você já terminou esta partida e não pode entrar novamente."`.
+4. Fixar a ordem de checagem no `JoinGame`: 1) Já finalizou (`ErrAlreadyFinished`); 2) Já está ativo (`ErrAlreadyJoined`); 3) Sala trancada (`ErrRoomLocked`).
+
+## Motivo
+Manter a coerência lógica do modo Caseiro com regras de stacking, evitar acusações falsas de blefe, permitir que jogadores que saíram por engano retornem sem trapacear (recebem mão nova e vão para o fim da fila) e garantir a invariante de que um jogador nunca pode obter múltiplas colocações na mesma partida.
+
+## Impacto
+O modo Clássico e o blefe normal permanecem 100% inalterados. Salas trancadas continuam bloqueando novos jogadores e reentrantes com a mensagem de trancamento. Jogadores já colocados não podem reentrar sob nenhuma circunstância.
+
+---
+
 # Decisão: registrar file_id autenticado para sticker cinza de Trocar cartas
 
 ## Data

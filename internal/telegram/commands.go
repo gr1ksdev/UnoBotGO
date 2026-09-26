@@ -351,10 +351,12 @@ func (h *CommandHandler) handleEntrar(ctx context.Context, actorID uno.PlayerID,
 
 	if err != nil {
 		switch {
-		case errors.Is(err, game.ErrRoomLocked):
-			h.reply(ctx, int64(chatID), "🔒 Esta partida está trancada e não aceita novos jogadores.", nil)
+		case errors.Is(err, uno.ErrAlreadyFinished):
+			h.reply(ctx, int64(chatID), "🏁 Você já terminou esta partida e não pode entrar novamente.", nil)
 		case errors.Is(err, uno.ErrAlreadyJoined):
 			h.reply(ctx, int64(chatID), "⚠️ Você já está inscrito nesta partida!", nil)
+		case errors.Is(err, game.ErrRoomLocked):
+			h.reply(ctx, int64(chatID), "🔒 Esta partida está trancada e não aceita novos jogadores.", nil)
 		case errors.Is(err, uno.ErrPlayerLimit):
 			h.reply(ctx, int64(chatID), "⚠️ A partida já atingiu o limite de 10 jogadores.", nil)
 		case errors.Is(err, uno.ErrGameFinished), errors.Is(err, game.ErrGameClosed):
