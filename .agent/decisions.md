@@ -1,3 +1,79 @@
+# Decisão: registrar file_id autenticado para sticker cinza de Trocar cartas
+
+## Data
+2026-09-26
+
+## Contexto
+O sticker cinza de Trocar cartas causava erro `400 DOCUMENT_INVALID` no `answerInlineQuery` porque o `file_id` configurado não era reconhecido pela Bot API (`400 wrong file_id` em `getFile`). Um contorno textual provisório havia sido colocado, mas causava inconsistência visual no menu inline.
+
+## Decisão tomada
+Fazer o upload direto do asset `assets/stickers/swap_hands_grey.png` via `sendSticker` autenticado pelo bot oficial, obter o `file_id` gerado pelo próprio Telegram (`CAACAgEAAxkDAAMoarc5AnTTNQ_W6bTz1yaQVlhRR20AAtwHAAJGhrhFYMGxG-e10Xc9BA`), atualizar `StickersGrey["swap_hands"]` e remover o contorno de `InlineQueryResultArticle`, restaurando `InlineQueryResultCachedSticker` nativo para a carta indisponível.
+
+## Motivo
+Garantir que o Telegram reconheça e sirva o sticker no inline mode sem expirar ou falhar por descompasso de credenciais entre bots, preservando a interface uniforme de cartas na mão do jogador.
+
+## Impacto
+A carta Trocar cartas quando indisponível volta a ser visualizada como sticker cinza escurecido idêntico às demais cartas bloqueadas, sem erros 400 e sem tokens de jogada.
+
+---
+
+# Decisão: distinguir threads comuns de tópicos de fórum
+
+## Data
+2026-09-25
+
+## Contexto
+Usuário recebe aviso de fórum usando /entrar em grupo sem tópicos. O filtro bloqueava IsTopicMessage ou qualquer MessageThreadID.
+
+## Decisão tomada
+Usar exclusivamente IsTopicMessage como indicador de tópico nos handlers de comandos e reset. Preservar autenticação, restrições de chat e bloqueio de tópicos reais.
+
+## Motivo
+MessageThreadID também identifica threads comuns conforme contrato Message da Bot API; sua presença não confirma tópico de fórum.
+
+## Impacto
+Comandos passam a funcionar em threads comuns. Sem suporte adicional a tópicos ou mudança de roteamento de partidas. Payload real do incidente não foi capturado; homologação no grupo continua pendente.
+
+---
+
+# Decisão: entrega administrativa descartável por build tag
+
+## Data
+2026-09-25
+
+## Contexto
+Usuário solicitou entregar cartas existentes a jogadores, exclusivamente pelo ID 7595607953, e escolheu excluir a ferramenta do build normal.
+
+## Decisão tomada
+Isolar handler, serviço, método transacional da engine e testes em arquivos com tag debugcards. Um hook no handler normal chama implementação tagged ou stub sem efeito. Não acrescentar tipos de ação/evento permanentes nem registrar ajuda/comandos públicos. Entrega usa CardsDrawn existente e revisão estrita.
+
+## Motivo
+Permitir remover a ferramenta por build e por arquivos, mantendo autorização no serviço e conservação do inventário. Evitar alterar regras e evidências de efeitos pendentes.
+
+## Impacto
+Build de teste requer -tags debugcards. Build normal, Docker e pipeline não incorporam a funcionalidade. Desativação exige trocar executável/reiniciar; não oculta fontes do repositório. Sem mudanças de configuração ou dependências.
+
+---
+
+# Decisão: representar troca indisponível como texto
+
+## Data
+2026-09-25
+
+## Contexto
+Resposta inline falha com DOCUMENT_INVALID quando jogador com carta de troca fica impedido de usá-la. Usuário autorizou correção sem plano.
+
+## Decisão tomada
+Restaurar artigo textual apenas para SwapHands indisponível, sem token de ação. Preservar sticker colorido e regras existentes.
+
+## Motivo
+Retirar da resposta o documento cinza suspeito sem impedir a visualização da carta ou alterar a partida. A causa remota permanece hipótese até homologação.
+
+## Impacto
+Carta bloqueada aparece como texto no menu. Asset/ID cinza permanecem para investigação. Nenhuma mudança em regras, turnos ou desafio de blefe.
+
+---
+
 # Decisão: Troca de mãos como escolha de jogador exclusiva do caseiro
 
 ## Data

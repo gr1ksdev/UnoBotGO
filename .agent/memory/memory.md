@@ -1,3 +1,53 @@
+# Resolução do sticker cinza de Trocar cartas — 2026-09-26
+
+- Plano aprovado com "sim": `corrigir-sticker-cinza-troca-maos_2026-09-26_00-15.md`.
+- Causa raiz de `DOCUMENT_INVALID`: o `file_id` anterior (`CAACAgEAAxkBAAER8aRqtlf6ZtRKfAj02K5AnlVcRz_W_AACVAcAAkaGsEXgXGCANqlQKz0E`) era inválido para a Bot API do bot (`400 wrong file_id` em `getFile`), fazendo com que qualquer `InlineQueryResultCachedSticker` com esse ID causasse erro 400 no `answerInlineQuery`.
+- Solução: upload de `assets/stickers/swap_hands_grey.png` via `sendSticker` diretamente pelo bot para o chat do usuário autorizado (`7595607953`), gerando o `file_id` válido e autenticado `CAACAgEAAxkDAAMoarc5AnTTNQ_W6bTz1yaQVlhRR20AAtwHAAJGhrhFYMGxG-e10Xc9BA` (`file_unique_id: AgAD3AcAAkaGuEU`, confirmado com HTTP 200 no `getFile`).
+- O mapeamento em `StickersGrey["swap_hands"]` foi atualizado com o novo `file_id`.
+- Removido o contorno textual (`InlineQueryResultArticle`) de `internal/telegram/inline.go`; a carta indisponível volta ao fluxo nativo de `InlineQueryResultCachedSticker` com prefixo `grey_` e sem token de jogada.
+- Testes unitários atualizados em `internal/telegram/swap_test.go`; validações de build e vet com e sem tag aprovadas.
+- Homologado com sucesso pelo usuário no Telegram real ("deu certo agora"), com o sticker cinza renderizando perfeitamente sem erros.
+
+---
+
+# Correção de falso tópico — 2026-09-25
+
+- Usuário confirmou grupo comum sem tópicos e aprovou plano corrigir-falso-topico_2026-09-25_23-55.md.
+- HandleMessage e HandleReset agora bloqueiam apenas IsTopicMessage. MessageThreadID isolado pode indicar thread comum e não é motivo de bloqueio.
+- Regressões: /novo, /entrar e /reset em thread comum; reset não autorizado permanece recusado; tópicos reais com ID zero/não zero seguem bloqueados sem mutação; /dar tagged funciona em thread comum.
+- Testes internal/telegram e build ./... passaram com e sem debugcards; git diff --check aprovado. Homologação no grupo afetado pendente.
+- Sem commit, push ou deploy. Alterações anteriores preservadas.
+
+---
+
+# Comando descartável /dar — 2026-09-25
+
+- Plano revisado aprovado com "sim": comando-dar-carta_2026-09-25_23-44.md.
+- Disponível exclusivamente com tag debugcards. Ativar: `go run -tags debugcards ./cmd/bot` ou `go build -tags debugcards -o /tmp/unobot-debugcards ./cmd/bot`.
+- Autorização exclusiva: Telegram ID 7595607953, validado no serviço. Outros usuários no grupo são ignorados sem revelar o comando. Não aparece em ajuda ou menus.
+- Sintaxe: /dar troca, /dar coringa, /dar +4, /dar <vermelho|azul|verde|amarelo> <0..9|+2|pular|inverter>.
+- Responder a mensagem do alvo ativo; sem resposta, entregar para o próprio solicitante. Usuário autorizado pode ser observador ao entregar a outro participante.
+- Move primeira cópia do monte ou, se faltar, do descarte do fundo ao topo excluindo topo. Nunca cria cartas nem retira de mãos alheias. Recusa indisponibilidade.
+- Somente TakingTurn, sem DrawCounter nem PendingBluff. Preserva turno, prazo, direção, cor e DrawnCardID; revisão incrementa uma vez. Troca apenas no caseiro.
+- Implementação em debugcards.go e testes tagged nos pacotes uno, game e telegram. Código normal só tem hook em commands.go e stub debugcards_disabled.go. GiveCard não existe nas APIs compiladas sem tag.
+- Desativar: substituir por build sem tag e reiniciar (partidas em memória são perdidas no reinício). Docker/pipeline atuais já compilam sem tag.
+- Remover definitivamente: retirar hook de commands.go e arquivos debugcards*.go dos três pacotes, preservando histórico local. O código-fonte continua visível a quem acessa o repositório.
+- Validações: go test ./..., go test -tags debugcards ./..., build/vet de ambas variantes, race com tag em uno/game/telegram e git diff --check passaram. go list confirmou exclusão da implementação tagged no build padrão.
+- Correção anterior de DOCUMENT_INVALID preservada. Sem commit, push ou deploy nesta etapa.
+
+---
+
+# Correção de abertura da mão com Trocar cartas indisponível — 2026-09-25
+
+- Usuário autorizou corrigir diretamente, sem criar plano.
+- Relatos: DOCUMENT_INVALID somente para jogador com Trocar cartas, após desafio de +4 perdido pelo adversário e após +2; voltou a abrir depois de mudar a mesa.
+- Mitigação: SwapHands indisponível volta a InlineQueryResultArticle, prefixo grey_, sem token. Sticker colorido jogável preservado. ID/asset cinza retidos para investigação, sem envio no menu.
+- Causa suspeita: documento do sticker cinza rejeitado no inline; ainda não confirmada por reprodução real.
+- Teste de regressão exige artigo, ausência do documento cinza e nenhuma ação ao selecionar.
+- Validações aprovadas: testes TestSwap, suíte internal/telegram, build de cmd/bot e git diff --check. Homologação real pendente.
+
+---
+
 # Trocar cartas no modo caseiro — 2026-09-25
 
 - Aprovação explícita: usuário respondeu "sim" ao plano trocar-cartas-caseiro_2026-09-24_23-58.md.
