@@ -204,7 +204,11 @@ func (r *Renderer) RenderLobby(view game.PublicGameView) string {
 		}
 	}
 
-	sb.WriteString("\nClique em /entrar para participar.")
+	if view.Locked {
+		sb.WriteString("\n🔒 Esta partida está trancada e não aceita novos jogadores.")
+	} else {
+		sb.WriteString("\nClique em /entrar para participar.")
+	}
 	if len(view.Players) >= 2 {
 		sb.WriteString("\nUse /iniciar para começar!")
 	} else {
@@ -214,93 +218,98 @@ func (r *Renderer) RenderLobby(view game.PublicGameView) string {
 	return sb.String()
 }
 
-// RenderPublicState formats the full observable state of an active or finished game.
+func placementLabel(position int) string {
+	switch position {
+	case 1:
+		return "🥇"
+	case 2:
+		return "🥈"
+	case 3:
+		return "🥉"
+	default:
+		return fmt.Sprintf("%dº", position)
+	}
+}
+
+func (r *Renderer) renderPlacements(view game.PublicGameView) string {
+	lines := make([]string, 0, len(view.Placements))
+	for _, pl := range view.Placements {
+		lines = append(lines, fmt.Sprintf("%s %s", placementLabel(pl.Position), r.PlayerLink(pl.PlayerID, view)))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// RenderPublicState displays the next decision and the actual turn sequence,
+// starting at the current player and walking in the engine's direction.
 func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 	var sb strings.Builder
-
 	if view.Closed || view.Phase == uno.Finished {
-		sb.WriteString("🏆 <b>Partida Encerrada!</b>\n\n")
+		sb.WriteString("🏆 <b>Partida encerrada</b>")
 		switch view.CloseReason {
-		case game.Completed:
-			sb.WriteString("A partida chegou ao fim.\n\n")
 		case game.Cancelled:
-			sb.WriteString("A partida foi cancelada pelo responsável.\n\n")
+			sb.WriteString("\nCancelada pelo responsável.")
 		case game.Departure:
-			sb.WriteString("A partida foi encerrada após desistência de jogadores.\n\n")
+			sb.WriteString("\nEncerrada após desistência de jogadores.")
 		}
-
 		if len(view.Placements) > 0 {
-			sb.WriteString("<b>Colocações finais:</b>\n")
-			for _, pl := range view.Placements {
-				sb.WriteString(fmt.Sprintf("%dº lugar: %s\n", pl.Position, r.PlayerLink(pl.PlayerID, view)))
-			}
+			sb.WriteString("\n\n" + r.renderPlacements(view))
 		}
 		return sb.String()
 	}
-
-	// Top card & active color
 	if view.TopCard != nil {
-		sb.WriteString(fmt.Sprintf("Carta no topo: <b>%s</b>\n", CardRepr(*view.TopCard)))
+		sb.WriteString(fmt.Sprintf("🃏 Topo: <b>%s</b>\n", CardRepr(*view.TopCard)))
+		if view.TopCard.Color == uno.NoColor && view.ActiveColor != uno.NoColor {
+			sb.WriteString(fmt.Sprintf("🎨 Cor: %s <b>%s</b>\n", ColorIcon(view.ActiveColor), ColorNamePT(view.ActiveColor)))
+		}
 	}
-	if view.ActiveColor != uno.NoColor {
-		sb.WriteString(fmt.Sprintf("Cor ativa: %s <b>%s</b>\n", ColorIcon(view.ActiveColor), ColorNamePT(view.ActiveColor)))
-	}
-
 	if view.DrawCounter > 0 {
-		sb.WriteString(fmt.Sprintf("⚠️ <b>Penalidade acumulada: comprar %d cartas!</b>\n\n", view.DrawCounter))
+		sb.WriteString(fmt.Sprintf("⚠️ Compra acumulada: %d cartas\n", view.DrawCounter))
 	}
-
-	// Placements so far (if BotRules)
-	if len(view.Placements) > 0 {
-		sb.WriteString("<b>Colocações:</b>\n")
-		for _, pl := range view.Placements {
-			sb.WriteString(fmt.Sprintf("%dº: %s | ", pl.Position, r.PlayerLink(pl.PlayerID, view)))
-		}
-		sb.WriteString("\n\n")
+	if len(view.Placements) == 1 {
+		sb.WriteString("🏅 Classificação: " + r.renderPlacements(view) + "\n")
+	} else if len(view.Placements) > 1 {
+		sb.WriteString("🏅 <b>Classificação</b>\n" + r.renderPlacements(view) + "\n")
 	}
-
-	// Players
-	sb.WriteString("<b>Jogadores em jogo:</b>\n")
-	playerParts := make([]string, 0, len(view.Order))
-	for _, pid := range view.Order {
-		var p *game.PublicPlayer
-		for i := range view.Players {
-			if view.Players[i].ID == pid {
-				p = &view.Players[i]
-				break
-			}
+	sb.WriteString("\n")
+	switch view.Phase {
+	case uno.ChoosingPlayer:
+		sb.WriteString(fmt.Sprintf("🔀 <b>Aguardando %s escolher um jogador para trocar cartas!</b>\n", r.PlayerLink(view.PlayerChooserID, view)))
+	case uno.ChoosingColor:
+		sb.WriteString(fmt.Sprintf("🎨 <b>Aguardando %s escolher a cor!</b>\n", r.PlayerLink(view.ColorChooserID, view)))
+	default:
+		if view.CurrentTurn > 0 {
+			sb.WriteString(fmt.Sprintf("🎯 Vez: 👉 %s\n", r.PlayerLink(view.CurrentTurn, view)))
 		}
-		if p == nil || !p.Active {
-			continue
-		}
-
-		entry := r.PlayerLink(pid, view)
-		if p.CardCount == 1 {
-			entry += " ⚠️ <b>UNO!</b>"
-		}
-		if pid == view.CurrentTurn {
-			entry = "👉 <b>" + entry + "</b>"
-		}
-		playerParts = append(playerParts, entry)
 	}
-
-	sep := " ➡️ "
+	parts := make([]string, 0, len(view.Order))
+	start, direction := 0, 1
 	if view.Direction < 0 {
-		sep = " ⬅️ "
+		direction = -1
 	}
-	sb.WriteString(strings.Join(playerParts, sep))
-	sb.WriteString("\n\n")
-
-	// Phase / Turn
-	if view.Phase == uno.ChoosingPlayer {
-		sb.WriteString(fmt.Sprintf("🔀 <b>Aguardando %s escolher um jogador para trocar cartas!</b>", r.PlayerLink(view.PlayerChooserID, view)))
-	} else if view.Phase == uno.ChoosingColor {
-		sb.WriteString(fmt.Sprintf("🎨 <b>Aguardando %s escolher a cor!</b>", r.PlayerLink(view.ColorChooserID, view)))
-	} else if view.CurrentTurn > 0 {
-		sb.WriteString(fmt.Sprintf("👉 Vez de: %s", r.PlayerLink(view.CurrentTurn, view)))
+	for i, id := range view.Order {
+		if id == view.CurrentTurn {
+			start = i
+			break
+		}
 	}
-
-	return sb.String()
+	for step := range view.Order {
+		pid := view.Order[(start+step*direction+len(view.Order))%len(view.Order)]
+		for _, player := range view.Players {
+			if player.ID != pid || !player.Active {
+				continue
+			}
+			text := r.PlayerLink(pid, view)
+			if player.CardCount == 1 {
+				text += " ⚠️ <b>UNO!</b>"
+			}
+			parts = append(parts, text)
+			break
+		}
+	}
+	if len(parts) > 0 {
+		sb.WriteString("👥 " + strings.Join(parts, " → "))
+	}
+	return strings.TrimSpace(sb.String())
 }
 
 // RenderActionConfirmation renders the confirmation of an accepted action to the group.
@@ -334,7 +343,7 @@ func (r *Renderer) RenderActionConfirmation(actorID uno.PlayerID, action uno.Act
 	case uno.ChoosePlayer:
 		sb.WriteString(fmt.Sprintf("🔀 %s trocou todas as cartas com %s!", actorLink, r.PlayerLink(action.TargetID, outcome.View)))
 	case uno.ChooseColor:
-		sb.WriteString(fmt.Sprintf("%s escolheu a cor %s <b>%s</b>!", actorLink, ColorIcon(action.Color), ColorNamePT(action.Color)))
+		sb.WriteString(fmt.Sprintf("%s escolheu %s <b>%s</b>!", actorLink, ColorIcon(action.Color), ColorNamePT(action.Color)))
 	case uno.CallBluff:
 		var bluffEv *uno.Event
 		for i := range outcome.Events {
@@ -357,13 +366,17 @@ func (r *Renderer) RenderActionConfirmation(actorID uno.PlayerID, action uno.Act
 	for _, ev := range outcome.Events {
 		switch ev.Type {
 		case uno.DirectionChanged:
-			sb.WriteString(" 🔄 O sentido do jogo foi invertido!")
+			sb.WriteString("\n🔄 O sentido foi invertido.")
 		case uno.PlayerSkipped:
 			if ev.PlayerID > 0 {
-				sb.WriteString(fmt.Sprintf(" 🚫 %s foi pulado(a)!", r.PlayerLink(ev.PlayerID, outcome.View)))
+				sb.WriteString(fmt.Sprintf("\n🚫 %s foi pulado.", r.PlayerLink(ev.PlayerID, outcome.View)))
 			}
 		case uno.PlayerWon:
-			sb.WriteString(fmt.Sprintf("\n🎉 <b>%s bateu e garantiu o %dº lugar!</b>", r.PlayerLink(ev.PlayerID, outcome.View), ev.Position))
+			medal := placementLabel(ev.Position)
+			if ev.Position > 3 {
+				medal = "🏅"
+			}
+			sb.WriteString(fmt.Sprintf("\n%s <b>%s terminou em %dº lugar!</b>", medal, r.PlayerLink(ev.PlayerID, outcome.View), ev.Position))
 		}
 	}
 
@@ -387,6 +400,8 @@ func (r *Renderer) RenderHelp(botUsername string) string {
 	sb.WriteString("<b>/help</b> — Exibe esta ajuda. O comando /ajuda é um alias.\n")
 	sb.WriteString("<b>/novo</b> — Cria uma partida no grupo.\n")
 	sb.WriteString("<b>/entrar</b> — Entra na partida aberta ou em andamento.\n")
+	sb.WriteString("<b>/trancar</b> — Impede novos jogadores de entrar.\n")
+	sb.WriteString("<b>/destrancar</b> — Permite novas entradas.\n")
 	sb.WriteString("<b>/iniciar</b> — Inicia a partida quando houver pelo menos dois jogadores.\n")
 	sb.WriteString("<b>/estado</b> — Mostra o lobby ou o estado atual da partida.\n")
 	sb.WriteString("<b>/sair</b> — Sai da partida em andamento.\n")

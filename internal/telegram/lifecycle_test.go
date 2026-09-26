@@ -190,7 +190,7 @@ func TestFinalInlineActionAcrossTransports(t *testing.T) {
 				api.mu.Lock()
 				messages := append([]telego.SendMessageParams(nil), api.SentMessages...)
 				api.mu.Unlock()
-				if len(messages) != 1 || !strings.Contains(messages[0].Text, "Partida Encerrada") || strings.Contains(messages[0].Text, "Vez de") || messages[0].ReplyMarkup != nil {
+				if len(messages) != 1 || !strings.Contains(messages[0].Text, "Partida encerrada") || strings.Contains(messages[0].Text, "🎯 Vez:") || messages[0].ReplyMarkup != nil {
 					t.Fatalf("terminal confirmation: %+v", messages)
 				}
 				for _, id := range []uno.PlayerID{11, 22} {
@@ -261,7 +261,7 @@ func TestTimeoutQueuedBehindTerminalAction(t *testing.T) {
 			}
 			api.mu.Lock()
 			defer api.mu.Unlock()
-			if len(api.SentMessages) != 1 || strings.Contains(api.SentMessages[0].Text, "O tempo acabou") || strings.Contains(api.SentMessages[0].Text, "Vez de") {
+			if len(api.SentMessages) != 1 || strings.Contains(api.SentMessages[0].Text, "O tempo acabou") || strings.Contains(api.SentMessages[0].Text, "🎯 Vez:") {
 				t.Fatalf("late timeout: %+v", api.SentMessages)
 			}
 		})
@@ -314,7 +314,7 @@ func TestClosedRefreshExplicitlyRemovesKeyboard(t *testing.T) {
 		t.Fatal("missing refresh")
 	}
 	edit := api.EditedMessages[0]
-	if edit.ReplyMarkup == nil || len(edit.ReplyMarkup.InlineKeyboard) != 0 || strings.Contains(edit.Text, "Vez de") {
+	if edit.ReplyMarkup == nil || len(edit.ReplyMarkup.InlineKeyboard) != 0 || strings.Contains(edit.Text, "🎯 Vez:") {
 		t.Fatalf("terminal edit: %+v", edit)
 	}
 	body, err := json.Marshal(edit)
@@ -348,7 +348,7 @@ func TestQueuedActionAfterClosureHasNoContinuation(t *testing.T) {
 				t.Fatalf("messages: %+v", messages)
 			}
 			rejected := messages[1]
-			if rejected.ReplyMarkup != nil || strings.Contains(rejected.Text, "Abra Suas cartas") || strings.Contains(rejected.Text, "Vez de") || strings.Contains(rejected.Text, fmt.Sprintf(`href="tg://user?id=%d"`, view.CurrentTurn)) {
+			if rejected.ReplyMarkup != nil || strings.Contains(rejected.Text, "Abra Suas cartas") || strings.Contains(rejected.Text, "🎯 Vez:") || strings.Contains(rejected.Text, fmt.Sprintf(`href="tg://user?id=%d"`, view.CurrentTurn)) {
 				t.Fatalf("terminal error invites play: %+v", rejected)
 			}
 			b.inlineHandler.HandleInlineQuery(t.Context(), &telego.InlineQuery{ID: "old", From: telego.User{ID: int64(view.CurrentTurn)}, Query: "g_" + string(view.GameID)})

@@ -31,6 +31,7 @@ type PublicGameView struct {
 	ChatName        string
 	CreatorID       uno.PlayerID
 	OwnerID         uno.PlayerID
+	Locked          bool
 	Revision        uint64
 	Phase           uno.Phase
 	Rules           uno.Rules
@@ -67,6 +68,7 @@ type GameSummary struct {
 	ChatID   ChatID
 	ChatName string
 	OwnerID  uno.PlayerID
+	Locked   bool
 	Revision uint64
 	Phase    uno.Phase
 }
@@ -83,13 +85,13 @@ func (v PublicGameView) clone() PublicGameView {
 }
 
 func (v PublicGameView) summary() GameSummary {
-	return GameSummary{GameID: v.GameID, ChatID: v.ChatID, ChatName: v.ChatName, OwnerID: v.OwnerID, Revision: v.Revision, Phase: v.Phase}
+	return GameSummary{GameID: v.GameID, ChatID: v.ChatID, ChatName: v.ChatName, OwnerID: v.OwnerID, Locked: v.Locked, Revision: v.Revision, Phase: v.Phase}
 }
 
 func publicView(entry *managedGame, state uno.State) PublicGameView {
 	v := PublicGameView{
 		GameID: state.ID, ChatID: entry.chatID, ChatName: entry.chatName,
-		CreatorID: entry.creatorID, OwnerID: entry.ownerID, Revision: state.Revision,
+		CreatorID: entry.creatorID, OwnerID: entry.ownerID, Locked: entry.locked, Revision: state.Revision,
 		Phase: state.Phase, Rules: state.Rules, CurrentTurn: state.CurrentPlayerID,
 		Direction: state.Direction, ActiveColor: state.ActiveColor,
 		DrawCounter: state.DrawCounter,

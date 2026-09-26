@@ -137,7 +137,7 @@ func TestCommandHandler_NovoEntrarIniciarCancelar(t *testing.T) {
 		Text: "/estado",
 	})
 	lastMsg = mockAPI.LastSentMessage()
-	if !strings.Contains(lastMsg, "Carta no topo") {
+	if !strings.Contains(lastMsg, "🃏 Topo:") {
 		t.Fatalf("expected state message, got: %s", lastMsg)
 	}
 

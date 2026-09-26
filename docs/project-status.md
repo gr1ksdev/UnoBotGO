@@ -1,8 +1,8 @@
 # UnoBotGO V2 — Estado do projeto
 
 Última revisão: **2026-09-26**. Esta versão acompanha a **dev**.
-Base auditada: `dev@ea22a1e` e `main@4a63591`, antes desta atualização documental.
-As diferenças abaixo continuam válidas após sua publicação: nenhum código foi promovido.
+Base desta revisão: `dev@badf81c` antes de Gameplay UX Polish e `main@fd011ab`.
+Esta revisão inclui Gameplay UX Polish na dev; nenhum código foi promovido à main.
 
 Este documento descreve **maturidade, validação e publicação**, não arquitetura.
 Para funcionamento interno, consulte a [documentação técnica](../README.md#documentação-técnica).
@@ -46,6 +46,7 @@ A coluna Implementado considera a dev; Main indica a presença na base pública 
 | Trocar cartas | Sim | Engine, serviço, inline e renderer | Parcial: sticker cinza confirmado | Não | Exclusiva do Caseiro na dev |
 | Comandos privados reorganizados | Sim | Boas-vindas, ajuda, escopos | Telegram: pendente | Não | /start, /help e botão adicionar ao grupo |
 | Correção de falso tópico | Sim | Threads comuns e tópicos reais | Grupo afetado: pendente | Não | Apenas IsTopicMessage identifica tópico |
+| Gameplay UX Polish | Sim, dev | Ordem, lock, renderer e regressões | Telegram: pendente | Não | Pronta para homologação manual |
 | /dar | Sim, com tag | Testes debugcards e exclusão normal | Não certificada; uso de desenvolvimento | Não | Fora do produto/build padrão |
 
 ## Transportes e evidência real
@@ -135,6 +136,7 @@ de grupos ou milhares de jogadores. Isso é uma limitação conhecida, não um b
 | M6 — Webhook transport | Implementado e publicado; homologação real não aprovada, experimental |
 | Milestone corretiva V2 | Lifecycle/timeout/menções publicados e testados; aceite visual pendente |
 | Simulador e recuperação | Implementados, testados e publicados; não são homologação de carga Telegram |
+| Gameplay UX Polish | Ordem lógica validada/exibida, room lock e mensagens compactas; testes concluídos, aceite real pendente; somente dev |
 | Evoluções Caseiro/UX/debug | Implementadas e testadas na dev; promoção pública pendente |
 
 A numeração acima usa os marcos efetivamente registrados; não reaproveita propostas
@@ -143,6 +145,12 @@ antigas de roadmap como se fossem entregas. Não há marco global M4 concluído 
 ## Desenvolvimento à frente da main
 
 Diferenças de produto confirmadas pelas árvores Git, sem promoção nesta milestone:
+
+- Gameplay UX Polish: ordem exibida a partir do atual no sentido vigente,
+  `/trancar` e `/destrancar` exclusivos do owner e renderer compacto. A inserção
+  de late join já respeitava a cauda lógica na engine auditada; novos testes
+  garantem essa regra. Lock pertence à sessão e não altera turno/revisão da engine.
+  Implementado e testado na dev; homologação Telegram real pendente; main: não.
 
 - Trocar cartas, seleção de jogador, stickers e suporte no simulador.
 - Recusa de `+4` sobre `+4` no Caseiro.

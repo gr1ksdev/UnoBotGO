@@ -49,6 +49,8 @@ grupos exibem os comandos de partida.
 | `/help` (ou `/ajuda`) | Exibe os comandos e as instruções de uso. |
 | `/novo` | Cria um lobby de partida no grupo (o criador é o responsável administrativo). |
 | `/entrar` | Inscreve o usuário na partida aberta ou em andamento. |
+| `/trancar` | Impede novos jogadores de entrar; somente o responsável, no lobby ou durante a partida. |
+| `/destrancar` | Permite novas entradas; somente o responsável. |
 | `/iniciar` | Inicia a partida quando há pelo menos dois jogadores inscritos. |
 | `/cancelar` (ou `/kill`) | Cancela a partida (autorizado apenas para o responsável). |
 | `/sair` | Sai da partida em andamento (transfere responsabilidade se necessário). |

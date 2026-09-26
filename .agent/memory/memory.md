@@ -373,3 +373,16 @@
 - Promoção preparada em worktree independente: somente README.md e docs/project-status.md. Script exato public-tree aprovado; nenhuma alteração de gameplay ou feature promovida.
 - Default consultada por API/ls-remote: dev. gh ausente, sem GH_TOKEN/GITHUB_TOKEN ou configuração gh; SSH Git não fornece API administrativa. Mudança indisponível neste ambiente. Comando manual: gh repo edit gr1ksdev/UnoBotGO --default-branch main.
 - API pública: branches protected=false, rulesets=[]; detalhes de proteção retornam 401. Workflows usam branches explícitas; nenhuma alteração de proteção/workflow necessária nesta revisão.
+
+
+# Gameplay UX Polish — 2026-09-26 (somente dev)
+
+- Pedido autorizou auditoria curta, implementação, commit e push dev; proibiu main/promoção/merge. Base badf81c; main fd011ab.
+- Auditoria: join da engine já insere na cauda lógica (antes do atual no sentido positivo, depois no negativo). Não foi reproduzido corte real de turno. Order é físico; renderer antigo podia sugerir entrada no meio. Preservado algoritmo da engine e adicionados testes com avanços reais, ambos sentidos, Reverse, placements e múltiplas entradas.
+- Renderer apresenta ordem a partir do atual, no sentido vigente, com → significando próximo da sequência. Ações/efeitos/resultados separados; cor apenas em topo sem cor; penalidade preservada; colocações com medalhas; um título de encerramento. PlayerLink, escaping e UNO preservados.
+- managedGame.locked pertence à sessão. Service.SetLocked exige owner/chat, inclusive owner observador; não usa privilégio de ChatAdmin. Join verifica admissão sob entry.mu. Projeções públicas incluem Locked; nenhuma revisão de engine/timer/token é alterada pelo lock.
+- Nova sessão aberta; operação idempotente em lobby/jogo; owner transferido mantém controle. Resumo fechado conserva metadata, mas não aceita lock/unlock; reset descarta sessão. Não existe persistência de sessão para restaurar.
+- /trancar e /destrancar adicionados aos comandos de grupo e ajuda. Nenhum handler/token/contexto inline foi alterado.
+- Homologação real pendente, main não publicada. Usuário fará aceite no Telegram antes de qualquer promoção.
+
+- Validação desta milestone: test/vet/build normais e com debugcards aprovados; diff check aprovado. Race local bloqueado por VMA 39 (exige 48), após habilitar CGO; verificação via CI após push.

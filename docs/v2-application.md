@@ -1,5 +1,24 @@
 # UnoBotGO V2 — Milestone 2
 
+## Atualização — controle de entradas (2026-09-26, somente dev)
+
+`managedGame.locked` é metadata de sessão protegida por `entry.mu`, exposta como
+`Locked` nas views e no resumo. `Service.SetLocked` autoriza exclusivamente o
+owner no chat correto, mesmo quando ele não é jogador. Começa aberto e funciona
+no lobby e durante o jogo; chamadas repetidas são idempotentes. Administrador de
+chat não recebe essa permissão apenas por ser administrador.
+
+`Service.Apply(JoinGame)` verifica o lock sob o mesmo mutex da mutação da engine:
+retorna `ErrRoomLocked` sem modificar estado quando a sala está trancada.
+SetLocked não altera revision da engine, mãos, turno ou prazo; jogadores atuais
+continuam jogando. A transferência existente de owner transfere essa permissão.
+
+Partidas encerradas recusam alterações. O resumo final conserva a informação;
+reset descarta a sessão e toda partida nova começa aberta. Não existe restauração
+durável de sessão atualmente: snapshots de `uno.State` não contêm metadata de
+admissão e não são snapshots completos de `internal/game`.
+
+
 ## Troca de mãos — 2026-09-25
 
 `ChoosePlayer` é autorizada como ação inline, vinculada ao `Actor.PlayerID` real,

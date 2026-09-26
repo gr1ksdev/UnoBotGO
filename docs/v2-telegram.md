@@ -1,5 +1,26 @@
 # UnoBotGO V2 — Telegram Adapter (Milestone 3)
 
+## Gameplay UX Polish (2026-09-26, somente dev)
+
+- `/trancar` e `/destrancar`: controle exclusivo do responsável, incluindo owner
+  observador, no lobby ou durante a partida; respostas idempotentes. `/entrar`
+  recusa sala trancada sem efeitos. Ajuda e registro de comandos incluem ambos.
+- Estado compacto: topo, cor somente para cartas sem cor própria, compra acumulada,
+  classificação, ação atual e ordem ativa. Classificação usa medalhas nos três
+  primeiros lugares e números a partir do quarto; encerramento tem um único título.
+- Ação, efeitos reais e resultado aparecem em linhas separadas. PlayerLink preserva
+  UserID do responsável atual e BotID para demais jogadores, com escaping HTML.
+- A ordem exibida começa no jogador atual e caminha no sentido vigente, sempre
+  usando `→` como próximo da sequência. Isso substitui a exibição física do slice.
+  Na engine auditada, late join já era inserido na cauda lógica; regressões cobrem
+  ambos os sentidos, Reverse, placements, várias entradas e preservação do turno.
+- Inline, tokens, revisões, regras dos modos e Trocar cartas permanecem inalterados.
+
+Aceite real pendente: conferir late join em ambos os sentidos, trancar/destrancar
+no lobby e durante partida, links, Wild/+4, efeitos, placements, escolha de alvo
+e encerramento com dois jogadores. Testes automáticos não substituem esse aceite.
+
+
 ## Trocar cartas — exclusivo do Caseiro (2026-09-25)
 
 O sticker `CAACAgEAAxkBAAER8VtqteJsR8-zG10NFeLTIZyxuZYsBQACBwkAAkkSsEU562tb90Ja3D0E`

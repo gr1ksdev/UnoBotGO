@@ -105,6 +105,8 @@ func (b *Bot) registerCommands(ctx context.Context) error {
 			Commands: []telego.BotCommand{
 				{Command: "novo", Description: "Criar uma nova partida de UNO"},
 				{Command: "entrar", Description: "Entrar na partida de UNO"},
+				{Command: "trancar", Description: "Impede novos jogadores de entrar"},
+				{Command: "destrancar", Description: "Permite novas entradas"},
 				{Command: "iniciar", Description: "Iniciar a partida"},
 				{Command: "estado", Description: "Ver o estado atual da partida"},
 				{Command: "sair", Description: "Sair da partida em andamento"},

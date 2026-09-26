@@ -173,6 +173,8 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 			mode = "caseiro"
 		}
 		h.handleNovo(ctx, actorID, chatID, msg.Chat.Title, mode)
+	case "trancar", "destrancar":
+		h.handleRoomLock(ctx, actorID, chatID, cmdName == "trancar")
 	case "entrar":
 		h.handleEntrar(ctx, actorID, chatID)
 	case "start":
@@ -349,6 +351,8 @@ func (h *CommandHandler) handleEntrar(ctx context.Context, actorID uno.PlayerID,
 
 	if err != nil {
 		switch {
+		case errors.Is(err, game.ErrRoomLocked):
+			h.reply(ctx, int64(chatID), "🔒 Esta partida está trancada e não aceita novos jogadores.", nil)
 		case errors.Is(err, uno.ErrAlreadyJoined):
 			h.reply(ctx, int64(chatID), "⚠️ Você já está inscrito nesta partida!", nil)
 		case errors.Is(err, uno.ErrPlayerLimit):
@@ -528,4 +532,32 @@ func (h *CommandHandler) handleEstado(ctx context.Context, chatID game.ChatID) {
 	} else {
 		h.reply(ctx, int64(chatID), h.renderer.RenderPublicState(view), makeGameButtons(view))
 	}
+}
+
+func (h *CommandHandler) handleRoomLock(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID, locked bool) {
+	summary, err := h.service.FindChatGame(ctx, chatID)
+	if err != nil {
+		h.reply(ctx, int64(chatID), "⚠️ Nenhuma partida ativa encontrada neste grupo.", nil)
+		return
+	}
+	_, changed, err := h.service.SetLocked(ctx, game.Actor{PlayerID: actorID, ChatID: chatID}, summary.GameID, locked)
+	if err != nil {
+		if errors.Is(err, game.ErrForbidden) {
+			h.reply(ctx, int64(chatID), "⚠️ Apenas o responsável pela partida pode trancar ou destrancar.", nil)
+		} else {
+			h.reply(ctx, int64(chatID), "⚠️ Não foi possível alterar as entradas desta partida.", nil)
+		}
+		return
+	}
+	text := "🔓 A partida foi destrancada.\nNovos jogadores podem entrar novamente."
+	if locked {
+		text = "🔒 A partida foi trancada.\nNovos jogadores não poderão entrar."
+	}
+	if !changed {
+		text = "🔓 A partida já está aberta."
+		if locked {
+			text = "🔒 A partida já está trancada."
+		}
+	}
+	h.reply(ctx, int64(chatID), text, nil)
 }

@@ -577,3 +577,21 @@ Evitar tratar commit, CI ou simulação como homologação Telegram e não publi
 
 ## Impacto
 Codemaps permanecem internos/históricos; nenhuma arquitetura ou gameplay alterados. Polling recomendado; webhook experimental por aceite real insuficiente. Default main desejada depende de autenticação administrativa indisponível neste ambiente.
+
+
+# Decisão: admissão como metadata e ordem lógica no renderer
+
+## Data
+2026-09-26
+
+## Contexto
+Milestone solicita late join justo, controle de entradas e mensagens compactas. A engine auditada já insere corretamente na cauda lógica; exibição anterior usa ordem física.
+
+## Decisão tomada
+Preservar algoritmo de entrada e cobri-lo com regressões; renderer percorre a ordem a partir do atual conforme Direction. Locked pertence a managedGame, com autorização exclusiva de owner e checagem atômica com Join sob entry.mu. Lock/unlock não incrementa revisão da engine.
+
+## Motivo
+Evitar alterar Reverse ou adicionar regras de elegibilidade futuras; administração não é jogada e não deve invalidar tokens nem mexer no prazo do turno.
+
+## Impacto
+Estado de sessão exposto publicamente sem mãos; zero persistência nova. Ordem visual representa o próximo ciclo no sentido atual. Reverse/Skip futuros continuam produzindo seus efeitos normais. Alterações somente dev; homologação Telegram pendente.

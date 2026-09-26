@@ -142,7 +142,7 @@ func TestRenderer_RenderLobbyAndState(t *testing.T) {
 	if strings.Contains(stateText, "Direção:") || strings.Contains(stateText, "Sentido horário") {
 		t.Errorf("expected no redundant direction line: %s", stateText)
 	}
-	if !strings.Contains(stateText, " ➡️ ") {
+	if !strings.Contains(stateText, " → ") {
 		t.Errorf("expected clockwise direction between players: %s", stateText)
 	}
 
@@ -152,7 +152,7 @@ func TestRenderer_RenderLobbyAndState(t *testing.T) {
 	if strings.Contains(reverseText, "Direção:") || strings.Contains(reverseText, "Sentido anti-horário") {
 		t.Errorf("expected no redundant reverse direction line: %s", reverseText)
 	}
-	if !strings.Contains(reverseText, " ⬅️ ") {
+	if !strings.Contains(reverseText, " → ") {
 		t.Errorf("expected counter-clockwise direction between players: %s", reverseText)
 	}
 }
@@ -280,7 +280,7 @@ func TestRendererMentionTargetsFollowResultingTurn(t *testing.T) {
 				}}
 				confirmation := r.RenderActionConfirmation(11, uno.Action{Type: action, Color: uno.Blue}, out)
 				assertMentionTargets(t, confirmation, cache, tc.real, 999)
-				if (tc.closed || tc.phase == uno.Finished) && strings.Contains(confirmation, "Vez de") {
+				if (tc.closed || tc.phase == uno.Finished) && strings.Contains(confirmation, "🎯 Vez:") {
 					t.Fatalf("turn after closure: %s", confirmation)
 				}
 			}
