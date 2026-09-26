@@ -15,17 +15,14 @@ anteriores precisam ser reabertos. O responsável pela escolha recebe a menção
 real; os demais nomes seguem a política de links ao bot.
 
 O sticker cinza
-`CAACAgEAAxkBAAER8aRqtlf6ZtRKfAj02K5AnlVcRz_W_AACVAcAAkaGsEXgXGCANqlQKz0E`
+`CAACAgEAAxkDAAMoarc5AnTTNQ_W6bTz1yaQVlhRR20AAtwHAAJGhrhFYMGxG-e10Xc9BA`
 representa a carta indisponível. Ela segue o mesmo fluxo visual das demais
-cartas cinza, com resultado `grey_` e sem token de jogada. UNO é comunicado para
-ambos os envolvidos quando aplicável.
+cartas cinza, com resultado `grey_` e sem token de jogada. O sticker colorido
+continua sendo usado quando a carta é jogável.
 
-Homologação manual pendente em cliente Telegram: selecionar Caseiro no lobby,
-confirmar a renderização dos stickers colorido e cinza, jogar a carta, abrir o
-menu, escolher outro participante e verificar novas mãos, cor, contagens e
-próximo turno. O sticker cinza foi aceito pela Bot API como arquivo estático de
-342×512 pixels; testes locais validam o payload e a ausência de ação no resultado
-indisponível.
+Homologação manual: abrir uma mão com Trocar cartas indisponível (ex: sob +2 ou
+coringa no topo) e confirmar que o sticker cinza é renderizado normalmente sem erros.
+Depois de desbloquear a carta, conferir o sticker colorido e a troca normal.
 
 
 > Atualização de 2026-09-23: as regras abaixo descrevem a milestone corretiva.
