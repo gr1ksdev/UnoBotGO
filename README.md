@@ -6,7 +6,7 @@ Bot de UNO em Go para o Telegram utilizando modo inline com stickers para visual
 
 ## Versões do Projeto
 
-### UnoBotGO V2 (Milestone 3 — Playable Telegram MVP)
+### UnoBotGO V2
 - **Executável**: `cmd/bot/main.go`
 - **Arquitetura**:
   - Engine desacoplada (`internal/uno`): regras clássicas, atomicidade, revision estrita e política de colocações.
@@ -49,7 +49,7 @@ grupos exibem os comandos de partida.
 | `/help` (ou `/ajuda`) | Exibe os comandos e as instruções de uso. |
 | `/novo` | Cria um lobby de partida no grupo (o criador é o responsável administrativo). |
 | `/entrar` | Inscreve o usuário na partida aberta ou em andamento. |
-| `/iniciar` | Inicia a partida (autorizado apenas para o responsável). |
+| `/iniciar` | Inicia a partida quando há pelo menos dois jogadores inscritos. |
 | `/cancelar` (ou `/kill`) | Cancela a partida (autorizado apenas para o responsável). |
 | `/sair` | Sai da partida em andamento (transfere responsabilidade se necessário). |
 | `/estado` | Exibe o estado público da partida ativa ou lobby. |
@@ -127,6 +127,7 @@ duas arquiteturas após as validações.
 ---
 
 ## Documentação Técnica
+- [Estado atual do projeto: implementação, validação e publicação](docs/project-status.md)
 - [Regras da Engine V2](docs/v2-rules.md)
 - [Camada de Aplicação V2](docs/v2-application.md)
 - [Adapter Telegram V2 e Roteiro de Aceite](docs/v2-telegram.md)
@@ -134,4 +135,4 @@ duas arquiteturas após as validações.
 
 ### Transporte Telegram
 
-Long polling é o padrão. Para webhook, use `TELEGRAM_MODE=webhook`, `WEBHOOK_URL`, `WEBHOOK_SECRET` e `WEBHOOK_LISTEN_ADDR=:8080`; publique o endpoint HTTPS por um proxy externo. `WEBHOOK_DROP_PENDING_UPDATES=false` preserva updates pendentes.
+Long polling é o padrão e o modo recomendado. Webhook permanece experimental, sem homologação real aprovada; consulte o [estado do projeto](docs/project-status.md#transportes-e-evidência-real). Para webhook, use `TELEGRAM_MODE=webhook`, `WEBHOOK_URL`, `WEBHOOK_SECRET` e `WEBHOOK_LISTEN_ADDR=:8080`; publique o endpoint HTTPS por um proxy externo. `WEBHOOK_DROP_PENDING_UPDATES=false` preserva updates pendentes.

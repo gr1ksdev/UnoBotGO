@@ -203,3 +203,17 @@
 - **Listas Circulares**: Os jogadores são encadeados em um anel usando referências de ponteiros `Next` e `Prev`. Isso facilita a alteração de turnos (`Turn`) e efeitos de inversão (`Reverse`).
 - **Ponteiros Globais**: O `GameManager` rastreia o jogo ativo atual de cada usuário (`UserIDCurrent`) e a lista de jogos ativos de cada usuário (`UserIDPlayers`) para saber como direcionar as requisições que chegam sem ChatID (como as queries inline).
 - **Parâmetros de Contexto**: A inline query utiliza parâmetros de string (como o ID do chat) passados via switch do botão "Suas cartas" para manter o alinhamento de contexto no ambiente multi-grupo.
+
+
+# Revisão de status do projeto — 2026-09-26
+
+- Pedido autorizou auditoria seguida de alterações documentais, commit/push dev/main e tentativa de default main. Plano: status-projeto_2026-09-26_01-00.md.
+- Bases auditadas: dev ea22a1e341bd55b440033a8deae3eb2a78b64453; main 4a635918e40cdacbc91662cb06ac30d8b94faf81. Sem ancestral comum.
+- docs/project-status.md distingue implementação, testes, aceite real, main, experimental e design. README corrigido minimamente (título, link, /iniciar e status webhook).
+- Apenas dev: SwapHands/stickers/simulador correspondente, +4 sobre +4 recusado no Caseiro, direção textual removida, comandos privados, correção de falso tópico, debugcards. Simulador/reset/penalidade cruzada já estavam na main.
+- Aceite cinza confirmado não implica aceite completo da troca. Menções visuais e falso tópico mantêm homologação pendente. Polling recomendado; webhook experimental pelo relato operacional fornecido, sem atribuir causa.
+- Codemaps em codemaps/ descrevem V1 (2026-06-25), não são mapa atual da V2. Não foram copiados para documentação pública. Docs técnicos também contêm seções históricas; código e atualizações recentes têm precedência.
+- Testes, vet, build e diff check aprovados em ambas; testes debugcards aprovados na dev. Race local bloqueado: CGO=0 inicialmente; com CGO=1, ThreadSanitizer unsupported VMA range (39, exige 48). Base CI main validada/publicada; acompanhar CI dos novos pushes.
+- Promoção preparada em worktree independente: somente README.md e docs/project-status.md. Script exato public-tree aprovado; nenhuma alteração de gameplay ou feature promovida.
+- Default consultada por API/ls-remote: dev. gh ausente, sem GH_TOKEN/GITHUB_TOKEN ou configuração gh; SSH Git não fornece API administrativa. Mudança indisponível neste ambiente. Comando manual: gh repo edit gr1ksdev/UnoBotGO --default-branch main.
+- API pública: branches protected=false, rulesets=[]; detalhes de proteção retornam 401. Workflows usam branches explícitas; nenhuma alteração de proteção/workflow necessária nesta revisão.

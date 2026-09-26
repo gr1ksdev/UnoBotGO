@@ -559,3 +559,21 @@ Dar ao primeiro contato uma apresentação curta, manter a ajuda legível e most
 O privado mostra `/start` e `/help`; os grupos mostram comandos de partida e `/help`. Mudanças de username passam a exigir apenas reinício do bot, sem alteração de código.
 
 ---
+
+
+# Decisão: status operacional separado da arquitetura
+
+## Data
+2026-09-26
+
+## Contexto
+Documentação histórica não distinguia maturidade nem diferenças atuais entre árvores independentes.
+
+## Decisão tomada
+Manter docs/project-status.md público e específico quanto às branches, com dimensões separadas de implementação, testes e homologação. Promover somente esse documento e README nesta milestone, sem merge.
+
+## Motivo
+Evitar tratar commit, CI ou simulação como homologação Telegram e não publicar novidades de gameplay incidentalmente.
+
+## Impacto
+Codemaps permanecem internos/históricos; nenhuma arquitetura ou gameplay alterados. Polling recomendado; webhook experimental por aceite real insuficiente. Default main desejada depende de autenticação administrativa indisponível neste ambiente.
