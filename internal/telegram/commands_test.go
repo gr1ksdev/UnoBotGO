@@ -487,3 +487,94 @@ func TestCommandHandler_ResetRejectsUnsupportedSendersAndChats(t *testing.T) {
 		t.Fatalf("private reset was not rejected: %s", mockAPI.LastSentMessage())
 	}
 }
+
+func TestOrdinaryThreadsAllowCommandsAndReset(t *testing.T) {
+	for _, directReset := range []bool{false, true} {
+		name := "command reset"
+		if directReset {
+			name = "recovery reset"
+		}
+		t.Run(name, func(t *testing.T) {
+			api := newMockBotAPI()
+			svc, err := game.NewService()
+			if err != nil {
+				t.Fatal(err)
+			}
+			h := NewCommandHandler(api, svc, NewRenderer(nil), NewTokenStore(100, 10, time.Now, nil), "unobot", nil)
+			msg := &telego.Message{Chat: telego.Chat{ID: -8001, Type: "supergroup"}, From: &telego.User{ID: 1, FirstName: "Owner"}, MessageThreadID: 42, Text: "/novo"}
+			h.HandleMessage(t.Context(), msg)
+			summary, err := svc.FindChatGame(t.Context(), game.ChatID(msg.Chat.ID))
+			if err != nil {
+				t.Fatal(err)
+			}
+			msg.From = &telego.User{ID: 2, FirstName: "Player"}
+			msg.Text = "/entrar"
+			h.HandleMessage(t.Context(), msg)
+			view, err := svc.PublicView(t.Context(), summary.GameID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(view.Players) != 1 || view.Players[0].ID != 2 {
+				t.Fatal("ordinary thread prevented joining", view)
+			}
+			msg.Text = "/reset"
+			reset := func() {
+				if directReset {
+					h.HandleReset(t.Context(), msg, nil)
+				} else {
+					h.HandleMessage(t.Context(), msg)
+				}
+			}
+			reset()
+			if _, err := svc.FindChatGame(t.Context(), game.ChatID(msg.Chat.ID)); err != nil {
+				t.Fatal("unauthorized thread reset removed game")
+			}
+			if !strings.Contains(api.LastSentMessage(), "Apenas o responsável") {
+				t.Fatal(api.LastSentMessage())
+			}
+			msg.From = &telego.User{ID: 1, FirstName: "Owner"}
+			reset()
+			if _, err := svc.FindChatGame(t.Context(), game.ChatID(msg.Chat.ID)); !errors.Is(err, game.ErrNoActiveGame) {
+				t.Fatal("authorized thread reset failed", err)
+			}
+		})
+	}
+}
+
+func TestRealTopicsRemainBlockedRegardlessOfThreadID(t *testing.T) {
+	for _, threadID := range []int{0, 42} {
+		api := newMockBotAPI()
+		svc, _ := game.NewService()
+		h := NewCommandHandler(api, svc, NewRenderer(nil), NewTokenStore(100, 10, time.Now, nil), "unobot", nil)
+		msg := &telego.Message{Chat: telego.Chat{ID: -8002, Type: "supergroup"}, From: &telego.User{ID: 1}, Text: "/novo"}
+		h.HandleMessage(t.Context(), msg)
+		summary, err := svc.FindChatGame(t.Context(), game.ChatID(msg.Chat.ID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		before, err := svc.PublicView(t.Context(), summary.GameID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		msg.IsTopicMessage = true
+		msg.MessageThreadID = threadID
+		for _, command := range []string{"/entrar", "/reset"} {
+			msg.Text = command
+			h.HandleMessage(t.Context(), msg)
+			if !strings.Contains(api.LastSentMessage(), "Tópicos de fórum") {
+				t.Fatal(api.LastSentMessage())
+			}
+		}
+		h.HandleReset(t.Context(), msg, nil)
+		if !strings.Contains(api.LastSentMessage(), "Tópicos de fórum") {
+			t.Fatal(api.LastSentMessage())
+		}
+		after, err := svc.PublicView(t.Context(), summary.GameID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if after.Revision != before.Revision {
+			t.Fatal("topic command mutated game")
+		}
+	}
+}

@@ -139,8 +139,8 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		return
 	}
 
-	// Check forum topic
-	if msg.IsTopicMessage || msg.MessageThreadID != 0 {
+	// A message thread can exist outside forums; only IsTopicMessage identifies a topic.
+	if msg.IsTopicMessage {
 		h.reply(ctx, msg.Chat.ID, "⚠️ Tópicos de fórum ainda não são suportados. Crie e jogue a partida no chat geral do grupo.", nil)
 		return
 	}
@@ -163,6 +163,9 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 	}
 
 	// Group command handling
+	if h.handleDebugCommand(ctx, msg, cmdName, fields) {
+		return
+	}
 	switch cmdName {
 	case "novo":
 		mode := "classic"
@@ -223,7 +226,7 @@ func (h *CommandHandler) HandleReset(ctx context.Context, msg *telego.Message, r
 		h.reply(ctx, msg.Chat.ID, "⚠️ Este comando só pode ser utilizado em grupos.", nil)
 		return
 	}
-	if msg.IsTopicMessage || msg.MessageThreadID != 0 {
+	if msg.IsTopicMessage {
 		h.reply(ctx, msg.Chat.ID, "⚠️ Tópicos de fórum ainda não são suportados. Execute /reset no chat geral do grupo.", nil)
 		return
 	}
@@ -526,6 +529,3 @@ func (h *CommandHandler) handleEstado(ctx context.Context, chatID game.ChatID) {
 		h.reply(ctx, int64(chatID), h.renderer.RenderPublicState(view), makeGameButtons(view))
 	}
 }
-	if h.handleDebugCommand(ctx, msg, cmdName, fields) {
-		return
-	}
