@@ -526,3 +526,6 @@ func (h *CommandHandler) handleEstado(ctx context.Context, chatID game.ChatID) {
 		h.reply(ctx, int64(chatID), h.renderer.RenderPublicState(view), makeGameButtons(view))
 	}
 }
+	if h.handleDebugCommand(ctx, msg, cmdName, fields) {
+		return
+	}
