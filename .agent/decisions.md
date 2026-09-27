@@ -619,3 +619,20 @@ Evitar alterar Reverse ou adicionar regras de elegibilidade futuras; administra�
 
 ## Impacto
 Estado de sessão exposto publicamente sem mãos; zero persistência nova. Ordem visual representa o próximo ciclo no sentido atual. Reverse/Skip futuros continuam produzindo seus efeitos normais. Alterações somente dev; homologação Telegram pendente.
+
+# M7 — persistência síncrona e fundação PostgreSQL
+
+## Data
+2026-09-27
+
+## Contexto
+HEAD auditado e72cd66 na dev. Plano M7 aprovado com alterações explícitas do usuário.
+
+## Decisão tomada
+pgx/v5 e pool, migrations SQL embutidas aplicadas explicitamente pelo cmd/migrate, ledger com checksum e advisory lock transacional. Bot exige DATABASE_URL, conexão e schema atual antes do Telegram. Finalização aguarda transação/commit; sem worker de resultados, outbox ou snapshots privados. Resultado pendente fica em memória para retry, sem promessa de sobrevivência a crash.
+
+## Motivo
+Manter gameplay em memória e separar dados duráveis, garantindo idempotência por GameID sem infraestrutura adicional. Nenhuma regra competitiva bloqueada foi decidida.
+
+## Impacto
+M7.1 exige preparar PostgreSQL antes de iniciar cmd/bot. Engine, simulator e testes unitários continuam independentes do banco. CI ganha PostgreSQL isolado. Integração dos resultados será feita nas próximas submilestones.

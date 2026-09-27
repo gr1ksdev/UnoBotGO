@@ -251,3 +251,9 @@
 - Homologação real pendente, main não publicada. Usuário fará aceite no Telegram antes de qualquer promoção.
 
 - Validação desta milestone: test/vet/build normais e com debugcards aprovados; diff check aprovado. Race local bloqueado por VMA 39 (exige 48), após habilitar CGO; verificação via CI após push.
+
+# M7 — fundação iniciada (2026-09-27)
+- cmd/bot requer DATABASE_URL, ping e schema atualizado antes do transporte; cmd/migrate aplica SQL versionado sem TOKEN.
+- internal/storage/postgres usa pgx/v5; internal/uno e internal/game continuam sem imports de PostgreSQL.
+- Sem fila de resultados/outbox por decisão explícita. Finalização futura deve aguardar transação antes da pontuação Telegram.
+- Plano aprovado com decisões competitivas/UX ainda pendentes. Não declarar M7 completa.

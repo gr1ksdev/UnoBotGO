@@ -10,6 +10,7 @@ import (
 
 	"github.com/malbs/UnoGoBot/internal/config"
 	"github.com/malbs/UnoGoBot/internal/game"
+	"github.com/malbs/UnoGoBot/internal/storage/postgres"
 	"github.com/malbs/UnoGoBot/internal/telegram"
 )
 
@@ -34,6 +35,22 @@ func main() {
 		"token_limit", cfg.InlineTokenLimit,
 		"token_user_limit", cfg.InlineTokenUserLim,
 	)
+
+	// PostgreSQL is required at startup; gameplay remains entirely in memory.
+	startupCtx, startupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	store, err := postgres.Open(startupCtx, cfg.DatabaseURL)
+	if err == nil {
+		err = store.VerifySchema(startupCtx)
+	}
+	startupCancel()
+	if err != nil {
+		if store != nil {
+			store.Close()
+		}
+		logger.Error("failed to initialize persistence", "error", err)
+		os.Exit(1)
+	}
+	defer store.Close()
 
 	// 3. Initialize game service
 	svc, err := game.NewService(game.WithHistoryLimit(cfg.HistoryLimit))

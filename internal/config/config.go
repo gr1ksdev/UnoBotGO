@@ -15,6 +15,7 @@ import (
 )
 
 var (
+	ErrMissingDatabaseURL   = errors.New("config: DATABASE_URL is required")
 	ErrMissingToken         = errors.New("config: TOKEN environment variable is required")
 	ErrInvalidToken         = errors.New("config: invalid Telegram bot token format")
 	ErrInvalidLogLevel      = errors.New("config: invalid LOG_LEVEL")
@@ -36,6 +37,7 @@ var (
 )
 
 type Config struct {
+	DatabaseURL        string
 	Token              string
 	LogLevel           slog.Level
 	HistoryLimit       int
@@ -174,5 +176,10 @@ func LoadFromLookup(lookup func(string) (string, bool)) (*Config, error) {
 		}
 	}
 
+	val, ok := lookup("DATABASE_URL")
+	if !ok || strings.TrimSpace(val) == "" {
+		return nil, ErrMissingDatabaseURL
+	}
+	cfg.DatabaseURL = strings.TrimSpace(val)
 	return cfg, nil
 }

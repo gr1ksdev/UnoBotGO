@@ -407,3 +407,9 @@
 - Homologação real pendente, main não publicada. Usuário fará aceite no Telegram antes de qualquer promoção.
 
 - Validação desta milestone: test/vet/build normais e com debugcards aprovados; diff check aprovado. Race local bloqueado por VMA 39 (exige 48), após habilitar CGO; verificação via CI após push.
+
+# M7 em implementação — 2026-09-27
+- Plano aprovado: m7-persistencia-ranking_2026-09-27_13-33.md, agora em approved.
+- Usuário removeu worker/fila de resultados e outbox do plano. Fechamento síncrono após GameFinished; commit antes da mensagem de pontos. Nenhum snapshot de engine/mãos no DB.
+- M7.1: pgx/v5, DATABASE_URL obrigatório em cmd/bot, cmd/migrate explícito, migration ledger checksum/advisory lock. Primeiro schema: group_configs Classic/Legacy.
+- Testes de integração exigem TEST_DATABASE_URL, schemas temporários isolados. Decisões de produto continuam bloqueadas.

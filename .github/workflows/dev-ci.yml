@@ -25,8 +25,31 @@ jobs:
       - run: go vet ./...
       - run: go build ./...
       - run: git diff --check
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_PASSWORD: unobot-test
+          POSTGRES_DB: unobot_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:unobot-test@localhost:5432/unobot_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test -race -tags integration ./internal/storage/postgres/...
   docker-build:
-    needs: validate
+    needs: [validate, postgres]
     runs-on: ubuntu-latest
     permissions:
       contents: read

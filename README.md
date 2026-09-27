@@ -138,3 +138,21 @@ duas arquiteturas após as validações.
 ### Transporte Telegram
 
 Long polling é o padrão e o modo recomendado. Webhook permanece experimental, sem homologação real aprovada; consulte o [estado do projeto](docs/project-status.md#transportes-e-evidência-real). Para webhook, use `TELEGRAM_MODE=webhook`, `WEBHOOK_URL`, `WEBHOOK_SECRET` e `WEBHOOK_LISTEN_ADDR=:8080`; publique o endpoint HTTPS por um proxy externo. `WEBHOOK_DROP_PENDING_UPDATES=false` preserva updates pendentes.
+
+### PostgreSQL V2 (M7 em implementação)
+
+O runtime V2 exige `DATABASE_URL` e schema atualizado. Antes de iniciar:
+
+```sh
+export DATABASE_URL='postgres://unobot:senha@localhost:5432/unobot?sslmode=disable'
+go run ./cmd/migrate
+go run ./cmd/bot
+```
+
+O comando de migrations não exige `TOKEN`. O bot verifica conexão e migrations com prazo de 10 segundos antes do transporte Telegram; falha provoca saída não zero, sem expor a URL nos logs. O schema não é alterado automaticamente pelo bot. Use TLS conforme o ambiente. Partidas ativas continuam em memória, sem recuperação após restart. Nesta primeira submilestone, a conexão e o schema estão preparados; resultados/ranking ainda não estão integrados.
+
+Testes reais de PostgreSQL usam uma base exclusiva de testes e schemas temporários isolados:
+
+```sh
+TEST_DATABASE_URL='postgres://postgres:senha@localhost:5432/unobot_test?sslmode=disable' go test -race -tags integration ./internal/storage/postgres/...
+```
