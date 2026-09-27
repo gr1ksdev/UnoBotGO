@@ -427,3 +427,9 @@
 - Continuação M7 aprovada: N = placements válidos de concluintes. Abandonados/lobby fora de N, sem posição artificial, zero; late/reentry sem punição se concluiu. Departure permitido se N>=2; N<2 sem concessão, cancelled excluído. internal/ranking.Prepare trabalha numa cópia, policy completed-placements-v1. Engine não alterada. Testes reais do serviço usam deck determinístico e ações normais para confirmar todos os ciclos.
 
 - Storage da elegibilidade: migration 0005 amplia apenas scoring_status com insufficient_eligible_players. Não reescreve dados/checksums anteriores. Todos os avaliados têm score_units numérico (zero para abandonos/N<2); stats só para elegíveis quando N>=2. participant_count continua sendo total auditado, não N. Integração PostgreSQL 17/race confirmou N2/N3/N8/N7/N6/departure/N0/N1, idempotência concorrente, rollback após sete stats, retry e preservação de pending históricos (repreparação conflitante não recontabiliza).
+
+- Telegram e anúncio de ranking pós-commit:
+  - Finalização síncrona nos 3 pontos de encerramento (`inline.go`, `commands.go`, `bot.go` timeout).
+  - Mensagem final compacta é enviada primeiro; o callback `notify` é retornado apenas se o commit confirmou `commit.Scored == true` e `!commit.AlreadyPersisted`.
+  - Disparo de `notifyPoints` envia a mensagem adicional com ordenação (colocados primeiro em ordem de colocação, depois participantes sem colocação com `(fora do ranking)` ordenados por UserID), escape HTML dos nomes, Legacy em inteiros e Updated em decimal formatado com vírgula e 2 casas (`half-up`).
+  - N<2 ou falhas de commit não disparam a mensagem de pontos; em caso de falha de banco, o resultado é mantido na memória do `game.Service` para retry síncrono via `RetryPendingResults`. Retries já persistidos (`AlreadyPersisted`) não reenviam a mensagem de pontuação. Commit `b56322e`.
