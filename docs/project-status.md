@@ -1,8 +1,9 @@
 # UnoBotGO V2 — Estado do projeto
 
-Última revisão: **2026-09-26**. Esta versão acompanha a **dev**.
+Última revisão: **2026-09-27**. Esta versão acompanha a **dev**.
 Base desta revisão: `dev@badf81c` antes de Gameplay UX Polish e `main@fd011ab`.
-Esta revisão inclui Gameplay UX Polish na dev; nenhum código foi promovido à main.
+Esta revisão inclui Gameplay UX Polish e a fundação M7 na dev; nenhum código foi promovido à main.
+A M7 foi auditada sobre `e72cd66`; implementação e limitações em [M7](m7-persistence.md).
 
 Este documento descreve **maturidade, validação e publicação**, não arquitetura.
 Para funcionamento interno, consulte a [documentação técnica](../README.md#documentação-técnica).
@@ -49,6 +50,8 @@ A coluna Implementado considera a dev; Main indica a presença na base pública 
 | Gameplay UX Polish | Sim, dev | Ordem, lock, renderer e regressões | Telegram: pendente | Não | Pronta para homologação manual |
 | Blefe em +4 sobre +2 | Sim, dev | Counter legal não desafiável | Telegram: pendente | Não | Caseiro: +4 sobre +2 não é blefe |
 | Reentrada e colocação | Sim, dev | Late join após saída vs finalizados | Telegram: pendente | Não | Reentrada de quem saiu; colocado bloqueado |
+| M7 persistência/configuração | Fundação implementada | PostgreSQL real/race/defaults/snapshot | Telegram: pendente | Não | DATABASE_URL obrigatório; setup pendente |
+| M7 ranking/import | Cálculo/transação/staging | Idempotência/rollback/Unicode/ambiguous | N/A para fundação | Não | Runtime salva resultado pending sem pontos; policy/UX bloqueadas |
 | /dar | Sim, com tag | Testes debugcards e exclusão normal | Não certificada; uso de desenvolvimento | Não | Fora do produto/build padrão |
 
 ## Transportes e evidência real

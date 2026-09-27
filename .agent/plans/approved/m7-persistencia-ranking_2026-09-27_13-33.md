@@ -173,3 +173,10 @@ Usuário aprovou o BUILD com estas alterações, que substituem qualquer mençã
 - Nenhum snapshot privado de engine/mãos no banco.
 - Decisões de produto permanecem bloqueadas; nenhum reset/conversão ou elegibilidade arbitrária.
 - Memória não garante sobrevivência a crash antes de commit; nenhuma recuperação ativa ou journal adicional foi aprovada.
+
+
+## Progresso do BUILD — 2026-09-27
+
+M7.1 (8b46c2d), M7.2 base (d4e34ee), M7.3 base (806e022), M7.4 (35e72de), M7.5 base (5364016), cleanup limitado (6e60203). Todos os checks locais e PostgreSQL/race passaram. Relatório em docs/m7-persistence.md.
+
+Runtime persiste somente resultados oficiais como needs_product_decision sem pontos enquanto as regras competitivas permanecem bloqueadas. Fechamento síncrono sem worker/outbox; DTO público retido em RAM até commit. Setup/instalador Telegram, troca de sistema, ranking público e aplicação de import continuam pendentes conforme decisões de produto. Nenhum push/main/deploy. Plano permanece approved, não done, pois a M7 integral não foi concluída.
