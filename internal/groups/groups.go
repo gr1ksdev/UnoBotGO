@@ -44,10 +44,15 @@ func (c Config) Snapshot() Snapshot { return Snapshot{c.RankingSystem, c.Revisio
 type Repository interface {
 	GetOrCreateGroupConfig(context.Context, int64) (Config, error)
 	SetDefaultGameMode(context.Context, int64, Mode) (Config, error)
+	SetRankingSystem(context.Context, int64, RankingSystem) (Config, error)
+	SetInstalledBy(context.Context, int64, int64) (Config, error)
 }
 
-var ErrForbidden = errors.New("groups: configuration permission denied")
-var ErrInvalid = errors.New("groups: invalid configuration")
+var (
+	ErrForbidden            = errors.New("groups: configuration permission denied")
+	ErrInvalid              = errors.New("groups: invalid configuration")
+	ErrNeedsProductDecision = errors.New("groups: cannot switch ranking system with existing accumulated scores")
+)
 
 // Membership must be asserted by a trusted platform adapter at action time.
 type Membership struct{ Admin, Member bool }
@@ -60,6 +65,21 @@ func CanConfigure(config Config, userID int64, role Membership) bool {
 type Service struct {
 	Repository       Repository
 	LookupMembership func(context.Context, int64, int64) (Membership, error)
+}
+
+func (s Service) CanConfigureUser(ctx context.Context, chatID, userID int64) (Config, bool, error) {
+	if chatID == 0 || userID <= 0 {
+		return Config{}, false, ErrInvalid
+	}
+	c, err := s.Repository.GetOrCreateGroupConfig(ctx, chatID)
+	if err != nil {
+		return Config{}, false, err
+	}
+	role, err := s.LookupMembership(ctx, chatID, userID)
+	if err != nil {
+		return Config{}, false, ErrForbidden
+	}
+	return c, CanConfigure(c, userID, role), nil
 }
 
 func (s Service) SetDefaultGameMode(ctx context.Context, chatID, userID int64, mode Mode) (Config, error) {
@@ -78,4 +98,29 @@ func (s Service) SetDefaultGameMode(ctx context.Context, chatID, userID int64, m
 		return Config{}, ErrForbidden
 	}
 	return s.Repository.SetDefaultGameMode(ctx, chatID, mode)
+}
+
+func (s Service) SetRankingSystem(ctx context.Context, chatID, userID int64, system RankingSystem) (Config, error) {
+	if chatID == 0 || userID <= 0 || !system.Valid() {
+		return Config{}, ErrInvalid
+	}
+	c, err := s.Repository.GetOrCreateGroupConfig(ctx, chatID)
+	if err != nil {
+		return Config{}, err
+	}
+	role, err := s.LookupMembership(ctx, chatID, userID)
+	if err != nil {
+		return Config{}, ErrForbidden
+	}
+	if !CanConfigure(c, userID, role) {
+		return Config{}, ErrForbidden
+	}
+	return s.Repository.SetRankingSystem(ctx, chatID, system)
+}
+
+func (s Service) RecordInstallation(ctx context.Context, chatID, installerID int64) (Config, error) {
+	if chatID == 0 || installerID <= 0 {
+		return Config{}, ErrInvalid
+	}
+	return s.Repository.SetInstalledBy(ctx, chatID, installerID)
 }
