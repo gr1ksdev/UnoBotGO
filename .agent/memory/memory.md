@@ -415,3 +415,5 @@
 - Testes de integração exigem TEST_DATABASE_URL, schemas temporários isolados. Decisões de produto continuam bloqueadas.
 
 - M7.2: internal/groups define defaults/repository/autorização; postgres GetOrCreate preserva Classic/Legacy. /novo consulta config uma vez; overrides não alteram default. Session snapshot de ranking/revision em game permanece independente de DB, lobby mantém seletor existente. API de modo valida permissão no serviço. Setup Telegram/troca de sistema ainda pendentes de UX/política; nenhum novo comando criado.
+
+- M7.3 foundation: centésimos int64/half-up; immutable public DTO + lifecycle counters; completed results held independently of history/reset until COMMIT. Telegram finalization synchronous only at closure, 10s timeout, no workers/outbox. Result policy blank persists needs_product_decision with NULL score and no stats; no competitive policy enabled. Atomic/idempotent Store test uses explicitly test-only policy, not runtime. GameID+canonical hash rejects conflicting retry, rollback on mismatched ranking.

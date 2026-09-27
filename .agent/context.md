@@ -259,3 +259,5 @@
 - Plano aprovado com decisões competitivas/UX ainda pendentes. Não declarar M7 completa.
 
 - M7.2: group_configs alimenta /novo; explicit overrides continuam. PublicGameView/managedGame carregam Snapshot (ranking_system/config_revision) por valor. Engine e ações de gameplay não importam storage. groups.Service verifica associação atual para configuração; setup Telegram ainda não integrado.
+
+- M7.3 foundation: completed_games + completed_game_players + player_group_stats. Resultado oficial público extraído antes de descarte da engine e retido em memória independente do FIFO/reset. Hooks de fechamento inline/saída/timeout aguardam RecordCompletedGame; erro retém DTO. Sem política competitiva aprovada: runtime persiste needs_product_decision (score NULL, sem stats). Calculador e transação pontuada testados com policy exclusiva de teste. Nenhuma mensagem de pontos ainda.

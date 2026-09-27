@@ -16,6 +16,7 @@ import (
 
 	"github.com/malbs/UnoGoBot/internal/game"
 	"github.com/malbs/UnoGoBot/internal/groups"
+	"github.com/malbs/UnoGoBot/internal/ranking"
 	"github.com/mymmrac/telego"
 )
 
@@ -28,19 +29,20 @@ var (
 var allowedUpdates = []string{"message", "inline_query", "chosen_inline_result", "callback_query"}
 
 type Bot struct {
-	api           BotAPI
-	service       *game.Service
-	tokens        *TokenStore
-	renderer      *Renderer
-	dispatcher    *Dispatcher
-	cmdHandler    *CommandHandler
-	cbHandler     *CallbackHandler
-	inlineHandler *InlineHandler
-	logger        *slog.Logger
-	username      string
-	turnTimeout   time.Duration
-	transport     TransportConfig
-	dedupe        *updateDeduper
+	resultRepository ranking.Repository
+	api              BotAPI
+	service          *game.Service
+	tokens           *TokenStore
+	renderer         *Renderer
+	dispatcher       *Dispatcher
+	cmdHandler       *CommandHandler
+	cbHandler        *CallbackHandler
+	inlineHandler    *InlineHandler
+	logger           *slog.Logger
+	username         string
+	turnTimeout      time.Duration
+	transport        TransportConfig
+	dedupe           *updateDeduper
 }
 
 func (b *Bot) SetGroupConfigs(repository groups.Repository) { b.cmdHandler.groupConfigs = repository }
@@ -277,6 +279,7 @@ func (b *Bot) enqueueAutoSkip(candidate game.ExpiredTurn) bool {
 		if !applied {
 			return
 		}
+		b.finalizeOutcome(ctx, outcome)
 		text := "⏱️ O tempo acabou; o turno foi pulado.\n\n" + b.renderer.RenderPublicState(outcome.View)
 		b.cmdHandler.reply(ctx, int64(candidate.ChatID), text, makeGameButtons(outcome.View))
 	})

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/malbs/UnoGoBot/internal/groups"
+	"github.com/malbs/UnoGoBot/internal/ranking"
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
 
@@ -27,8 +28,9 @@ type CreateRequest struct {
 }
 
 type Outcome struct {
-	View   PublicGameView
-	Events []uno.Event
+	Completed *ranking.Result
+	View      PublicGameView
+	Events    []uno.Event
 }
 
 type ResetResult struct {

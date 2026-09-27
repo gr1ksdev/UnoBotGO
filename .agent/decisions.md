@@ -636,3 +636,20 @@ Manter gameplay em memória e separar dados duráveis, garantindo idempotência 
 
 ## Impacto
 M7.1 exige preparar PostgreSQL antes de iniciar cmd/bot. Engine, simulator e testes unitários continuam independentes do banco. CI ganha PostgreSQL isolado. Integração dos resultados será feita nas próximas submilestones.
+
+# M7 — scores e fechamento sem política inventada
+
+## Data
+2026-09-27
+
+## Contexto
+Fórmulas aprovadas, mas elegibilidade/requisitos mínimos/abandono/late join ainda bloqueados.
+
+## Decisão tomada
+Unidades int64 em centésimos, Updated arredondado half-up a duas casas. DTO público final guarda apenas participantes, nomes, colocações existentes e metadados de participação. Resultado sem policy_version é persistido como needs_product_decision, score NULL, sem tocar stats. Runtime ainda não ativa uma política competitiva. Foundation transacional aceita scores calculados somente com policy_version explícita, validando fórmula. Nenhuma política de produção foi criada.
+
+## Motivo
+Implementar cálculo, auditoria e transação testável sem decidir elegibilidade arbitrária. Resultado imutável retido em mapa de memória independente do histórico; adapter aguarda COMMIT fora dos locks de game e reconhece somente sucesso. Sem worker/outbox.
+
+## Impacto
+Partidas oficialmente encerradas já podem persistir auditoria; canceladas/ativas não. Ranking automático e mensagens de pontos continuam pendentes de decisão. Resultados pending não são promovidos/recalculados automaticamente; aplicação futura exige operação auditável específica. Falha de conexão mantém resultado para retry síncrono; crash antes de COMMIT ainda perde RAM.
