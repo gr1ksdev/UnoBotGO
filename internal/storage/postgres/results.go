@@ -39,21 +39,22 @@ func (s *Store) RecordCompletedGame(ctx context.Context, result ranking.Result) 
 			return ranking.Commit{}, ranking.ErrConflict
 		}
 		// No writes are needed for a confirmed identical retry.
-		return ranking.Commit{AlreadyPersisted: true, Scored: status == "scored"}, nil
+		return ranking.Commit{AlreadyPersisted: true, Scored: status == ranking.StatusScored}, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return ranking.Commit{}, operationError(ctx, "check result idempotency")
 	}
-	scored := r.PolicyVersion != ""
+	status = r.ScoringStatus()
+	scored := status == ranking.StatusScored
 	if scored && system != string(r.RankingSystem) {
 		return ranking.Commit{}, ranking.ErrNeedsProductDecision
 	}
-	status = "needs_product_decision"
 	var policy any
 	var scoredAt any
-	if scored {
-		status = "scored"
+	if r.PolicyVersion != "" {
 		policy = r.PolicyVersion
+	}
+	if scored {
 		scoredAt = r.FinishedAt
 	}
 	// ON CONFLICT also covers accidental reuse of a GameID in different chats.
@@ -84,7 +85,7 @@ func (s *Store) RecordCompletedGame(ctx context.Context, result ranking.Result) 
 		if p.Position > 0 {
 			position = p.Position
 		}
-		if scored {
+		if r.PolicyVersion != "" {
 			score = int64(p.Score)
 		}
 		if p.Username != "" {
@@ -94,7 +95,7 @@ func (s *Store) RecordCompletedGame(ctx context.Context, result ranking.Result) 
  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, r.GameID, p.UserID, p.DisplayName, username, p.FinalStatus, position, p.WentOut, score, p.JoinedAfterStart, p.LeaveCount, p.ReentryCount); err != nil {
 			return ranking.Commit{}, operationError(ctx, "insert result player")
 		}
-		if !scored {
+		if !scored || !p.Eligible() {
 			continue
 		}
 		wins := 0
