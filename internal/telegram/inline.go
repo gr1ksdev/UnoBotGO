@@ -470,6 +470,7 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 	// Schedule the state change in the designated chat worker queue to ensure in-order execution
 	accepted := h.dispatcher.EnqueueChat(actionToken.ChatID, func(taskCtx context.Context) {
 		actor := game.Actor{PlayerID: actorID, ChatID: actionToken.ChatID}
+		_ = h.service.ObservePlayer(taskCtx, actor, actionToken.GameID, observedName(chosen.From), chosen.From.Username)
 		outcome, err := h.service.Apply(taskCtx, actor, actionToken.GameID, actionToken.Action)
 		if err != nil {
 			h.replyActionError(taskCtx, actorID, tokenStr, actionToken, err)

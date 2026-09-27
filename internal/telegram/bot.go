@@ -45,7 +45,8 @@ type Bot struct {
 	dedupe           *updateDeduper
 }
 
-func (b *Bot) SetGroupConfigs(repository groups.Repository) { b.cmdHandler.groupConfigs = repository }
+func (b *Bot) SetGroupConfigs(repository groups.Repository)   { b.cmdHandler.groupConfigs = repository }
+func (b *Bot) SetKnownUsers(repository groups.UserRepository) { b.cmdHandler.knownUsers = repository }
 
 func (b *Bot) SetTurnTimeout(timeout time.Duration) { b.turnTimeout = timeout }
 func (b *Bot) SetTransport(cfg TransportConfig)     { b.transport = cfg.normalized() }

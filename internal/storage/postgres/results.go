@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/jackc/pgx/v5"
+	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/ranking"
 	"slices"
 )
@@ -74,6 +75,11 @@ func (s *Store) RecordCompletedGame(ctx context.Context, result ranking.Result) 
 		return 0
 	})
 	for _, p := range r.Players {
+		if !p.LastSeenAt.IsZero() {
+			if err = observeGroupUser(ctx, tx, groups.KnownUser{ChatID: r.ChatID, UserID: p.UserID, DisplayName: p.DisplayName, Username: p.Username, LastSeenAt: p.LastSeenAt}); err != nil {
+				return ranking.Commit{}, operationError(ctx, "observe result user")
+			}
+		}
 		var position, score, username any
 		if p.Position > 0 {
 			position = p.Position

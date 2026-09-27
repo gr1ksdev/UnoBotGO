@@ -52,6 +52,7 @@ func FormatPoints(u Units) string {
 }
 
 type Player struct {
+	LastSeenAt               time.Time
 	UserID                   int64
 	DisplayName              string
 	Username                 string

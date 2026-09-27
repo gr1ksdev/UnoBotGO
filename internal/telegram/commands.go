@@ -15,6 +15,7 @@ import (
 )
 
 type CommandHandler struct {
+	knownUsers   groups.UserRepository
 	finalize     func(context.Context, game.Outcome)
 	groupConfigs groups.Repository
 	bot          BotAPI
@@ -165,6 +166,10 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		return
 	}
 
+	// Observed names stay in RAM during gameplay and are flushed at closure.
+	if summary, err := h.service.FindChatGame(ctx, chatID); err == nil {
+		_ = h.service.ObservePlayer(ctx, game.Actor{PlayerID: actorID, ChatID: chatID}, summary.GameID, observedName(*msg.From), msg.From.Username)
+	}
 	// Group command handling
 	if h.handleDebugCommand(ctx, msg, cmdName, fields) {
 		return
@@ -178,7 +183,7 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 				mode = "caseiro"
 			}
 		}
-		h.handleNovo(ctx, actorID, chatID, msg.Chat.Title, mode)
+		h.handleNovoObserved(ctx, actorID, chatID, msg.Chat.Title, mode, msg.From)
 	case "trancar", "destrancar":
 		h.handleRoomLock(ctx, actorID, chatID, cmdName == "trancar")
 	case "entrar":
@@ -305,6 +310,9 @@ func (h *CommandHandler) HandleReset(ctx context.Context, msg *telego.Message, r
 }
 
 func (h *CommandHandler) handleNovo(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID, chatTitle, mode string) {
+	h.handleNovoObserved(ctx, actorID, chatID, chatTitle, mode, nil)
+}
+func (h *CommandHandler) handleNovoObserved(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID, chatTitle, mode string, user *telego.User) {
 	config := groups.Defaults(int64(chatID))
 	if h.groupConfigs != nil {
 		var err error
@@ -313,6 +321,11 @@ func (h *CommandHandler) handleNovo(ctx context.Context, actorID uno.PlayerID, c
 			h.logger.Warn("failed to load group config", "chat_id", chatID, "error", err)
 			h.reply(ctx, int64(chatID), "❌ Não foi possível carregar a configuração do grupo. Tente novamente.", nil)
 			return
+		}
+	}
+	if h.knownUsers != nil && user != nil {
+		if err := h.knownUsers.ObserveGroupUser(ctx, groups.KnownUser{ChatID: int64(chatID), UserID: user.ID, DisplayName: observedName(*user), Username: user.Username, LastSeenAt: time.Now().UTC()}); err != nil {
+			h.logger.Warn("failed to observe group user", "chat_id", chatID, "error", err)
 		}
 	}
 	if mode == "" {

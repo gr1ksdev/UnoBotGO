@@ -10,6 +10,7 @@ import (
 )
 
 type participantHistory struct {
+	LastSeenAt               time.Time
 	DisplayName, Username    string
 	JoinedAfterStart         bool
 	LeaveCount, ReentryCount int
@@ -33,6 +34,7 @@ func (s *Service) ObservePlayer(ctx context.Context, actor Actor, id uno.GameID,
 		entry.participants = map[uno.PlayerID]participantHistory{}
 	}
 	metadata := entry.participants[actor.PlayerID]
+	metadata.LastSeenAt = time.Now().UTC()
 	metadata.DisplayName = name
 	metadata.Username = username
 	entry.participants[actor.PlayerID] = metadata
@@ -87,7 +89,7 @@ func finalResult(entry *managedGame, state uno.State) *ranking.Result {
 		if player.Status == uno.WentOut {
 			status = "went_out"
 		}
-		p := ranking.Player{UserID: int64(player.ID), DisplayName: name, Username: h.Username, FinalStatus: status, JoinedAfterStart: h.JoinedAfterStart, LeaveCount: h.LeaveCount, ReentryCount: h.ReentryCount}
+		p := ranking.Player{LastSeenAt: h.LastSeenAt, UserID: int64(player.ID), DisplayName: name, Username: h.Username, FinalStatus: status, JoinedAfterStart: h.JoinedAfterStart, LeaveCount: h.LeaveCount, ReentryCount: h.ReentryCount}
 		for _, placed := range state.Placements {
 			if placed.PlayerID == player.ID {
 				p.Position = placed.Position

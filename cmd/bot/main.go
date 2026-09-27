@@ -74,6 +74,7 @@ func main() {
 	bot := telegram.New(telegoBot, svc, tokens, renderer, cfg.InlineTokenTTL, logger)
 	bot.SetGroupConfigs(store)
 	bot.SetResultRepository(store)
+	bot.SetKnownUsers(store)
 	bot.SetTurnTimeout(cfg.TurnTimeout)
 	bot.SetTransport(telegram.TransportConfig{Mode: telegram.TransportMode(cfg.TelegramMode), WebhookURL: cfg.WebhookURL, WebhookSecret: cfg.WebhookSecret, ListenAddr: cfg.WebhookListenAddr, DropPendingUpdates: cfg.WebhookDropPending})
 
