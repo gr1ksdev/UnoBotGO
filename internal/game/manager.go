@@ -37,6 +37,7 @@ type managedGame struct {
 	chatName    string
 	creatorID   uno.PlayerID
 	ownerID     uno.PlayerID
+	locked      bool // session admission policy, guarded by mu
 	turnStarted time.Time
 	final       *PublicGameView // public projection only, accessed under mu
 	reset       bool

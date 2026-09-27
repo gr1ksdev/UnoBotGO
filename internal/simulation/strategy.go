@@ -12,6 +12,20 @@ type strategy struct {
 
 func (s strategy) decide(game *uno.Game, state uno.State) uno.Action {
 	action := uno.Action{PlayerID: state.CurrentPlayerID, Revision: state.Revision}
+	if state.Phase == uno.ChoosingPlayer {
+		action.Type = uno.ChoosePlayer
+		// Prefer the smallest active hand; seat order breaks ties deterministically.
+		smallest := int(^uint(0) >> 1)
+		for _, id := range state.Order {
+			if id == state.CurrentPlayerID {
+				continue
+			}
+			if player := statePlayer(state, id); player != nil && len(player.Hand) < smallest {
+				action.TargetID, smallest = id, len(player.Hand)
+			}
+		}
+		return action
+	}
 	if state.Phase == uno.ChoosingColor {
 		action.Type = uno.ChooseColor
 		action.Color = preferredColor(state, state.CurrentPlayerID)

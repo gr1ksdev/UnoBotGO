@@ -98,6 +98,17 @@ func (s *Service) Apply(ctx context.Context, actor Actor, id uno.GameID, action 
 		return Outcome{}, err
 	}
 	before := entry.engine.Snapshot()
+	if action.Type == uno.JoinGame {
+		if before.HasPlacement(action.PlayerID) {
+			return Outcome{}, uno.ErrAlreadyFinished
+		}
+		if p := before.Player(action.PlayerID); p != nil && p.Status == uno.Playing {
+			return Outcome{}, uno.ErrAlreadyJoined
+		}
+		if entry.locked {
+			return Outcome{}, ErrRoomLocked
+		}
+	}
 	if action.Revision != before.Revision {
 		return Outcome{}, uno.ErrStaleRevision
 	}
@@ -137,7 +148,7 @@ func authorize(entry *managedGame, actor Actor, kind uno.ActionType) error {
 		if actor.ChatID == 0 || actor.PlayerID != entry.ownerID {
 			return ErrForbidden
 		}
-	case uno.PlayCard, uno.DrawCard, uno.PassTurn, uno.ChooseColor, uno.CallBluff:
+	case uno.PlayCard, uno.DrawCard, uno.PassTurn, uno.ChooseColor, uno.ChoosePlayer, uno.CallBluff:
 		// Inline actions have no chat context. The engine still validates the actor.
 	default:
 		return uno.ErrInvalidAction
@@ -286,4 +297,36 @@ func (s *Service) ResetChat(ctx context.Context, actor Actor) (ResetResult, erro
 		return ResetResult{}, ErrInvalidArgument
 	}
 	return s.manager.resetChat(ctx, actor)
+}
+
+// SetLocked changes admission policy under the same lock as JoinGame. It does
+// not mutate engine revision, turn deadlines or participants. Owners may be observers.
+func (s *Service) SetLocked(ctx context.Context, actor Actor, id uno.GameID, locked bool) (PublicGameView, bool, error) {
+	if err := checkContext(ctx); err != nil {
+		return PublicGameView{}, false, err
+	}
+	if actor.PlayerID <= 0 || actor.ChatID == 0 || id == "" {
+		return PublicGameView{}, false, ErrInvalidArgument
+	}
+	entry, err := s.manager.lockGame(ctx, id)
+	if err != nil {
+		return PublicGameView{}, false, err
+	}
+	defer entry.mu.Unlock()
+	if entry.final != nil {
+		return PublicGameView{}, false, ErrGameClosed
+	}
+	if actor.ChatID != entry.chatID || actor.PlayerID != entry.ownerID {
+		return PublicGameView{}, false, ErrForbidden
+	}
+	if err := ctx.Err(); err != nil {
+		return PublicGameView{}, false, err
+	}
+	changed := entry.locked != locked
+	entry.locked = locked
+	view := publicView(entry, entry.engine.Snapshot())
+	s.manager.indexMu.Lock()
+	s.manager.byID[id] = indexRecord{entry: entry, summary: view.summary()}
+	s.manager.indexMu.Unlock()
+	return view, changed, nil
 }

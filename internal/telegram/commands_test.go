@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -137,7 +138,7 @@ func TestCommandHandler_NovoEntrarIniciarCancelar(t *testing.T) {
 		Text: "/estado",
 	})
 	lastMsg = mockAPI.LastSentMessage()
-	if !strings.Contains(lastMsg, "Carta no topo") {
+	if !strings.Contains(lastMsg, "🃏 Topo:") {
 		t.Fatalf("expected state message, got: %s", lastMsg)
 	}
 
@@ -234,7 +235,7 @@ func TestCommandHandler_FiltersAndAliases(t *testing.T) {
 		From: &telego.User{ID: 100, FirstName: "User"},
 		Text: "/ajuda",
 	})
-	if !strings.Contains(mockAPI.LastSentMessage(), "Como Jogar") {
+	if !strings.Contains(mockAPI.LastSentMessage(), "UnoBotGO — Comandos") {
 		t.Fatalf("expected help text in private chat, got: %s", mockAPI.LastSentMessage())
 	}
 
@@ -270,6 +271,69 @@ func TestCommandHandler_FiltersAndAliases(t *testing.T) {
 	gView, _ := svc.PublicView(ctx, gSummary.GameID)
 	if len(gView.Players) != 0 {
 		t.Fatalf("expected 0 players in lobby, got %d", len(gView.Players))
+	}
+}
+
+func TestCommandHandler_PrivateStartAndHelp(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, _ := game.NewService()
+	handler := NewCommandHandler(mockAPI, svc, NewRenderer(NewUserCache(100)), NewTokenStore(100, 10, time.Now, nil), "DynamicBot_42", nil)
+	private := telego.Chat{ID: 100, Type: "private"}
+	user := &telego.User{ID: 100, FirstName: "User"}
+
+	handler.HandleMessage(t.Context(), &telego.Message{Chat: private, From: user, Text: "/start"})
+	if len(mockAPI.SentMessages) != 1 {
+		t.Fatalf("expected one welcome message, got %d", len(mockAPI.SentMessages))
+	}
+	welcome := mockAPI.SentMessages[0]
+	if !strings.Contains(welcome.Text, "Bem-vindo ao UnoBotGO") || !strings.Contains(welcome.Text, "/help") {
+		t.Fatalf("unexpected welcome text: %s", welcome.Text)
+	}
+	for _, forbidden := range []string{"V2", "Golang", "desenvolvida em Go"} {
+		if strings.Contains(welcome.Text, forbidden) {
+			t.Fatalf("welcome contains %q: %s", forbidden, welcome.Text)
+		}
+	}
+	markup, ok := welcome.ReplyMarkup.(*telego.InlineKeyboardMarkup)
+	if !ok || markup == nil || len(markup.InlineKeyboard) != 1 || len(markup.InlineKeyboard[0]) != 1 {
+		t.Fatalf("unexpected welcome keyboard: %#v", welcome.ReplyMarkup)
+	}
+	button := markup.InlineKeyboard[0][0]
+	if button.Text != "➕ Adicionar a um grupo" || button.URL != "https://t.me/dynamicbot_42?startgroup=true" {
+		t.Fatalf("unexpected add-to-group button: %#v", button)
+	}
+
+	handler.HandleMessage(t.Context(), &telego.Message{Chat: private, From: user, Text: "/help"})
+	if len(mockAPI.SentMessages) != 2 {
+		t.Fatalf("expected help response, got %d messages", len(mockAPI.SentMessages))
+	}
+	help := mockAPI.SentMessages[1]
+	if help.ReplyMarkup != nil {
+		t.Fatalf("help should not repeat the start keyboard: %#v", help.ReplyMarkup)
+	}
+	for _, expected := range []string{"<blockquote>", "</blockquote>", "<b>/novo</b>", "<b>/reset</b>", "@dynamicbot_42", "versão brasileira", "Go (Golang)", "@unopybot"} {
+		if !strings.Contains(help.Text, expected) {
+			t.Fatalf("help is missing %q: %s", expected, help.Text)
+		}
+	}
+}
+
+func TestCommandHandler_StartGroupDeepLinkDoesNotStartGame(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, _ := game.NewService()
+	handler := NewCommandHandler(mockAPI, svc, NewRenderer(nil), NewTokenStore(100, 10, time.Now, nil), "dynamicbot_42", nil)
+	chat := telego.Chat{ID: -10042, Type: "supergroup", Title: "New Group"}
+
+	handler.HandleMessage(t.Context(), &telego.Message{
+		Chat: chat,
+		From: &telego.User{ID: 42, FirstName: "User"},
+		Text: "/start@DynamicBot_42 true",
+	})
+	if !strings.Contains(mockAPI.LastSentMessage(), "UnoBotGO adicionado") || !strings.Contains(mockAPI.LastSentMessage(), "/novo") {
+		t.Fatalf("unexpected startgroup response: %s", mockAPI.LastSentMessage())
+	}
+	if _, err := svc.FindChatGame(t.Context(), game.ChatID(chat.ID)); !errors.Is(err, game.ErrNoActiveGame) {
+		t.Fatalf("startgroup payload created or started a game: %v", err)
 	}
 }
 
@@ -422,5 +486,287 @@ func TestCommandHandler_ResetRejectsUnsupportedSendersAndChats(t *testing.T) {
 	}, nil)
 	if !strings.Contains(mockAPI.LastSentMessage(), "só pode ser utilizado em grupos") {
 		t.Fatalf("private reset was not rejected: %s", mockAPI.LastSentMessage())
+	}
+}
+
+func TestOrdinaryThreadsAllowCommandsAndReset(t *testing.T) {
+	for _, directReset := range []bool{false, true} {
+		name := "command reset"
+		if directReset {
+			name = "recovery reset"
+		}
+		t.Run(name, func(t *testing.T) {
+			api := newMockBotAPI()
+			svc, err := game.NewService()
+			if err != nil {
+				t.Fatal(err)
+			}
+			h := NewCommandHandler(api, svc, NewRenderer(nil), NewTokenStore(100, 10, time.Now, nil), "unobot", nil)
+			msg := &telego.Message{Chat: telego.Chat{ID: -8001, Type: "supergroup"}, From: &telego.User{ID: 1, FirstName: "Owner"}, MessageThreadID: 42, Text: "/novo"}
+			h.HandleMessage(t.Context(), msg)
+			summary, err := svc.FindChatGame(t.Context(), game.ChatID(msg.Chat.ID))
+			if err != nil {
+				t.Fatal(err)
+			}
+			msg.From = &telego.User{ID: 2, FirstName: "Player"}
+			msg.Text = "/entrar"
+			h.HandleMessage(t.Context(), msg)
+			view, err := svc.PublicView(t.Context(), summary.GameID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(view.Players) != 1 || view.Players[0].ID != 2 {
+				t.Fatal("ordinary thread prevented joining", view)
+			}
+			msg.Text = "/reset"
+			reset := func() {
+				if directReset {
+					h.HandleReset(t.Context(), msg, nil)
+				} else {
+					h.HandleMessage(t.Context(), msg)
+				}
+			}
+			reset()
+			if _, err := svc.FindChatGame(t.Context(), game.ChatID(msg.Chat.ID)); err != nil {
+				t.Fatal("unauthorized thread reset removed game")
+			}
+			if !strings.Contains(api.LastSentMessage(), "Apenas o responsável") {
+				t.Fatal(api.LastSentMessage())
+			}
+			msg.From = &telego.User{ID: 1, FirstName: "Owner"}
+			reset()
+			if _, err := svc.FindChatGame(t.Context(), game.ChatID(msg.Chat.ID)); !errors.Is(err, game.ErrNoActiveGame) {
+				t.Fatal("authorized thread reset failed", err)
+			}
+		})
+	}
+}
+
+func TestRealTopicsRemainBlockedRegardlessOfThreadID(t *testing.T) {
+	for _, threadID := range []int{0, 42} {
+		api := newMockBotAPI()
+		svc, _ := game.NewService()
+		h := NewCommandHandler(api, svc, NewRenderer(nil), NewTokenStore(100, 10, time.Now, nil), "unobot", nil)
+		msg := &telego.Message{Chat: telego.Chat{ID: -8002, Type: "supergroup"}, From: &telego.User{ID: 1}, Text: "/novo"}
+		h.HandleMessage(t.Context(), msg)
+		summary, err := svc.FindChatGame(t.Context(), game.ChatID(msg.Chat.ID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		before, err := svc.PublicView(t.Context(), summary.GameID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		msg.IsTopicMessage = true
+		msg.MessageThreadID = threadID
+		for _, command := range []string{"/entrar", "/reset"} {
+			msg.Text = command
+			h.HandleMessage(t.Context(), msg)
+			if !strings.Contains(api.LastSentMessage(), "Tópicos de fórum") {
+				t.Fatal(api.LastSentMessage())
+			}
+		}
+		h.HandleReset(t.Context(), msg, nil)
+		if !strings.Contains(api.LastSentMessage(), "Tópicos de fórum") {
+			t.Fatal(api.LastSentMessage())
+		}
+		after, err := svc.PublicView(t.Context(), summary.GameID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if after.Revision != before.Revision {
+			t.Fatal("topic command mutated game")
+		}
+	}
+}
+
+func TestCommandHandler_EntrarRoomLockedAndReentry(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, err := game.NewService()
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	renderer := NewRenderer(NewUserCache(100))
+	tokens := NewTokenStore(1000, 100, time.Now, nil)
+	cmdHandler := NewCommandHandler(mockAPI, svc, renderer, tokens, "unobot", nil)
+
+	ctx := context.Background()
+	chatID := int64(-100300)
+
+	// 1. Owner creates game
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+		From: &telego.User{ID: 10, FirstName: "Owner"},
+		Text: "/novo",
+	})
+
+	// 2. Players 1, 2, 3 join
+	for _, id := range []int64{1, 2, 3} {
+		cmdHandler.HandleMessage(ctx, &telego.Message{
+			Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+			From: &telego.User{ID: id, FirstName: fmt.Sprintf("Player%d", id)},
+			Text: "/entrar",
+		})
+	}
+
+	// 3. Start game
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+		From: &telego.User{ID: 10, FirstName: "Owner"},
+		Text: "/iniciar",
+	})
+
+	// 4. Player 3 leaves via /sair
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+		From: &telego.User{ID: 3, FirstName: "Player3"},
+		Text: "/sair",
+	})
+
+	// 5. Owner locks room via /trancar
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+		From: &telego.User{ID: 10, FirstName: "Owner"},
+		Text: "/trancar",
+	})
+
+	// 6. Player 3 tries to /entrar while locked -> rejected with room locked message
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+		From: &telego.User{ID: 3, FirstName: "Player3"},
+		Text: "/entrar",
+	})
+	if !strings.Contains(mockAPI.LastSentMessage(), "Esta partida está trancada e não aceita novos jogadores") {
+		t.Fatalf("expected room locked message, got: %s", mockAPI.LastSentMessage())
+	}
+
+	// 7. Owner unlocks room via /destrancar
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+		From: &telego.User{ID: 10, FirstName: "Owner"},
+		Text: "/destrancar",
+	})
+
+	// 8. Player 3 rejoins via /entrar -> accepted!
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+		From: &telego.User{ID: 3, FirstName: "Player3"},
+		Text: "/entrar",
+	})
+	if !strings.Contains(mockAPI.LastSentMessage(), "entrou na partida em andamento") {
+		t.Fatalf("expected rejoin message, got: %s", mockAPI.LastSentMessage())
+	}
+}
+
+func TestCommandHandler_EntrarAlreadyFinished(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, err := game.NewService()
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	renderer := NewRenderer(NewUserCache(100))
+	tokens := NewTokenStore(1000, 100, time.Now, nil)
+	cmdHandler := NewCommandHandler(mockAPI, svc, renderer, tokens, "unobot", nil)
+
+	ctx := context.Background()
+	chatID := int64(-100400)
+
+	// Owner creates game with BotRules (Placements end policy)
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+		From: &telego.User{ID: 10, FirstName: "Owner"},
+		Text: "/novo",
+	})
+	for _, id := range []int64{1, 2, 3} {
+		cmdHandler.HandleMessage(ctx, &telego.Message{
+			Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+			From: &telego.User{ID: id, FirstName: fmt.Sprintf("Player%d", id)},
+			Text: "/entrar",
+		})
+	}
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+		From: &telego.User{ID: 10, FirstName: "Owner"},
+		Text: "/iniciar",
+	})
+
+	summary, err := svc.FindChatGame(ctx, game.ChatID(chatID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	gameID := summary.GameID
+
+	// Play until someone gets a placement
+	var winnerID uno.PlayerID
+	for steps := 0; steps < 500; steps++ {
+		pubView, pErr := svc.PublicView(ctx, gameID)
+		if pErr != nil || pubView.Closed {
+			break
+		}
+		if len(pubView.Placements) > 0 {
+			winnerID = pubView.Placements[0].PlayerID
+			break
+		}
+		if pubView.ColorChooserID != 0 {
+			_, _ = svc.Apply(ctx, game.Actor{PlayerID: pubView.ColorChooserID, ChatID: 0}, gameID, uno.Action{
+				Type:     uno.ChooseColor,
+				PlayerID: pubView.ColorChooserID,
+				Color:    uno.Red,
+				Revision: pubView.Revision,
+			})
+			continue
+		}
+		currID := pubView.CurrentTurn
+		pView, pErr := svc.PlayerView(ctx, game.Actor{PlayerID: currID, ChatID: 0}, gameID)
+		if pErr != nil {
+			break
+		}
+		played := false
+		for _, cv := range pView.Hand {
+			if cv.Playable {
+				_, applyErr := svc.Apply(ctx, game.Actor{PlayerID: currID, ChatID: 0}, gameID, uno.Action{
+					Type:     uno.PlayCard,
+					PlayerID: currID,
+					CardID:   cv.Card.ID,
+					Revision: pubView.Revision,
+				})
+				if applyErr == nil {
+					played = true
+					break
+				}
+			}
+		}
+		if !played {
+			if pView.DrawnCardID != "" {
+				_, _ = svc.Apply(ctx, game.Actor{PlayerID: currID, ChatID: 0}, gameID, uno.Action{
+					Type:     uno.PassTurn,
+					PlayerID: currID,
+					Revision: pubView.Revision,
+				})
+			} else {
+				_, _ = svc.Apply(ctx, game.Actor{PlayerID: currID, ChatID: 0}, gameID, uno.Action{
+					Type:     uno.DrawCard,
+					PlayerID: currID,
+					Revision: pubView.Revision,
+				})
+			}
+		}
+	}
+
+	if winnerID == 0 {
+		t.Skip("no winner reached within 500 steps, skipping placement check")
+	}
+
+	// Winner attempts to /entrar again
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+		From: &telego.User{ID: int64(winnerID), FirstName: "Winner"},
+		Text: "/entrar",
+	})
+	lastMsg := mockAPI.LastSentMessage()
+	if !strings.Contains(lastMsg, "Você já terminou esta partida e não pode entrar novamente") {
+		t.Fatalf("expected already finished message, got: %s", lastMsg)
 	}
 }

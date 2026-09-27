@@ -87,7 +87,7 @@ func TestReportContainsStatsSpecialsAndDiagnostics(t *testing.T) {
 		t.Fatal(err)
 	}
 	stats := CollectStats(result)
-	if stats.BluffsCalled == 0 || stats.BluffsCaught == 0 || stats.PenaltyEvents == 0 {
+	if stats.BluffsCalled == 0 || stats.PenaltyEvents == 0 {
 		t.Fatalf("expected bluff and penalty statistics, got %+v", stats)
 	}
 	report := RenderMarkdown(result)
@@ -147,5 +147,45 @@ func playStep(card uno.Card, before, after StateSummary, events ...uno.Event) St
 		Before: before,
 		After:  after,
 		Events: events,
+	}
+}
+
+func TestCaughtBluffStatisticsFromEvents(t *testing.T) {
+	stats := CollectStats(Result{Config: Config{Players: 2}, Steps: []Step{{
+		Action: uno.Action{Type: uno.CallBluff, PlayerID: 2},
+		Events: []uno.Event{{Type: uno.BluffCalled, PlayerID: 2, TargetID: 1, Success: true, Count: 4}, {Type: uno.CardsDrawn, PlayerID: 1, Count: 4}},
+	}}})
+	if stats.BluffsCalled != 1 || stats.BluffsCaught != 1 || stats.PenaltyEvents != 1 || stats.Players[1].CardsDrawn != 4 || stats.Players[2].BluffsCaught != 1 {
+		t.Fatal(stats)
+	}
+}
+
+func TestSwapHandsSimulationAndReport(t *testing.T) {
+	result, err := Run(t.Context(), Config{Players: 4, Mode: ModeHouse, Seed: 20260924, MaxActions: DefaultMaxActions}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	swaps := 0
+	for _, step := range result.Steps {
+		if step.Action.Type != uno.ChoosePlayer {
+			continue
+		}
+		swaps++
+		actor, target := step.Action.PlayerID, step.Action.TargetID
+		if actor == target || step.After.HandSizes[actor] != step.Before.HandSizes[target] || step.After.HandSizes[target] != step.Before.HandSizes[actor] || step.After.ActiveColor != step.Before.ActiveColor {
+			t.Fatal(step)
+		}
+		if !strings.Contains(DescribeStep(step), "trocou todas as cartas") || len(ExplainStep(step)) != 1 {
+			t.Fatal("missing swap description")
+		}
+	}
+	if swaps == 0 || CollectStats(result).HandSwaps != swaps {
+		t.Fatal("no swaps recorded")
+	}
+	report := RenderMarkdown(result)
+	for _, want := range []string{"Trocar cartas", "escolhendo jogador", "trocou todas as cartas", "Trocas de mãos"} {
+		if !strings.Contains(report, want) {
+			t.Fatal("missing", want)
+		}
 	}
 }

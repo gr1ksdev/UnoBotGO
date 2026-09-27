@@ -1,8 +1,8 @@
 # UnoBotGO V2 — Estado do projeto
 
-Última revisão: **2026-09-26**. Esta versão acompanha a **main pública**; itens exclusivos da dev são identificados explicitamente.
-Base auditada: `dev@ea22a1e` e `main@4a63591`, antes desta atualização documental.
-As diferenças abaixo continuam válidas após sua publicação: nenhum código foi promovido.
+Última revisão: **2026-09-27**. Esta versão acompanha a **main pública**.
+Código promovido seletivamente de `dev@e72cd66`, sobre `main@fd011ab`.
+Publicado significa disponível nesta árvore; homologação real é uma dimensão separada.
 
 Este documento descreve **maturidade, validação e publicação**, não arquitetura.
 Para funcionamento interno, consulte a [documentação técnica](../README.md#documentação-técnica).
@@ -23,30 +23,33 @@ A homologação interna pode se apoiar em testes; UX e transportes exigem evidê
 
 ## Matriz principal
 
-A coluna Implementado considera a dev; Main indica a presença na base pública auditada.
+A coluna Implementado considera o código promovido; Main indica presença nesta publicação.
 
 | Área | Implementado | Testado automaticamente | Homologado | Main | Situação |
 |---|---|---|---|---|---|
-| Engine V2 | Sim | Regras, invariantes, lifecycle | Interno: sim | Sim, base | Operacional; diferenças de Caseiro abaixo |
-| Application Layer | Sim | Autorização, views, concorrência | Interno: sim | Sim, base | Estado em memória, isolamento por partida |
-| Telegram adapter | Sim | Handlers/API simulada | Uso relatado; aceite completo pendente | Sim, base | Produto utilizável em grupos |
+| Engine V2 | Sim | Regras, invariantes, lifecycle | Interno: sim | Sim | Operacional; diferenças de Caseiro abaixo |
+| Application Layer | Sim | Autorização, views, concorrência | Interno: sim | Sim | Estado em memória, isolamento por partida |
+| Telegram adapter | Sim | Handlers/API simulada | Uso relatado; aceite completo pendente | Sim | Produto utilizável em grupos |
 | Inline Mode | Sim | Contexto, tokens, revisão, cache | Uso relatado; matriz de clientes pendente | Sim | Contexto multigrupo mantido |
 | Clássico | Sim | Regras e partidas determinísticas | Uso relatado; regressões específicas pendentes | Sim | Usa BotRules, não ClassicRules estrito |
-| Caseiro | Sim | Stacking, blefe e cartas especiais | Uso relatado; novidades pendentes | Parcial | Regras diferentes por branch |
+| Caseiro | Sim | Stacking, blefe e cartas especiais | Uso relatado; novidades pendentes | Sim | Regras próprias do Caseiro |
 | TURN_TIMEOUT | Sim | Revalidação e corrida com término | Telegram: pendente | Sim | Não deve publicar turno após encerramento |
 | Polling | Sim | Transporte/pipeline com mocks | Uso real relatado | Sim | Padrão e recomendado |
 | Webhook | Sim | HTTP, secret, dedupe, lifecycle | Não aprovado no teste real | Sim | Experimental; não recomendado atualmente |
 | Docker V2 | Sim | Build no CI | Build confirmado; operação não certificada | Sim | linux/amd64 e linux/arm64 |
 | GHCR | Sim | Workflow de publicação aprovado | Publicação pelo CI confirmada | Sim | latest e sha-commit; não implica deploy |
 | CI | Sim | Execuções aprovadas | N/A | Sim | dev valida; main valida/publica e verifica árvore |
-| Simulador | Sim | Runner, estratégia e relatório | Interno: sim; Telegram: N/A | Sim, base | Local, diretamente sobre a engine |
+| Simulador | Sim | Runner, estratégia e relatório | Interno: sim; Telegram: N/A | Sim | Local, diretamente sobre a engine |
 | Recovery / reset | Sim | Autorização, isolamento, filas/panic | Recuperação real: pendente | Sim | /reset por grupo; não garante cura de toda falha |
 | GameFinished / lifecycle | Sim | Dois jogadores, botões e timeout | Regressão Telegram: pendente | Sim | Correção concluída no código e nos testes |
-| Menções / links | Sim | Destinos e estados do renderer | Visual nos clientes: pendente | Sim, base | UserID apenas do responsável atual |
-| Trocar cartas | Sim | Engine, serviço, inline e renderer | Parcial: sticker cinza confirmado | Não | Exclusiva do Caseiro na dev |
-| Comandos privados reorganizados | Sim | Boas-vindas, ajuda, escopos | Telegram: pendente | Não | /start, /help e botão adicionar ao grupo |
-| Correção de falso tópico | Sim | Threads comuns e tópicos reais | Grupo afetado: pendente | Não | Apenas IsTopicMessage identifica tópico |
-| /dar | Sim, com tag | Testes debugcards e exclusão normal | Não certificada; uso de desenvolvimento | Não | Fora do produto/build padrão |
+| Menções / links | Sim | Destinos e estados do renderer | Visual nos clientes: pendente | Sim | UserID apenas do responsável atual |
+| Trocar cartas | Sim | Engine, serviço, inline e renderer | Parcial: sticker cinza confirmado | Sim | Exclusiva do Caseiro |
+| Comandos privados reorganizados | Sim | Boas-vindas, ajuda, escopos | Telegram: pendente | Sim | /start, /help e botão adicionar ao grupo |
+| Correção de falso tópico | Sim | Threads comuns e tópicos reais | Grupo afetado: pendente | Sim | Apenas IsTopicMessage identifica tópico |
+| Gameplay UX Polish | Sim | Ordem, lock, renderer e regressões | Telegram: pendente | Sim | Pronta para homologação manual |
+| Blefe em +4 sobre +2 | Sim | Counter legal não desafiável | Telegram: pendente | Sim | Caseiro: +4 sobre +2 não é blefe |
+| Reentrada e colocação | Sim | Late join após saída vs finalizados | Telegram: pendente | Sim | Reentrada de quem saiu; colocado bloqueado |
+| /dar (somente dev) | Sim, com tag na dev | Testes debugcards e exclusão normal | Não certificada; uso de desenvolvimento | Não | Fora do produto/build padrão |
 
 ## Transportes e evidência real
 
@@ -72,14 +75,14 @@ Skip/bloqueio, Reverse, coringa, +2 e +4 estão presentes em ambos os modos.
 **Caseiro** possui regras próprias de resposta às penalidades:
 `+2 → +4` acumula **6**, e `+4 → +2` exige a cor escolhida.
 A correção que preserva o total acumulado já está nas duas branches.
-Na **dev**, Caseiro recusa `+4 → +4`; na **main auditada**, ainda permite essa resposta.
-O Clássico mantém `+4 → +4` em ambas. Esta publicação documental não muda essas regras.
+Caseiro recusa `+4 → +4` nas duas branches; Clássico mantém essa resposta.
+No Caseiro, +4 sobre +2 é um counter legal sem desafio de blefe; o total é preservado.
 
-O baralho Clássico tem 108 cartas. Caseiro tem 108 na main e 109 na dev,
-onde foi acrescentada uma única **Trocar cartas**, sem reduzir as demais especiais.
+O baralho Clássico tem 108 cartas e o Caseiro tem 109 em ambas as branches,
+com uma única **Trocar cartas**, sem reduzir as demais especiais.
 Poucas aparições em algumas partidas não demonstram distribuição incorreta.
 
-**Trocar cartas — apenas dev:** descarta a carta, abre `ChoosingPlayer` e permite
+**Trocar cartas — publicada:** descarta a carta, abre `ChoosingPlayer` e permite
 escolher outro jogador ativo para trocar integralmente as mãos restantes.
 Preserva cor, ordem e direção; o renderer/inline apresenta seleção de jogador,
 contagens e stickers colorido/cinza. Há validação de autorização e revisão.
@@ -96,7 +99,7 @@ A renderização do sticker cinza foi confirmada em Telegram real; esse aceite
   [Telegram](v2-telegram.md).
 - **Menções:** em turno/escolha, só o responsável atual usa seu UserID real;
   demais links usam BotID. Lobby, encerrado e estados sem responsável usam BotID
-  para todos. A escolha de jogador integra essa regra apenas na dev.
+  para todos. A escolha de jogador também integra essa regra na main.
   Testes validam HTML/destinos; abertura visual em Android/iOS/Desktop segue pendente.
 - **Contexto inline:** `g_<GameID>_<revision>` seleciona a partida correta.
   Não é o token de ação. InlineQuery/ChosenInlineResult não trazem chat_id suficiente
@@ -113,12 +116,13 @@ A renderização do sticker cinza foi confirmada em Telegram real; esse aceite
 `cmd/simulator` já está na main: 2–10 jogadores, seleção de modo, seed reproduzível,
 estatísticas, diagnósticos, explicações de especiais, histórico completo e duração.
 Executa a engine local, sem application/infraestrutura Telegram de ponta a ponta.
-A dev acrescenta estratégia e relatório para Trocar cartas. Relatórios gerados não
+Estratégia e relatório para Trocar cartas também estão publicados. Relatórios gerados não
 fazem parte dos arquivos versionados/publicados.
 
 `/dar` é ferramenta de desenvolvimento da dev, protegida pela build tag `debugcards`
 e autorização específica. Não faz parte da ajuda ou do produto normal; o build padrão,
-Docker e releases atuais não incluem sua implementação. Não deve entrar no release público padrão.
+Docker e releases atuais não incluem sua implementação. Seus arquivos e hook
+não foram promovidos para a main, nem mesmo como código opcional.
 
 Carga em muitos grupos reais simultâneos **não foi caracterizada formalmente**.
 Testes de concorrência e simulações locais não comprovam capacidade para centenas
@@ -135,26 +139,23 @@ de grupos ou milhares de jogadores. Isso é uma limitação conhecida, não um b
 | M6 — Webhook transport | Implementado e publicado; homologação real não aprovada, experimental |
 | Milestone corretiva V2 | Lifecycle/timeout/menções publicados e testados; aceite visual pendente |
 | Simulador e recuperação | Implementados, testados e publicados; não são homologação de carga Telegram |
-| Evoluções Caseiro/UX/debug | Implementadas e testadas na dev; promoção pública pendente |
+| Gameplay UX Polish | Ordem lógica validada/exibida, room lock e mensagens compactas; testes concluídos, aceite real pendente; publicado na main |
+| Evoluções Caseiro/UX/debug | Caseiro/UX publicados; debug permanece apenas na dev |
 
 A numeração acima usa os marcos efetivamente registrados; não reaproveita propostas
 antigas de roadmap como se fossem entregas. Não há marco global M4 concluído identificado nesta auditoria.
 
-## Desenvolvimento à frente da main
+## Dev e main após esta publicação
 
-Diferenças de produto confirmadas pelas árvores Git, sem promoção nesta milestone:
+As funcionalidades públicas de `dev@e72cd66` foram promovidas seletivamente:
+Trocar cartas e simulador correspondente, regras Caseiro, UX/room lock, comandos
+privados, correção de falso tópico, blefe de +4 sobre +2 e reentrada sem colocação.
+Quem já terminou permanece bloqueado; o lock recusa novas entradas/reentradas.
 
-- Trocar cartas, seleção de jogador, stickers e suporte no simulador.
-- Recusa de `+4` sobre `+4` no Caseiro.
-- Remoção da linha textual redundante de direção do estado público.
-- Boas-vindas privadas, `/help` por contexto, escopos de comandos e botão de grupo
-  com username obtido automaticamente do bot.
-- Correção que evita classificar threads comuns como tópicos de fórum.
-- Ferramenta de desenvolvimento `/dar`, somente em build explícito com tag.
-
-Não foi encontrada funcionalidade de jogo exclusiva da main. Seu check `public-tree`
-é específico da publicação; artefatos de desenvolvimento não contam como features.
-As branches têm históricos independentes; a [promoção é seletiva](branching.md), sem merge.
+Não há feature pública dessa base pendente de promoção. `/dar` permanece somente
+na dev como ferramenta de desenvolvimento; foi excluído da árvore pública.
+Os históricos continuam independentes, conforme a [política de branches](branching.md).
+A publicação não substitui os aceites Telegram pendentes listados na matriz.
 
 ## Design e temas adiados
 
@@ -169,14 +170,11 @@ farming, volume de partidas e balanceamento entre modos permanecem em discussão
 
 ## Base de validação e atualização
 
-A revisão confrontou código, testes, documentação, registros de aceite e ambas as
-árvores remotas. Testes Go, vet, build e `git diff --check` passaram nas duas branches;
-o check público passou na main. Race foi tentado em ambas: CGO estava desativado;
-com `CGO_ENABLED=1`, ThreadSanitizer recusou o VMA local (39 bits, requer 48).
-Não houve resultado local válido de race; essa verificação depende do CI Linux suportado.
-Os testes com `debugcards` foram verificados separadamente na dev.
-CI da base main: [build/publicação](https://github.com/gr1ksdev/UnoBotGO/actions/runs/36080638236)
-e [árvore pública](https://github.com/gr1ksdev/UnoBotGO/actions/runs/36080638192), ambos aprovados.
+A promoção usa o código/testes da dev, com exclusão da ferramenta de debug.
+A árvore pública é validada com testes Go, vet, build, `git diff --check` e o
+workflow `public-tree`. Race local é limitado pelo VMA do host (39 bits, requer 48);
+a validação efetiva de race ocorre no CI Linux suportado.
+Os workflows preservados publicam imagens AMD64/ARM64 após validar a main.
 
 Ao promover uma feature ou registrar novo aceite real, atualizar a matriz, a diferença
 entre branches e a referência auditada. Commit ou teste verde isolado não comprova homologação Telegram.

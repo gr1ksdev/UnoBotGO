@@ -1,5 +1,51 @@
 # UnoBotGO V2 — Telegram Adapter (Milestone 3)
 
+## Gameplay UX Polish (2026-09-26; publicado na main em 2026-09-27)
+
+- `/trancar` e `/destrancar`: controle exclusivo do responsável, incluindo owner
+  observador, no lobby ou durante a partida; respostas idempotentes. `/entrar`
+  recusa sala trancada sem efeitos. Ajuda e registro de comandos incluem ambos.
+- Estado compacto: topo, cor somente para cartas sem cor própria, compra acumulada,
+  classificação, ação atual e ordem ativa. Classificação usa medalhas nos três
+  primeiros lugares e números a partir do quarto; encerramento tem um único título.
+- Ação, efeitos reais e resultado aparecem em linhas separadas. PlayerLink preserva
+  UserID do responsável atual e BotID para demais jogadores, com escaping HTML.
+- A ordem exibida começa no jogador atual e caminha no sentido vigente, sempre
+  usando `→` como próximo da sequência. Isso substitui a exibição física do slice.
+  Na engine auditada, late join já era inserido na cauda lógica; regressões cobrem
+  ambos os sentidos, Reverse, placements, várias entradas e preservação do turno.
+- Inline, tokens, revisões, regras dos modos e Trocar cartas permanecem inalterados.
+
+Aceite real pendente: conferir late join em ambos os sentidos, trancar/destrancar
+no lobby e durante partida, links, Wild/+4, efeitos, placements, escolha de alvo
+e encerramento com dois jogadores. Testes automáticos não substituem esse aceite.
+
+
+## Trocar cartas — exclusivo do Caseiro (2026-09-25)
+
+O sticker `CAACAgEAAxkBAAER8VtqteJsR8-zG10NFeLTIZyxuZYsBQACBwkAAkkSsEU562tb90Ja3D0E`
+representa a carta **🔀 Trocar cartas**. Depois de jogá-la, abrir **Suas cartas**
+mostra um menu como o do coringa, com nomes e contagens de cartas dos demais
+participantes ativos. Selecionar um nome confirma a troca integral das mãos
+restantes, mantém a cor da mesa e passa a vez. O menu não pede cor.
+
+Somente quem jogou a carta recebe tokens de escolha; os demais veem a mensagem de
+espera e o resumo privado da própria mão. Tokens são pessoais, opacos, de uso
+único e vinculados à revisão. Um alvo que sair deixa de ser elegível, e menus
+anteriores precisam ser reabertos. O responsável pela escolha recebe a menção
+real; os demais nomes seguem a política de links ao bot.
+
+O sticker cinza
+`CAACAgEAAxkDAAMoarc5AnTTNQ_W6bTz1yaQVlhRR20AAtwHAAJGhrhFYMGxG-e10Xc9BA`
+representa a carta indisponível. Ela segue o mesmo fluxo visual das demais
+cartas cinza, com resultado `grey_` e sem token de jogada. O sticker colorido
+continua sendo usado quando a carta é jogável.
+
+Homologação manual: abrir uma mão com Trocar cartas indisponível (ex: sob +2 ou
+coringa no topo) e confirmar que o sticker cinza é renderizado normalmente sem erros.
+Depois de desbloquear a carta, conferir o sticker colorido e a troca normal.
+
+
 > Atualização de 2026-09-23: as regras abaixo descrevem a milestone corretiva.
 > O roteiro histórico da M3 mais adiante contém comportamentos já substituídos.
 
@@ -84,6 +130,7 @@ Após `GetMe`, o BotID é disponibilizado ao renderer antes da entrada de update
 | Lobby, encerrado, cancelado ou sem contexto | BotID para todos |
 | TakingTurn | UserID real só para CurrentTurn; demais apontam ao BotID |
 | ChoosingColor | UserID real só para ColorChooserID; demais apontam ao BotID |
+| ChoosingPlayer | UserID real só para PlayerChooserID; demais apontam ao BotID |
 
 A regra inclui responsável, colocações, entrada/saída, confirmações, UNO, erros e
 timeout. Nomes e usernames exibidos são preservados com escape HTML. Renderer
@@ -174,7 +221,18 @@ O UnoBotGO V2 é executado via `./cmd/bot` e consome diretamente a camada de apl
 - **Startup seguro**:
   - `GetMe`: valida nome de usuário e flag `SupportsInlineQueries`. Se o modo inline estiver desabilitado, o bot falha no startup orientando o uso do `/setinline` no @BotFather.
   - `GetWebhookInfo`: se houver webhook ativo, falha no startup instruindo o usuário a deletar o webhook manualmente para evitar conflito com long polling.
-  - `SetMyCommands`: registra apenas os comandos implementados no Telegram.
+  - `SetMyCommands`: registra menus por escopo. O privado recebe `/start` e
+    `/help`; grupos recebem comandos de partida e `/help`; o escopo padrão mantém
+    `/help` como fallback.
+- **Apresentação privada**:
+  - `/start` envia boas-vindas, uma descrição curta e um botão para adicionar o
+    bot a grupos usando `https://t.me/<username>?startgroup=true`.
+  - O username vem de `GetMe`; não há nome de bot fixo no texto nem no link.
+  - O payload de grupo `/start@bot true` confirma a adição e orienta `/novo` e
+    `/help`, sem tentar iniciar uma partida inexistente. `/start` sem payload
+    continua como alias compatível de `/iniciar` nos grupos.
+  - `/help` lista comandos em blockquote, mantém `/ajuda` como alias e registra a
+    origem brasileira baseada no `@unopybot`.
 - **Particionamento por ChatID**:
   - 8 workers com canais de capacidade 32 dedicados às mensagens, comandos e confirmações de ações agrupados pelo `ChatID`.
   - Garante ordem estrita de execução para a mesma partida, eliminando condições de corrida entre comandos e jogadas.

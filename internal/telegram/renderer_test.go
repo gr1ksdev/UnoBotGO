@@ -64,6 +64,27 @@ func TestCardRepr(t *testing.T) {
 	}
 }
 
+func TestRenderer_WelcomeAndHelp(t *testing.T) {
+	renderer := NewRenderer(nil)
+	welcome := renderer.RenderWelcome()
+	if !strings.Contains(welcome, "Bem-vindo ao UnoBotGO") || !strings.Contains(welcome, "/help") {
+		t.Fatalf("unexpected welcome: %s", welcome)
+	}
+	if strings.Contains(welcome, "V2") || strings.Contains(welcome, "Golang") || strings.Contains(welcome, "desenvolvida em Go") {
+		t.Fatalf("welcome exposed implementation details: %s", welcome)
+	}
+
+	help := renderer.RenderHelp("ExampleBot")
+	if strings.Count(help, "<blockquote>") != 1 || strings.Count(help, "</blockquote>") != 1 {
+		t.Fatalf("help blockquote is malformed: %s", help)
+	}
+	for _, expected := range []string{"<b>/start</b>", "<b>/help</b>", "<b>/novo</b>", "<b>/reset</b>", "@ExampleBot", "Go (Golang)", "@unopybot"} {
+		if !strings.Contains(help, expected) {
+			t.Fatalf("help is missing %q: %s", expected, help)
+		}
+	}
+}
+
 func TestRenderer_RenderLobbyAndState(t *testing.T) {
 	cache := NewUserCache(10)
 	cache.Put(10, "Alice", "alice")
@@ -117,6 +138,22 @@ func TestRenderer_RenderLobbyAndState(t *testing.T) {
 	}
 	if !strings.Contains(stateText, "💚 5") {
 		t.Errorf("expected top card in state text: %s", stateText)
+	}
+	if strings.Contains(stateText, "Direção:") || strings.Contains(stateText, "Sentido horário") {
+		t.Errorf("expected no redundant direction line: %s", stateText)
+	}
+	if !strings.Contains(stateText, " → ") {
+		t.Errorf("expected clockwise direction between players: %s", stateText)
+	}
+
+	reverseView := playView
+	reverseView.Direction = -1
+	reverseText := renderer.RenderPublicState(reverseView)
+	if strings.Contains(reverseText, "Direção:") || strings.Contains(reverseText, "Sentido anti-horário") {
+		t.Errorf("expected no redundant reverse direction line: %s", reverseText)
+	}
+	if !strings.Contains(reverseText, " → ") {
+		t.Errorf("expected counter-clockwise direction between players: %s", reverseText)
 	}
 }
 
@@ -243,7 +280,7 @@ func TestRendererMentionTargetsFollowResultingTurn(t *testing.T) {
 				}}
 				confirmation := r.RenderActionConfirmation(11, uno.Action{Type: action, Color: uno.Blue}, out)
 				assertMentionTargets(t, confirmation, cache, tc.real, 999)
-				if (tc.closed || tc.phase == uno.Finished) && strings.Contains(confirmation, "Vez de") {
+				if (tc.closed || tc.phase == uno.Finished) && strings.Contains(confirmation, "🎯 Vez:") {
 					t.Fatalf("turn after closure: %s", confirmation)
 				}
 			}

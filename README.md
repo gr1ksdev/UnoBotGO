@@ -32,16 +32,24 @@ Bot de UNO em Go para o Telegram utilizando modo inline com stickers para visual
 
 ## Comandos do Bot (V2)
 
+No chat privado, `/start` apresenta o bot e oferece um botão para adicioná-lo a
+um grupo. `/help` mostra a lista completa de comandos. O menu do Telegram é
+separado por contexto: o privado exibe apenas `/start` e `/help`, enquanto os
+grupos exibem os comandos de partida.
+
 | Comando | Descrição |
 |---|---|
+| `/start` | Mostra a apresentação e o botão para adicionar o bot a um grupo. |
+| `/help` (ou `/ajuda`) | Exibe os comandos e as instruções de uso. |
 | `/novo` | Cria um lobby de partida no grupo (o criador é o responsável administrativo). |
 | `/entrar` | Inscreve o usuário na partida aberta ou em andamento. |
+| `/trancar` | Impede novos jogadores de entrar; somente o responsável, no lobby ou durante a partida. |
+| `/destrancar` | Permite novas entradas; somente o responsável. |
 | `/iniciar` | Inicia a partida quando há pelo menos dois jogadores inscritos. |
 | `/cancelar` (ou `/kill`) | Cancela a partida (autorizado apenas para o responsável). |
 | `/sair` | Sai da partida em andamento (transfere responsabilidade se necessário). |
 | `/estado` | Exibe o estado público da partida ativa ou lobby. |
 | `/reset` | Recupera o grupo, cancela trabalhos pendentes e apaga a partida e o histórico daquele grupo (responsável ou administrador). |
-| `/ajuda` | Instruções de como jogar. |
 
 O `/reset` usa uma fila de recuperação separada. Assim, ele continua disponível
 mesmo quando a fila normal do grupo está cheia ou uma operação anterior ficou
@@ -50,6 +58,14 @@ remove seu estado e seus tokens e abre uma fila limpa para novos comandos. O
 comando não afeta partidas de outros grupos.
 
 ---
+
+## Trocar cartas no modo caseiro
+
+Selecione **Caseiro** no lobby para jogar com uma carta extra **🔀 Trocar cartas**
+(109 cartas no total). Ao jogá-la, abra **Suas cartas** e escolha outro participante
+no menu: vocês trocam as mãos inteiras restantes, a cor da mesa é mantida e a vez
+passa normalmente. A carta não pode finalizar a mão, ser jogada sobre coringa ou
+responder a uma penalidade +2/+4. O modo clássico mantém suas 108 cartas.
 
 ## Testes Automatizados
 
@@ -87,7 +103,7 @@ go run ./cmd/simulator --players 4 --mode caseiro --seed 20260924 --quiet
 Cada execução mostra a semente utilizada e grava um relatório Markdown em
 `.reports/simulations/`. O relatório reúne colocações, estatísticas gerais e por
 jogador, possíveis erros e uma linha do tempo que explica bloqueios, reversões,
-coringas, +2, +4, empilhamentos, penalidades e desafios de blefe ocorridos. Ele
+coringas, trocas de mãos, +2, +4, empilhamentos, penalidades e desafios de blefe ocorridos. Ele
 também informa início, fim e tempo total, além do histórico completo de todas as
 ações, eventos da engine e estado da mesa depois de cada jogada.
 

@@ -36,6 +36,7 @@ const (
 	DrawTwo
 	Wild
 	WildDrawFour
+	SwapHands
 )
 
 type Card struct {
@@ -45,7 +46,7 @@ type Card struct {
 }
 
 func (c Card) valid() bool {
-	return c.ID != "" && c.Rank <= WildDrawFour &&
+	return c.ID != "" && c.Rank <= SwapHands &&
 		((c.Rank >= Wild && c.Color == NoColor) || (c.Rank < Wild && c.Color.valid()))
 }
 
@@ -67,6 +68,15 @@ func ClassicDeck() []Card {
 		for range 4 {
 			add(NoColor, rank)
 		}
+	}
+	return cards
+}
+
+// deckForRules preserves classic physical IDs and adds one house-only card.
+func deckForRules(rules Rules) []Card {
+	cards := ClassicDeck()
+	if rules.AllowSwapHands {
+		cards = append(cards, Card{ID: "c109", Color: NoColor, Rank: SwapHands})
 	}
 	return cards
 }

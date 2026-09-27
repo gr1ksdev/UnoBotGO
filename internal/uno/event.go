@@ -3,21 +3,23 @@ package uno
 type EventType string
 
 const (
-	PlayerJoined        EventType = "player_joined"
-	PlayerLeft          EventType = "player_left"
-	GameStarted         EventType = "game_started"
-	CardPlayed          EventType = "card_played"
-	CardsDrawn          EventType = "cards_drawn"
-	PlayerSkipped       EventType = "player_skipped"
-	DirectionChanged    EventType = "direction_changed"
-	ColorChoiceRequired EventType = "color_choice_required"
-	ColorChosen         EventType = "color_chosen"
-	TurnChanged         EventType = "turn_changed"
-	UnoAnnounced        EventType = "uno_announced"
-	PlayerWon           EventType = "player_won"
-	GameFinished        EventType = "game_finished"
-	BluffCalled         EventType = "bluff_called"
-	RulesChanged        EventType = "rules_changed"
+	PlayerJoined         EventType = "player_joined"
+	PlayerLeft           EventType = "player_left"
+	GameStarted          EventType = "game_started"
+	CardPlayed           EventType = "card_played"
+	CardsDrawn           EventType = "cards_drawn"
+	PlayerSkipped        EventType = "player_skipped"
+	DirectionChanged     EventType = "direction_changed"
+	ColorChoiceRequired  EventType = "color_choice_required"
+	ColorChosen          EventType = "color_chosen"
+	TurnChanged          EventType = "turn_changed"
+	UnoAnnounced         EventType = "uno_announced"
+	PlayerWon            EventType = "player_won"
+	GameFinished         EventType = "game_finished"
+	BluffCalled          EventType = "bluff_called"
+	RulesChanged         EventType = "rules_changed"
+	PlayerChoiceRequired EventType = "player_choice_required"
+	HandsSwapped         EventType = "hands_swapped"
 )
 
 // Event contains public facts only. CardsDrawn never exposes private card IDs.

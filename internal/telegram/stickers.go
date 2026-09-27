@@ -7,6 +7,7 @@ import (
 )
 
 var Stickers = map[string]string{
+	"swap_hands":   "CAACAgEAAxkBAAER8VtqteJsR8-zG10NFeLTIZyxuZYsBQACBwkAAkkSsEU562tb90Ja3D0E",
 	"option_draw":  "BQADBAAD-AIAAl9XmQABxEjEcFM-VHIC",
 	"option_pass":  "BQADBAAD-gIAAl9XmQABcEkAAbaZ4SicAg",
 	"option_bluff": "BQADBAADygIAAl9XmQABJoLfB9ntI2UC",
@@ -68,6 +69,7 @@ var Stickers = map[string]string{
 }
 
 var StickersGrey = map[string]string{
+	"swap_hands":   "CAACAgEAAxkDAAMoarc5AnTTNQ_W6bTz1yaQVlhRR20AAtwHAAJGhrhFYMGxG-e10Xc9BA",
 	"colorchooser": "CAADBAADpQ4AAlfDmFFHGkwyGFeCFQI",
 	"draw_four":    "CAADBAADMRMAAv7amFHvKGLoNyFbNQI",
 	"r_0":          "CAADBAADsBMAAuGdkFHTZ-jl4eNn-gI",
@@ -126,6 +128,9 @@ var StickersGrey = map[string]string{
 
 // CardToStickerKey maps an internal uno.Card to the string key used in the stickers map.
 func CardToStickerKey(c uno.Card) string {
+	if c.Rank == uno.SwapHands {
+		return "swap_hands"
+	}
 	if c.Rank == uno.Wild {
 		return "colorchooser"
 	}

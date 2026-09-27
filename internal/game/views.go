@@ -26,26 +26,28 @@ const (
 // PublicGameView has no hands, draw pile or full inventory. OwnerID is metadata,
 // not a participant; Players contains only users explicitly registered via Join.
 type PublicGameView struct {
-	GameID         uno.GameID
-	ChatID         ChatID
-	ChatName       string
-	CreatorID      uno.PlayerID
-	OwnerID        uno.PlayerID
-	Revision       uint64
-	Phase          uno.Phase
-	Rules          uno.Rules
-	CurrentTurn    uno.PlayerID
-	Direction      int
-	ActiveColor    uno.Color
-	TopCard        *uno.Card
-	ColorChooserID uno.PlayerID
-	DrawCounter    int
-	Players        []PublicPlayer
-	Order          []uno.PlayerID
-	Placements     []uno.Placement
-	Closed         bool
-	CloseReason    CloseReason
-	CanCallBluff   bool
+	GameID          uno.GameID
+	ChatID          ChatID
+	ChatName        string
+	CreatorID       uno.PlayerID
+	OwnerID         uno.PlayerID
+	Locked          bool
+	Revision        uint64
+	Phase           uno.Phase
+	Rules           uno.Rules
+	CurrentTurn     uno.PlayerID
+	Direction       int
+	ActiveColor     uno.Color
+	TopCard         *uno.Card
+	PlayerChooserID uno.PlayerID
+	ColorChooserID  uno.PlayerID
+	DrawCounter     int
+	Players         []PublicPlayer
+	Order           []uno.PlayerID
+	Placements      []uno.Placement
+	Closed          bool
+	CloseReason     CloseReason
+	CanCallBluff    bool
 }
 
 type CardView struct {
@@ -66,6 +68,7 @@ type GameSummary struct {
 	ChatID   ChatID
 	ChatName string
 	OwnerID  uno.PlayerID
+	Locked   bool
 	Revision uint64
 	Phase    uno.Phase
 }
@@ -82,13 +85,13 @@ func (v PublicGameView) clone() PublicGameView {
 }
 
 func (v PublicGameView) summary() GameSummary {
-	return GameSummary{GameID: v.GameID, ChatID: v.ChatID, ChatName: v.ChatName, OwnerID: v.OwnerID, Revision: v.Revision, Phase: v.Phase}
+	return GameSummary{GameID: v.GameID, ChatID: v.ChatID, ChatName: v.ChatName, OwnerID: v.OwnerID, Locked: v.Locked, Revision: v.Revision, Phase: v.Phase}
 }
 
 func publicView(entry *managedGame, state uno.State) PublicGameView {
 	v := PublicGameView{
 		GameID: state.ID, ChatID: entry.chatID, ChatName: entry.chatName,
-		CreatorID: entry.creatorID, OwnerID: entry.ownerID, Revision: state.Revision,
+		CreatorID: entry.creatorID, OwnerID: entry.ownerID, Locked: entry.locked, Revision: state.Revision,
 		Phase: state.Phase, Rules: state.Rules, CurrentTurn: state.CurrentPlayerID,
 		Direction: state.Direction, ActiveColor: state.ActiveColor,
 		DrawCounter: state.DrawCounter,
@@ -109,10 +112,13 @@ func publicView(entry *managedGame, state uno.State) PublicGameView {
 			}
 		}
 	}
+	if state.Phase == uno.ChoosingPlayer {
+		v.PlayerChooserID = state.CurrentPlayerID
+	}
 	if state.Pending != nil {
 		v.ColorChooserID = state.Pending.Actor
 	}
-	if state.PendingBluff != nil && state.CurrentPlayerID == state.PendingBluff.Target && state.DrawCounter > 0 {
+	if state.PendingBluff != nil && state.DrawFourChallengeable && state.CurrentPlayerID == state.PendingBluff.Target && state.DrawCounter > 0 {
 		v.CanCallBluff = true
 	}
 	return v

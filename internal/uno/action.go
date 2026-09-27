@@ -14,6 +14,7 @@ const (
 	SkipTurn
 	CallBluff
 	SetRules
+	ChoosePlayer
 )
 
 // Action uses only domain IDs. The application authenticates PlayerID and
@@ -28,6 +29,7 @@ type Action struct {
 	Revision uint64
 	CardID   CardID
 	Color    Color
+	TargetID PlayerID // ChoosePlayer only; another active participant.
 	DealerID PlayerID
 	Rules    Rules
 }
