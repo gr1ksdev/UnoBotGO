@@ -1,3 +1,18 @@
+# Encerramento formal da Milestone M7 (Persistência, Configuração e Ranking) e Adiamento de Import — 2026-09-27 (somente dev)
+
+- A Milestone M7 foi encerrada formalmente no escopo atual da branch `dev`, devidamente testada e homologada manualmente no Telegram real.
+- Status da M7: CONCLUÍDA E HOMOLOGADA NO TELEGRAM REAL (escopo de import antigo adiado).
+- Escopo homologado no Telegram real:
+  - Sistema Legacy: N=2 e N=3.
+  - Sistema Updated: N=2 (1º=+10,00, 2º=+0,00); N=3 (1º=+10,00, 2º=+5,00, 3º=+0,00).
+  - Abandono definitivo: jogador que deu `/sair` sem voltar fica fora do ranking, não entra em N, recebe +0,00 pontos e demais concluintes são pontuados normalmente.
+  - Saída + reentrada: jogador que usou `/sair`, reentrou via `/entrar` e concluiu a partida pontuou normalmente conforme sua colocação.
+  - Configuração de Grupo (/config): botões inline, seleção de Modo (Clássico/Caseiro) e Ranking (Legado/Atualizado), permissões de admin/instalador via `my_chat_member`, defaults não bloqueantes (`Classic` + `Legacy`), e bloqueio de alternância de ranking com histórico acumulado (`ErrNeedsProductDecision`).
+- Import de ranking antigo: classificado explicitamente como DEFERRED ("Old ranking import is deferred to a future milestone"). A fundação técnica (`internal/rankingimport` e tabelas de staging) foi preservada sem criação de comandos, conversões arbitrárias ou aplicação de scores.
+- Política de artefatos internos: arquivos em `.agent/` e `AGENTS.md` são de controle interno de desenvolvimento e NUNCA devem ser promovidos para a branch pública `main`.
+
+---
+
 # Correção de blefe em +4 sobre +2 no Caseiro e reentrada na mesma partida — 2026-09-26 (somente dev)
 
 - Pedido do usuário aprovado no plano: `corrigir-blefe-caseiro-e-reentrada_2026-09-26_13-48.md`.

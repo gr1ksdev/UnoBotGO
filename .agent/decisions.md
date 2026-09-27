@@ -1,3 +1,26 @@
+# Decisão: encerramento formal da Milestone M7 no escopo homologado e adiamento (DEFERRED) do import antigo
+
+## Data
+2026-09-27
+
+## Contexto
+A fundação de persistência PostgreSQL, configuração persistente por grupo, snapshots imutáveis por jogo, rankings Legacy e Updated, regras de elegibilidade e abandono, persistência atômica síncrona pós-jogo, mensagens de pontuação pós-commit, comando `/config` com permissões de admin/instalador e bloqueio de alternância de ranking com histórico acumulado foram implementados, testados exaustivamente e homologados manualmente no Telegram real.
+O escopo de importação de ranking legado a partir de mensagens textuais antigas (M7.5), embora possua fundação de parser, staging e reconciliação criada, depende de decisões de produto adicionais (política de conversão Legacy → Updated, multiplicadores, resolução de ambiguidades e UX Telegram).
+
+## Decisão tomada
+1. Encerrar formalmente a Milestone M7 considerando como concluído e homologado todo o escopo de persistência, configuração e rankings Legacy e Updated.
+2. Adiar formalmente o import de ranking antigo para uma milestone futura, marcando-o explicitamente como DEFERRED ("Old ranking import is deferred to a future milestone").
+3. Manter a fundação técnica existente em `internal/rankingimport` e a migration de staging `0004_imports.up.sql` intactas na branch `dev`, sem expor comandos, sem mutação de pontuação e sem conversões arbitrárias.
+4. Classificar explicitamente toda a pasta `.agent/` (`plans/`, `memory/`, `decisions.md`, `context.md`) e `AGENTS.md` como artefatos de controle interno de desenvolvimento exclusivos da branch `dev`, mantendo-os estritamente fora da árvore pública da branch `main` e de qualquer promoção.
+
+## Motivo
+Garantir previsibilidade técnica, rastreabilidade arquitetural e permitir que o produto estável e homologado avance de forma segura, evitando acumular escopo não prioritário e assegurando que os artefatos de governança interna do agente não vazem para o repositório público em conformidade com as regras do projeto e `docs/branching.md`.
+
+## Impacto
+A M7 atinge seu encerramento com sucesso e homologação comprovada no Telegram real. A base de código na `dev` fica pronta para auditoria e planejamento de promoção para `main`. Nenhuma quebra ou funcionalidade inacabada é exposta aos usuários do bot.
+
+---
+
 # Decisão: UX Telegram de configuração de grupos, permissões e proteção de histórico
 
 ## Data

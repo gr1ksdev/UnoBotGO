@@ -1,3 +1,28 @@
+# Encerramento da Milestone M7 e Adiamento de Import de Ranking Antigo — 2026-09-27 (somente dev)
+
+- Status final: Milestone M7 CONCLUÍDA e HOMOLOGADA NO TELEGRAM REAL.
+- Escopo entregue e homologado no Telegram real:
+  1. Persistência PostgreSQL com pool `pgx/v5` e migrações versionadas (`cmd/migrate`) com lock consultivo e checksums.
+  2. Configuração por grupo persistente (`group_configs`) com defaults não-bloqueantes (`Classic` + `Legacy`).
+  3. Snapshot imutável de configuração por partida no momento da criação, mantendo `/novo classico` e `/novo caseiro` como overrides de partida única.
+  4. Cálculo e concessão determinística de ranking em centésimos (`half-up`) para os sistemas Legacy e Updated.
+  5. Regras de elegibilidade: concluintes válidos entram em N; jogadores abandonados (`/sair` definitivo) ficam fora do ranking, não contam em N e recebem +0,00; reentrantes que concluem pontuam normalmente conforme colocação.
+  6. Fechamento síncrono atômico no encerramento da partida, com idempotência por `(game_id, canonical_hash)` e mensagem dedicada de anúncio de pontos pós-commit enviada apenas após confirmação transacional.
+  7. Interface de configuração Telegram `/config` com botões inline interativos, autorização para administradores e instalador ativo, e captura de transição real de instalação/reentrada via `my_chat_member`.
+  8. Proteção contra troca de ranking (`ErrNeedsProductDecision`): bloqueio de alternância entre Legacy e Updated quando o grupo já possui histórico acumulado, preservando a integridade estatística.
+- Cenários homologados no Telegram real:
+  - Legacy N=2 e N=3.
+  - Updated N=2 (1º=+10,00, 2º=+0,00) e N=3 (1º=+10,00, 2º=+5,00, 3º=+0,00).
+  - Abandono definitivo com exclusão de N e menção `(fora do ranking)`.
+  - Saída seguida de reentrada com pontuação normal.
+  - `/config`, seleção de modos/rankings, e recusa amigável de troca com histórico.
+- Import de ranking antigo: DEFERRED. "Old ranking import is deferred to a future milestone."
+  - Parser e reconciliação pura em `internal/rankingimport` e tabelas de staging em migration `0004` retidos como fundação.
+  - Nenhum comando de importação criado, nenhum score importado aplicado, nenhuma conversão assumida.
+- Artefatos internos: `.agent/` e `AGENTS.md` são exclusivamente de desenvolvimento na `dev` e não devem ser promovidos para a `main`.
+
+---
+
 # Correção de blefe em +4 sobre +2 no Caseiro e reentrada na mesma partida — 2026-09-26 (somente dev)
 
 - Pedido do usuário aprovado no plano: `corrigir-blefe-caseiro-e-reentrada_2026-09-26_13-48.md`.
