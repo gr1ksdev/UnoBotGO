@@ -12,7 +12,7 @@ import (
 
 func sampleResult(id string, system groups.RankingSystem) ranking.Result {
 	now := time.Now().UTC().Truncate(time.Microsecond)
-	r := ranking.Result{GameID: id, ChatID: 42, GameMode: groups.Classic, RankingSystem: system, ConfigRevision: 1, StartedAt: now.Add(-time.Minute), FinishedAt: now, FinalRevision: 20, FinishReason: "completed", PolicyVersion: "integration-test-policy-only"}
+	r := ranking.Result{GameID: id, ChatID: 42, GameMode: groups.Classic, RankingSystem: system, ConfigRevision: 1, StartedAt: now.Add(-time.Minute), FinishedAt: now, FinalRevision: 20, FinishReason: "completed", PolicyVersion: ranking.PlacementPolicyV1}
 	for i := 1; i <= 3; i++ {
 		score, _ := ranking.Score(system, 3, i)
 		status := "went_out"

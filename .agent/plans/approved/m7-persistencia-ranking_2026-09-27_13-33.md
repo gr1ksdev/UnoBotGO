@@ -180,3 +180,29 @@ Usuário aprovou o BUILD com estas alterações, que substituem qualquer mençã
 M7.1 (8b46c2d), M7.2 base (d4e34ee), M7.3 base (806e022), M7.4 (35e72de), M7.5 base (5364016), cleanup limitado (6e60203). Todos os checks locais e PostgreSQL/race passaram. Relatório em docs/m7-persistence.md.
 
 Runtime persiste somente resultados oficiais como needs_product_decision sem pontos enquanto as regras competitivas permanecem bloqueadas. Fechamento síncrono sem worker/outbox; DTO público retido em RAM até commit. Setup/instalador Telegram, troca de sistema, ranking público e aplicação de import continuam pendentes conforme decisões de produto. Nenhum push/main/deploy. Plano permanece approved, não done, pois a M7 integral não foi concluída.
+
+## Continuação aprovada — elegibilidade definitiva (2026-09-27)
+
+Usuário autorizou explicitamente implementar e commitar na dev após auditoria de 2b52344b6289c785b72fc879638def8c3b2e4d02. Checkout/pull confirmou esse HEAD e árvore limpa. Esta decisão substitui os bloqueios anteriores de elegibilidade, late join, reentrada e departure.
+
+### Regra aprovada
+- Elegíveis: concluintes com placement válido; N é a quantidade desses jogadores, nunca len(Players).
+- Abandono definitivo e participante apenas do lobby: score zero, fora de N/stats, posição ausente; registros de auditoria preservados.
+- Late join e saída/reentrada seguidos de conclusão: elegíveis sem penalidade.
+- Departure usa placements existentes; N<2 persiste auditoria sem concessão para ambos sistemas. Cancelled continua excluído.
+- Fórmula Updated/centésimos/half-up e regra Legacy preservadas. Nenhuma mudança de uno/placements/gameplay.
+
+### Passos e arquivos
+1. internal/ranking: policy versionada e cálculo sobre cópia do resultado final, validação de posições contíguas/status, zero para não elegíveis e N<2. Testes explícitos N2/N3/N8, abandonos N7/N6, lobby, late/reentry, duplicatas, cancelled/departure; testes application via ações reais sem alterar engine. Commit de domínio.
+2. internal/storage/postgres: mesma transação/GameID/hash; registrar todos os participantes, atualizar stats só dos elegíveis quando N>=2. Migration incremental 0005 apenas amplia status com insufficient_eligible_players; migrations anteriores imutáveis. policy_version registra avaliação, scored_at NULL para N<2, scores zero sem stats. Testes PostgreSQL real de rollback, concorrência, retries/conflitos e upgrade de schema. Commit storage.
+3. internal/telegram/results.go e hooks de fechamento: preparar resultado antes do repository, aguardar commit, preservar mensagem final e enviar pontos em mensagem adicional depois dela. Falha conserva resultado em RAM para retry síncrono; commit confirmado com falha Telegram não perde pontuação. Sem worker/outbox/comandos/UX de setup. Não reenviar pontos em retry identificado como AlreadyPersisted; não há garantia exatamente uma vez de mensagens. Commit Telegram e documentação.
+
+### Compatibilidade, riscos e validação
+- DTO público/hash sem novos campos obrigatórios; registros antigos needs_product_decision não são reprocessados ou pontuados retroativamente. Payload divergente mantém conflito.
+- Stats completed_games/wins somente para os concluintes de partidas pontuadas; abandonos não criam nem incrementam stats. N<2 não atualiza stats.
+- Sem cronologia de abandono ou PresentAtStart, pois placement válido já fornece evidência necessária à regra escolhida.
+- Verificar memória/DB/ordem das mensagens, políticas de sistemas incompatíveis e compatibilidade de builds padrão/debugcards.
+- go test ./..., go test -race ./..., go vet ./..., go build ./..., testes/vet/build debugcards e integração PostgreSQL com race; git diff --check.
+- Linux/macOS/Windows e Docker/CI continuam com mesmas dependências/runtime. DATABASE_URL inalterada; aplicar nova migration antes do bot.
+- Rollback por commits coordenado com schema compatível, sem apagar dados/down migration. Nenhum push/main/deploy autorizado.
+- Permanecem bloqueados setup, troca de sistema com acumulado, aplicação/conversão de import e política futura para concessão com N<2. Nenhuma decisão adicional será presumida.

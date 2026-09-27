@@ -9,9 +9,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/malbs/UnoGoBot/internal/groups"
 	"slices"
 	"time"
+
+	"github.com/malbs/UnoGoBot/internal/groups"
 )
 
 type Units int64 // 100 units = one point; never a binary float.
@@ -101,6 +102,10 @@ func (r Result) Hash() (string, error) {
 	h := sha256.Sum256(data)
 	return hex.EncodeToString(h[:]), nil
 }
+
+// Validate checks public result consistency and, when evaluated, every award.
+// Placements are engine facts: gaps, duplicates or placements on Left players
+// are errors, never repaired by inventing/reordering ranking positions.
 func (r Result) Validate() error {
 	if r.GameID == "" || r.ChatID == 0 || !r.GameMode.Valid() || !r.RankingSystem.Valid() || r.ConfigRevision <= 0 || r.StartedAt.IsZero() || r.FinishedAt.Before(r.StartedAt) || r.FinalRevision == 0 || r.FinalRevision > 1<<63-1 || len(r.Players) == 0 {
 		return ErrInvalid
@@ -108,34 +113,44 @@ func (r Result) Validate() error {
 	if r.FinishReason != "completed" && r.FinishReason != "departure" {
 		return ErrInvalid
 	}
+	if r.PolicyVersion != "" && r.PolicyVersion != PlacementPolicyV1 {
+		return ErrNeedsProductDecision
+	}
+	n := r.EligibleCount()
 	ids := map[int64]bool{}
 	positions := map[int]bool{}
 	for _, p := range r.Players {
-		if p.UserID <= 0 || ids[p.UserID] || p.Position < 0 || p.Position > len(r.Players) || p.LeaveCount < 0 || p.ReentryCount < 0 {
+		if p.UserID <= 0 || ids[p.UserID] || p.Position < 0 || p.Position > n || p.LeaveCount < 0 || p.ReentryCount < 0 {
 			return ErrInvalid
 		}
 		ids[p.UserID] = true
 		if p.FinalStatus != "playing" && p.FinalStatus != "went_out" && p.FinalStatus != "left" {
 			return ErrInvalid
 		}
+		if p.FinalStatus == "went_out" && (p.Position == 0 || !p.WentOut) {
+			return ErrInvalid
+		}
+		if p.WentOut && (p.Position == 0 || p.FinalStatus != "went_out") {
+			return ErrInvalid
+		}
 		if p.Position > 0 {
-			if positions[p.Position] {
+			if !p.Eligible() || positions[p.Position] {
+				return ErrInvalid
+			}
+			if !p.WentOut && p.Position != n {
 				return ErrInvalid
 			}
 			positions[p.Position] = true
 		}
-		if r.PolicyVersion == "" {
-			if p.Score != 0 {
-				return ErrInvalid
+		expected := Units(0)
+		if r.PolicyVersion != "" && p.Eligible() && n >= 2 {
+			var err error
+			expected, err = Score(r.RankingSystem, n, p.Position)
+			if err != nil {
+				return err
 			}
-			continue
 		}
-		// Only an explicit policy may enable scoring. No runtime policy is approved yet.
-		if r.FinishReason != "completed" || p.Position == 0 {
-			return ErrNeedsProductDecision
-		}
-		expected, err := Score(r.RankingSystem, len(r.Players), p.Position)
-		if err != nil || p.Score != expected {
+		if p.Score != expected {
 			return ErrInvalid
 		}
 	}

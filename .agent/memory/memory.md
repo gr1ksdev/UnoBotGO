@@ -423,3 +423,5 @@
 - M7.5 foundation: ranking_imports/entries por IDs, UNIQUE(chat,source_hash); parser usa último sufixo inteiro e preserva Unicode/invisíveis/duplicatas/linhas inválidas. Reconciliation exata conservadora; múltiplas entradas reivindicando mesmo UserID ou múltiplos candidatos => ambiguous, sem autolink. Staging transacional idempotente não aplica pontos. Sem conversão Updated ou UI/import oficial.
 
 - Revisão M7: rollback usa contexto independente com prazo de 3s, para cancelamento da operação não impedir cleanup e conexão quebrada não prender finalização indefinidamente. Testes PostgreSQL/race e checks locais continuam passando.
+
+- Continuação M7 aprovada: N = placements válidos de concluintes. Abandonados/lobby fora de N, sem posição artificial, zero; late/reentry sem punição se concluiu. Departure permitido se N>=2; N<2 sem concessão, cancelled excluído. internal/ranking.Prepare trabalha numa cópia, policy completed-placements-v1. Engine não alterada. Testes reais do serviço usam deck determinístico e ações normais para confirmar todos os ciclos.

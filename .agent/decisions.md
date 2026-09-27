@@ -653,3 +653,20 @@ Implementar cálculo, auditoria e transação testável sem decidir elegibilidad
 
 ## Impacto
 Partidas oficialmente encerradas já podem persistir auditoria; canceladas/ativas não. Ranking automático e mensagens de pontos continuam pendentes de decisão. Resultados pending não são promovidos/recalculados automaticamente; aplicação futura exige operação auditável específica. Falha de conexão mantém resultado para retry síncrono; crash antes de COMMIT ainda perde RAM.
+
+# M7 — elegibilidade por conclusão aprovada
+
+## Data
+2026-09-27
+
+## Contexto
+Após auditoria do HEAD 2b52344, o usuário definiu a regra definitiva e autorizou implementação na dev, com commits sem push.
+
+## Decisão tomada
+N é exclusivamente a quantidade de concluintes com placement válido. Abandonados definitivos e participantes apenas do lobby ficam na auditoria com posição ausente e zero pontos, fora de N e das stats de partidas concluídas. Late join e saída/reentrada não penalizam quem concluiu. Departure usa os placements reais; N<2 é persistido sem concessão para ambos sistemas. Cancelled continua excluído. Sem cronologia extra ou alteração em internal/uno.
+
+## Motivo
+Aplicar as regras explícitas de produto, preservando engine/placements e fórmula/centésimos/half-up da fundação. Não há necessidade de distinguir late join original de reentrada para elegibilidade.
+
+## Impacto
+Policy completed-placements-v1 é aplicada numa cópia do resultado final. Validação rejeita placement duplicado, posição em Left, gaps e score divergente. N<2 será identificado no storage como insufficient_eligible_players. Dados antigos pending não serão pontuados retroativamente.
