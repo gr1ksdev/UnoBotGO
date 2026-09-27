@@ -263,3 +263,5 @@
 - M7.3 foundation: completed_games + completed_game_players + player_group_stats. Resultado oficial público extraído antes de descarte da engine e retido em memória independente do FIFO/reset. Hooks de fechamento inline/saída/timeout aguardam RecordCompletedGame; erro retém DTO. Sem política competitiva aprovada: runtime persiste needs_product_decision (score NULL, sem stats). Calculador e transação pontuada testados com policy exclusiva de teste. Nenhuma mensagem de pontos ainda.
 
 - M7.4: metadata de nomes observada por comandos/chosen inline é RAM durante gameplay; finalization persiste conhecidos juntamente com resultado. /novo pode gravar criador diretamente por ser criação/configuração. Import futuro lista conhecidos por UserID sem scrape.
+
+- M7.5 groundwork: internal/rankingimport parser/reconciliation sem SQL; postgres staging versionado/auditável. Fonte é Legacy e nenhuma operação de aplicação/reset/conversão foi criada.
