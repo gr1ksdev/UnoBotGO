@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"strings"
+	"time"
 )
 
 var ErrConnection = errors.New("postgres: connection unavailable (check DATABASE_URL and database service)")
@@ -43,4 +45,12 @@ func operationError(ctx context.Context, operation string) error {
 		return fmt.Errorf("postgres: %s: %w", operation, err)
 	}
 	return fmt.Errorf("postgres: %s failed", operation)
+}
+
+// Rollback still runs when the operation context has expired, but cleanup itself
+// must not hold a finalization task indefinitely on a broken connection.
+func rollback(tx pgx.Tx) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_ = tx.Rollback(ctx)
 }

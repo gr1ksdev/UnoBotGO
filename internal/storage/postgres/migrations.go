@@ -50,7 +50,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 	if err != nil {
 		return operationError(ctx, "begin migrations")
 	}
-	defer tx.Rollback(context.Background())
+	defer rollback(tx)
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(71870101)`); err != nil {
 		return operationError(ctx, "lock migrations")
 	}

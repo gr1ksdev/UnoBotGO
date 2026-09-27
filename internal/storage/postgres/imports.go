@@ -25,7 +25,7 @@ func (s *Store) StageRankingImport(ctx context.Context, source rankingimport.Imp
 	if err != nil {
 		return rankingimport.Import{}, operationError(ctx, "begin import")
 	}
-	defer tx.Rollback(context.Background())
+	defer rollback(tx)
 	tag, err := tx.Exec(ctx, `INSERT INTO ranking_imports(import_id,chat_id,created_by,created_at,source_hash,raw_text) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(chat_id,source_hash) DO NOTHING`, parsed.ID, parsed.ChatID, parsed.CreatedBy, parsed.CreatedAt, parsed.Hash, parsed.RawText)
 	if err != nil {
 		return rankingimport.Import{}, operationError(ctx, "stage import")

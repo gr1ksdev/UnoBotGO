@@ -421,3 +421,5 @@
 - M7.4: known_group_users por (chat_id,user_id), username nullable, atualização monotônica. /novo observa criador em DB (fora de gameplay); comandos/chosen inline observam participantes somente em RAM e resultado flush na mesma transação de encerramento. Não scrapeia membros nem acessa DB por jogada. Unicode preservado; nomes duplicados não mesclam IDs.
 
 - M7.5 foundation: ranking_imports/entries por IDs, UNIQUE(chat,source_hash); parser usa último sufixo inteiro e preserva Unicode/invisíveis/duplicatas/linhas inválidas. Reconciliation exata conservadora; múltiplas entradas reivindicando mesmo UserID ou múltiplos candidatos => ambiguous, sem autolink. Staging transacional idempotente não aplica pontos. Sem conversão Updated ou UI/import oficial.
+
+- Revisão M7: rollback usa contexto independente com prazo de 3s, para cancelamento da operação não impedir cleanup e conexão quebrada não prender finalização indefinidamente. Testes PostgreSQL/race e checks locais continuam passando.

@@ -26,7 +26,7 @@ func (s *Store) RecordCompletedGame(ctx context.Context, result ranking.Result) 
 	if err != nil {
 		return ranking.Commit{}, operationError(ctx, "begin result")
 	}
-	defer tx.Rollback(context.Background())
+	defer rollback(tx)
 	// Serialize results for one group and forbid incompatible stats silently mixing.
 	var system string
 	if err = tx.QueryRow(ctx, `SELECT ranking_system FROM group_configs WHERE chat_id=$1 FOR UPDATE`, r.ChatID).Scan(&system); err != nil {
