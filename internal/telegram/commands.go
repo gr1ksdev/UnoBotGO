@@ -15,15 +15,35 @@ import (
 )
 
 type CommandHandler struct {
-	knownUsers   groups.UserRepository
-	finalize     func(context.Context, game.Outcome) func()
-	groupConfigs groups.Repository
-	bot          BotAPI
-	service      *game.Service
-	renderer     *Renderer
-	tokens       *TokenStore
-	botUsername  string
-	logger       *slog.Logger
+	knownUsers    groups.UserRepository
+	finalize      func(context.Context, game.Outcome) func()
+	groupConfigs  groups.Repository
+	groupsService *groups.Service
+	bot           BotAPI
+	service       *game.Service
+	renderer      *Renderer
+	tokens        *TokenStore
+	botUsername   string
+	logger        *slog.Logger
+}
+
+func (h *CommandHandler) SetGroupsService(s *groups.Service) {
+	h.groupsService = s
+}
+
+func (h *CommandHandler) getGroupsService() *groups.Service {
+	if h.groupsService != nil {
+		return h.groupsService
+	}
+	if h.groupConfigs != nil {
+		return &groups.Service{
+			Repository: h.groupConfigs,
+			LookupMembership: func(ctx context.Context, chatID, userID int64) (groups.Membership, error) {
+				return lookupMembershipAPI(ctx, h.bot, chatID, userID)
+			},
+		}
+	}
+	return nil
 }
 
 func NewCommandHandler(
@@ -46,6 +66,7 @@ func NewCommandHandler(
 		logger:      logger,
 	}
 }
+
 
 func stringPtr(s string) *string {
 	return &s
@@ -103,6 +124,63 @@ func makePrivateStartButtons(botUsername string) *telego.InlineKeyboardMarkup {
 		}}},
 	}
 }
+
+func makeGroupConfigButtons(config groups.Config) *telego.InlineKeyboardMarkup {
+	classicText := "Clássico"
+	caseiroText := "Caseiro"
+	if config.DefaultGameMode == groups.Caseiro {
+		caseiroText = "✅ Caseiro"
+	} else {
+		classicText = "✅ Clássico"
+	}
+
+	legacyText := "Legado"
+	updatedText := "Atualizado"
+	if config.RankingSystem == groups.Updated {
+		updatedText = "✅ Atualizado"
+	} else {
+		legacyText = "✅ Legado"
+	}
+
+	return &telego.InlineKeyboardMarkup{
+		InlineKeyboard: [][]telego.InlineKeyboardButton{
+			{
+				{
+					Text:         classicText,
+					CallbackData: fmt.Sprintf("cfg_mode_classic_%d", config.ChatID),
+				},
+				{
+					Text:         caseiroText,
+					CallbackData: fmt.Sprintf("cfg_mode_caseiro_%d", config.ChatID),
+				},
+			},
+			{
+				{
+					Text:         legacyText,
+					CallbackData: fmt.Sprintf("cfg_rank_legacy_%d", config.ChatID),
+				},
+				{
+					Text:         updatedText,
+					CallbackData: fmt.Sprintf("cfg_rank_updated_%d", config.ChatID),
+				},
+			},
+		},
+	}
+}
+
+func makeGroupWelcomeButtons(chatID int64) *telego.InlineKeyboardMarkup {
+	return &telego.InlineKeyboardMarkup{
+		InlineKeyboard: [][]telego.InlineKeyboardButton{
+			{
+				{
+					Text:         "⚙️ Configurar",
+					CallbackData: fmt.Sprintf("cfg_open_%d", chatID),
+				},
+			},
+		},
+	}
+}
+
 
 func (h *CommandHandler) reply(ctx context.Context, chatID int64, text string, markup *telego.InlineKeyboardMarkup) {
 	params := &telego.SendMessageParams{
@@ -204,6 +282,8 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		h.handleEstado(ctx, chatID)
 	case "reset":
 		h.HandleReset(ctx, msg, nil)
+	case "config":
+		h.handleConfig(ctx, msg)
 	case "ajuda", "help":
 		h.reply(ctx, msg.Chat.ID, h.renderer.RenderHelp(h.botUsername), nil)
 	}
@@ -602,4 +682,100 @@ func (h *CommandHandler) handleRoomLock(ctx context.Context, actorID uno.PlayerI
 		}
 	}
 	h.reply(ctx, int64(chatID), text, nil)
+}
+
+func (h *CommandHandler) handleConfig(ctx context.Context, msg *telego.Message) {
+	if msg == nil || msg.From == nil {
+		return
+	}
+	chatID := msg.Chat.ID
+	actorID := msg.From.ID
+
+	if h.knownUsers != nil {
+		if err := h.knownUsers.ObserveGroupUser(ctx, groups.KnownUser{
+			ChatID:      chatID,
+			UserID:      actorID,
+			DisplayName: observedName(*msg.From),
+			Username:    msg.From.Username,
+			LastSeenAt:  time.Now().UTC(),
+		}); err != nil {
+			h.logger.WarnContext(ctx, "failed to observe user in /config", "chat_id", chatID, "error", err)
+		}
+	}
+
+	svc := h.getGroupsService()
+	if svc == nil {
+		h.reply(ctx, chatID, "❌ Configuração não disponível no momento.", nil)
+		return
+	}
+
+	cfg, allowed, err := svc.CanConfigureUser(ctx, chatID, actorID)
+	if err != nil && !errors.Is(err, groups.ErrForbidden) {
+		h.logger.WarnContext(ctx, "failed to check config permissions", "chat_id", chatID, "user_id", actorID, "error", err)
+	}
+
+	if !allowed {
+		h.reply(ctx, chatID, "⚠️ Somente administradores ou quem adicionou o bot pode alterar esta configuração.", nil)
+		return
+	}
+
+	text := h.renderer.RenderGroupConfig(cfg)
+	buttons := makeGroupConfigButtons(cfg)
+	h.reply(ctx, chatID, text, buttons)
+}
+
+func (h *CommandHandler) HandleMyChatMember(ctx context.Context, update *telego.ChatMemberUpdated) {
+	if update == nil {
+		return
+	}
+	chatID := update.Chat.ID
+	isGroup := update.Chat.Type == "group" || update.Chat.Type == "supergroup"
+	if !isGroup {
+		return
+	}
+
+	if update.OldChatMember == nil || update.NewChatMember == nil {
+		return
+	}
+
+	oldStatus := update.OldChatMember.MemberStatus()
+	newStatus := update.NewChatMember.MemberStatus()
+
+	wasAbsent := oldStatus == telego.MemberStatusLeft || oldStatus == telego.MemberStatusBanned
+	isPresent := newStatus == telego.MemberStatusMember || newStatus == telego.MemberStatusAdministrator
+
+	if !wasAbsent || !isPresent {
+		return
+	}
+
+	svc := h.getGroupsService()
+	if update.From.ID > 0 && !update.From.IsBot {
+		if svc != nil {
+			if _, err := svc.RecordInstallation(ctx, chatID, update.From.ID); err != nil {
+				h.logger.WarnContext(ctx, "failed to record bot installation", "chat_id", chatID, "user_id", update.From.ID, "error", err)
+			}
+		}
+		if h.knownUsers != nil {
+			if err := h.knownUsers.ObserveGroupUser(ctx, groups.KnownUser{
+				ChatID:      chatID,
+				UserID:      update.From.ID,
+				DisplayName: observedName(update.From),
+				Username:    update.From.Username,
+				LastSeenAt:  time.Now().UTC(),
+			}); err != nil {
+				h.logger.WarnContext(ctx, "failed to observe installer user", "chat_id", chatID, "error", err)
+			}
+		}
+	}
+
+	config := groups.Defaults(chatID)
+	if svc != nil && svc.Repository != nil {
+		if c, err := svc.Repository.GetOrCreateGroupConfig(ctx, chatID); err == nil {
+			config = c
+		}
+	}
+
+	text := h.renderer.RenderGroupWelcome(config)
+	buttons := makeGroupWelcomeButtons(chatID)
+	h.reply(ctx, chatID, text, buttons)
 }

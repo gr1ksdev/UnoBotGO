@@ -22,6 +22,13 @@ func (r *configRepo) GetOrCreateGroupConfig(context.Context, int64) (groups.Conf
 func (r *configRepo) SetDefaultGameMode(context.Context, int64, groups.Mode) (groups.Config, error) {
 	panic("/novo must not update defaults")
 }
+func (r *configRepo) SetRankingSystem(context.Context, int64, groups.RankingSystem) (groups.Config, error) {
+	panic("unexpected SetRankingSystem call")
+}
+func (r *configRepo) SetInstalledBy(context.Context, int64, int64) (groups.Config, error) {
+	panic("unexpected SetInstalledBy call")
+}
+
 func TestNovoGroupDefaultAndOverrides(t *testing.T) {
 	for _, tt := range []struct {
 		cmd     string
