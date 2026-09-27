@@ -56,6 +56,7 @@ grupos exibem os comandos de partida.
 | `/sair` | Sai da partida em andamento (transfere responsabilidade se necessário). |
 | `/estado` | Exibe o estado público da partida ativa ou lobby. |
 | `/reset` | Recupera o grupo, cancela trabalhos pendentes e apaga a partida e o histórico daquele grupo (responsável ou administrador). |
+| `/config` | Configura o modo padrão (Clássico/Caseiro) e sistema de ranking (Legado/Atualizado) do grupo (admin ou instalador). |
 
 O `/reset` usa uma fila de recuperação separada. Assim, ele continua disponível
 mesmo quando a fila normal do grupo está cheia ou uma operação anterior ficou

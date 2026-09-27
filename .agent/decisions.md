@@ -1,4 +1,28 @@
+# Decisão: UX Telegram de configuração de grupos, permissões e proteção de histórico
+
+## Data
+2026-09-27
+
+## Contexto
+A Milestone M7 implementou a fundação de persistência com `group_configs`, mas faltava a interface de usuário no Telegram para os grupos configurarem seu modo de jogo padrão (`Classic` / `Caseiro`) e sistema de ranking (`Legacy` / `Updated`). Além disso, era necessário determinar quem tem permissão para alterar configurações, como receber eventos de entrada do bot no grupo (`my_chat_member`), e como lidar com trocas de ranking quando já existem pontuações registradas.
+
+## Decisão tomada
+1. Comando único `/config` em grupos baseado em botões inline para alternar modo padrão e sistema de ranking, marcando visualmente o item ativo.
+2. Permissão restrita a: administradores atuais do grupo OU usuário que adicionou o bot (se ainda for membro atual). Em caso de falha de consulta à API do Telegram, falhar fechado (`groups.ErrForbidden`).
+3. Bloquear a troca do sistema de ranking (`Legacy` ↔ `Updated`) caso o grupo já contenha pontuações registradas em `player_group_stats` ou partidas pontuadas em `completed_games`, retornando `groups.ErrNeedsProductDecision` e exibindo um alerta claro ao usuário, preservando a configuração anterior sem corrupção ou migrações mágicas de pontos.
+4. Escutar updates de `my_chat_member` em `allowedUpdates` e filtrar transições reais de instalação/reentrada (`left`/`kicked` -> `member`/`administrator`). Apenas quando houver um ator válido no update, gravar `installed_by_user_id` e atualizar `KnownGroupUser`. Enviar mensagem curta de boas-vindas com botão `[ ⚙️ Configurar ]` (`cfg_open_`). Updates irrelevantes (promoções/demissões de cargo do bot) são descartados sem envio de mensagens.
+5. O setup permanece 100% opcional e nunca impede a criação ou execução de partidas com `/novo` (defaults `Classic` + `Legacy`).
+
+## Motivo
+Garantir uma interface simples, segura e autoexplicativa sem poluir a lista de comandos com múltiplos `/set...`, evitar que usuários não autorizados alterem as regras do grupo, e proteger a integridade estatística dos rankings contra inconsistências de cálculo histórico até que haja uma definição de produto para migração ou coexistência.
+
+## Impacto
+Administradores e quem adicionou o bot podem gerenciar as configurações facilmente. Partidas em andamento continuam isoladas com seus snapshots congelados. Grupos novos recebem uma mensagem discreta de boas-vindas. O histórico de pontuações existente fica protegido contra alterações de sistema.
+
+---
+
 # Decisão: desabilitar desafio de blefe para +4 contra +2 no Caseiro e regras de reentrada
+
 
 ## Data
 2026-09-26

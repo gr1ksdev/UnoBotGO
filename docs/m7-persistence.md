@@ -18,8 +18,10 @@ ranking automático homologado.
 | `9dc0cd8` | Elegibilidade definitiva: concluintes com placement válido, abandono fora de N e zero pontos |
 | `25f7f90` | Persistência postgres: migration 0005, concessão e stats somente para elegíveis em N>=2 |
 | `e1ebb41` | Integração telegram: anúncio de pontuação pós-commit após a mensagem final compacta |
+| `dev` | Telegram group config UX: comando /config, botões inline, my_chat_member e proteção contra troca de ranking com histórico |
 
 Sem push, promoção ou alteração na main.
+
 
 ## Arquitetura e arquivos principais
 
@@ -95,22 +97,26 @@ A política de elegibilidade definitiva foi aprovada e integrada (`completed-pla
 
 Continuam NEEDS PRODUCT DECISION:
 
-- Troca Legacy/Updated em grupos com histórico ou score acumulado.
-- UX do setup inicial, superfície definitiva de configuração e comandos dedicados.
+- Conversão/migração definitiva de histórico/scores acumulados caso produto venha a permitir troca de ranking em grupos já ativos (atualmente recusada com `ErrNeedsProductDecision`).
 - Aproximação/confirmação de import Updated; nenhum fator ×5 aprovado/implementado.
 - Reavaliação de resultados legados em status `needs_product_decision`.
 
 ## Configuração e permissões
 
 GetOrCreate cria Classic+Legacy sem setup. `/novo` consulta config uma vez;
-`/novo classico` e `/novo caseiro` sobrescrevem apenas a partida. Ranking/revision
-ficam congelados na criação; regras efetivas do lobby determinam modo no início,
+`/novo classico` e `/novo caseiro` sobrescrevem apenas a partida sem alterar `GroupConfig`.
+Ranking e revisão ficam congelados na criação da partida; regras efetivas do lobby determinam modo no início,
 preservando o seletor de modo existente.
 
-`groups.Service` valida a cada operação de modo: admin atual OU instalador ainda
-membro. Falha na consulta de associação recusa ação. A integração Telegram de
-setup/callbacks e instalador ainda não foi ligada: `my_chat_member` não é recebido
-pelo pipeline atual e não se inventa instalador a partir de mensagens comuns.
+`groups.Service` valida a cada operação de modo e ranking: admin atual OU instalador ainda
+membro. Falha na consulta de associação recusa ação (fail closed).
+
+A UX Telegram de configuração de grupos foi integrada com sucesso:
+- Comando `/config` disponível em grupos para administradores e instalador ativo.
+- Interface em botões inline para alternar Modo (`Clássico` / `Caseiro`) e Ranking (`Legado` / `Atualizado`).
+- Tentativa de alternância de ranking em grupos com histórico incompatível recusa a operação com alerta amigável ao usuário via `ErrNeedsProductDecision`, preservando a configuração anterior.
+- Monitoramento de `my_chat_member` captura transições reais de instalação/reentrada (`left`/`kicked` -> `member`/`administrator`), grava `installed_by_user_id` e envia mensagem curta de boas-vindas com botão `[ ⚙️ Configurar ]`. Updates irrelevantes (promoções/demissões) são ignorados.
+
 A Bot API oferece `ChatMemberUpdated.From`; a futura integração deve registrar
 apenas uma transição confiável de instalação e validar membros atuais via
 GetChatMember, cuja garantia para outros usuários requer bot administrador.

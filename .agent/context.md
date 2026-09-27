@@ -265,3 +265,12 @@
 - M7.4: metadata de nomes observada por comandos/chosen inline é RAM durante gameplay; finalization persiste conhecidos juntamente com resultado. /novo pode gravar criador diretamente por ser criação/configuração. Import futuro lista conhecidos por UserID sem scrape.
 
 - M7.5 groundwork: internal/rankingimport parser/reconciliation sem SQL; postgres staging versionado/auditável. Fonte é Legacy e nenhuma operação de aplicação/reset/conversão foi criada.
+
+# M7 — UX Telegram de Configuração de Grupo (2026-09-27, somente dev)
+- Comando único `/config` em grupos para administradores atuais e instalador do bot (se ainda membro do grupo). Usuários comuns ou instalador que saiu têm acesso recusado com mensagem amigável (fail closed).
+- Interface inline com botões para alternar Modo padrão (`Clássico` / `Caseiro`) e Sistema de Ranking (`Legado` / `Atualizado`), com marcação visual do item ativo.
+- Setup é totalmente opcional e não bloqueia o início de partidas: defaults do sistema são `Classic` + `Legacy`.
+- Snapshot por partida preservado: `/novo` consome a configuração do grupo no momento da criação. Mudanças posteriores de configuração não afetam partidas em andamento. `/novo classico` e `/novo caseiro` continuam operando como overrides exclusivos daquela partida sem alterar a `GroupConfig`.
+- Transição de ranking protegida: troca `Legacy` ↔ `Updated` é bloqueada caso o grupo já contenha pontuações ou partidas pontuadas no sistema anterior (`groups.ErrNeedsProductDecision`), emitindo alerta explicativo no callback e preservando a configuração anterior sem conversão, reset ou rankings paralelos.
+- Suporte a `my_chat_member`: detecta transição real de instalação/reentrada (`left`/`kicked` -> `member`/`administrator`), registra `installed_by_user_id` a partir do ator e envia mensagem curta de boas-vindas com botão `[ ⚙️ Configurar ]`. Updates de status irrelevantes (promoções/demissões de cargo do bot) não disparam mensagem.
+- Registro monotônico de `KnownGroupUser` integrado em `/config`, callbacks `cfg_` e `my_chat_member`.

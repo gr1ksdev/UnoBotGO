@@ -433,3 +433,20 @@
   - Mensagem final compacta é enviada primeiro; o callback `notify` é retornado apenas se o commit confirmou `commit.Scored == true` e `!commit.AlreadyPersisted`.
   - Disparo de `notifyPoints` envia a mensagem adicional com ordenação (colocados primeiro em ordem de colocação, depois participantes sem colocação com `(fora do ranking)` ordenados por UserID), escape HTML dos nomes, Legacy em inteiros e Updated em decimal formatado com vírgula e 2 casas (`half-up`).
   - N<2 ou falhas de commit não disparam a mensagem de pontos; em caso de falha de banco, o resultado é mantido na memória do `game.Service` para retry síncrono via `RetryPendingResults`. Retries já persistidos (`AlreadyPersisted`) não reenviam a mensagem de pontuação. Commit `b56322e`.
+
+# M7 — UX Telegram de Configuração de Grupo — 2026-09-27 (somente dev)
+- Plano aprovado: `telegram-group-config-ux_2026-09-27_16-50.md` com dois ajustes do usuário:
+  1. Troca Legacy ↔ Updated bloqueada se houver histórico/scores incompatíveis acumulados (`ErrNeedsProductDecision`), preservando a configuração anterior e informando o usuário com alerta sem quebrar a UI.
+  2. `installed_by_user_id` só é atualizado quando `my_chat_member` comprovar transição real de instalação/reentrada (`left`/`kicked` -> `member`/`administrator`) usando o ator fornecido pelo update.
+- Implementação:
+  - `internal/groups`: `SetRankingSystem`, `SetInstalledBy`, `CanConfigureUser`, `RecordInstallation` e `ErrNeedsProductDecision`.
+  - `internal/storage/postgres`: `SetRankingSystem` com verificação transacional de conflito em `player_group_stats` e `completed_games`, e `SetInstalledBy`.
+  - `internal/telegram`:
+    - `Renderer.RenderGroupConfig` e `Renderer.RenderGroupWelcome`.
+    - `makeGroupConfigButtons` e `makeGroupWelcomeButtons`.
+    - `lookupMembershipAPI` e `parseMembership` para mapear status telego para `groups.Membership` (fail closed em erro).
+    - `bot.go`: adicionado `my_chat_member` a `allowedUpdates`, despachado via `dispatcher.EnqueueChat`, registro de `/config` no menu de grupos.
+    - `commands.go`: tratamento de `/config` com verificação de autorização (admin atual ou instalador ainda membro), `HandleMyChatMember` filtrando transições reais e registrando instalador.
+    - `callbacks.go`: tratamento de callbacks `cfg_` (`cfg_open_`, `cfg_mode_`, `cfg_rank_`), revalidação a cada clique, atualização do status e edição limpa da mensagem.
+    - `KnownGroupUser` atualizado em `/config`, callbacks `cfg_` e `my_chat_member`.
+  - Suíte completa em `internal/telegram/config_test.go` cobrindo todos os 23 cenários + regra de conflito de histórico.

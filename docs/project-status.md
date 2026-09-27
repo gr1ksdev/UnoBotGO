@@ -49,9 +49,9 @@ A coluna Implementado considera a dev; Main indica a presença na base pública 
 | Correção de falso tópico | Sim | Threads comuns e tópicos reais | Grupo afetado: pendente | Não | Apenas IsTopicMessage identifica tópico |
 | Gameplay UX Polish | Sim, dev | Ordem, lock, renderer e regressões | Telegram: pendente | Não | Pronta para homologação manual |
 | Blefe em +4 sobre +2 | Sim, dev | Counter legal não desafiável | Telegram: pendente | Não | Caseiro: +4 sobre +2 não é blefe |
-| Reentrada e colocação | Sim, dev | Late join após saída vs finalizados | Telegram: pendente | Não | Reentrada de quem saiu; colocado bloqueado |
-| M7 persistência/configuração | Fundação implementada | PostgreSQL real/race/defaults/snapshot | Telegram: pendente | Não | DATABASE_URL obrigatório; setup pendente |
-| M7 ranking/import | Cálculo/transação/staging | Idempotência/rollback/Unicode/ambiguous | N/A para fundação | Não | Runtime salva resultado pending sem pontos; policy/UX bloqueadas |
+| M7 persistência/configuração | Sim, dev | PostgreSQL real/race/defaults/snapshot | Homologado Legacy Telegram | Não | DATABASE_URL obrigatório; defaults Classic+Legacy |
+| M7 UX de Configuração (/config) | Sim, dev | /config, botões inline, my_chat_member, 23 cenários | Telegram: pendente de homologação manual | Não | Permissão admin/installer; bloqueio troca ranking com histórico |
+| M7 ranking/import | Cálculo/transação/staging | Idempotência/rollback/Unicode/ambiguous | Homologado Legacy Telegram | Não | Post-commit pontua e envia mensagem; Updated pendente de decisão de produto |
 | /dar | Sim, com tag | Testes debugcards e exclusão normal | Não certificada; uso de desenvolvimento | Não | Fora do produto/build padrão |
 
 ## Transportes e evidência real
