@@ -15,6 +15,9 @@ ranking automático homologado.
 | `35e72de` | M7.4: usuários conhecidos e nomes observados |
 | `5364016` | M7.5 base: parser, reconciliação e staging de imports |
 | `6e60203` | Limitar cleanup de transações em falha/cancelamento |
+| `9dc0cd8` | Elegibilidade definitiva: concluintes com placement válido, abandono fora de N e zero pontos |
+| `25f7f90` | Persistência postgres: migration 0005, concessão e stats somente para elegíveis em N>=2 |
+| `e1ebb41` | Integração telegram: anúncio de pontuação pós-commit após a mensagem final compacta |
 
 Sem push, promoção ou alteração na main.
 
@@ -54,6 +57,7 @@ Migrations embutidas versionadas em `internal/storage/postgres/migrations`:
 | `0002_results.up.sql` | `completed_games`: GameID PK, snapshots/auditoria/hash/policy/status; `completed_game_players`: UserID/nomes/colocação/status/score/counters; `player_group_stats`: uma linha por chat/user, unidades acumuladas, partidas e vitórias |
 | `0003_known_users.up.sql` | `known_group_users`: identidade chat/user, nomes mutáveis, username nullable, last_seen monotônico |
 | `0004_imports.up.sql` | `ranking_imports`: fonte/hash único por chat e auditoria; `ranking_import_entries`: IDs próprios, linhas, nomes e status, sem chave pelo nome |
+| `0005_insufficient_eligible_players.up.sql` | `completed_games`: adiciona o status `insufficient_eligible_players` para partidas concluídas onde N < 2 elegíveis |
 
 `schema_migrations` registra versão/checksum. Migrations são aplicadas em transação,
 serializadas com advisory lock; alterações/versões desconhecidas são rejeitadas.
@@ -64,31 +68,37 @@ GameID+hash confirmam retries idênticos; conteúdo divergente é recusado. Lock
 configuração serializa conclusões do grupo. Stats com outro sistema recusam a
 transação integralmente. Não há reset ou conversão silenciosa.
 
-## Ranking e decisões bloqueadas
+## Ranking e elegibilidade definitiva
 
 100 unidades inteiras = 1 ponto. Legacy concede 100 unidades para posições antes
 do último e 0 ao último. Updated calcula `1000*(N-position)/(N-1)`, arredondado a
-unidades inteiras pelo método half-up. Exibição preparada a uma casa decimal com
-vírgula, também determinística. N=1 é matematicamente indefinido e recusado pelo
-calculador; isso não define um requisito de produto para partidas.
+unidades inteiras pelo método half-up. Exibição preparada com vírgula e duas casas
+decimais para Updated (`fmt.Sprintf("%d,%02d", p.Score/100, p.Score%100)`) e inteiro
+para Legacy.
 
-**O runtime não habilita uma política competitiva.** Resultados oficiais são
-persistidos como `needs_product_decision`, com score NULL e sem stats. Partidas
-canceladas ou ainda ativas não são persistidas. Não são enviados pontos/ranking
-sem pontuação commitada. A transação pontuada é testada com policy exclusivamente
-de teste; não foi adotada essa policy em produção.
+A política de elegibilidade definitiva foi aprovada e integrada (`completed-placements-v1`):
+- Participam do cálculo (`N`) e recebem pontuação apenas os jogadores que concluíram
+  efetivamente a partida e possuem colocação válida no resultado.
+- Abandono definitivo: jogador que sai e não retorna recebe 0 pontos, fica fora de `N`,
+  sem colocação artificial, permanecendo no registro persistido para fins de auditoria
+  e exibido no Telegram como `(fora do ranking)`.
+- Late join e saída com reentrada válida: se o jogador concluiu normalmente a partida,
+  participa de `N` e pontua pela sua colocação final sem penalidade.
+- Partidas com `N < 2` elegíveis (ex: encerramento por departure com 1 jogador restante)
+  são persistidas para auditoria com status `insufficient_eligible_players`, com scores
+  zerados e sem alteração de `player_group_stats`. Partidas canceladas não são persistidas.
+- A finalização síncrona aguarda o COMMIT do PostgreSQL e, quando confirmado com concessão
+  de pontos (`commit.Scored == true`), dispara uma mensagem adicional de pontuação logo
+  após a mensagem final compacta do jogo. Em caso de retry já persistido (`AlreadyPersisted`),
+  a mensagem de pontos não é reenviada. Falhas temporárias de DB retêm o resultado na
+  memória do serviço para retry síncrono via `RetryPendingResults`.
 
 Continuam NEEDS PRODUCT DECISION:
 
-- Elegibilidade/N de abandono definitivo, late join, reentrada e encerramento por saída.
-- Requisitos mínimos/partidas pequenas.
-- Troca Legacy/Updated com score acumulado ou partidas com snapshot antigo.
-- UX do setup inicial, superfície definitiva de configuração e extensão da mensagem de ranking.
+- Troca Legacy/Updated em grupos com histórico ou score acumulado.
+- UX do setup inicial, superfície definitiva de configuração e comandos dedicados.
 - Aproximação/confirmação de import Updated; nenhum fator ×5 aprovado/implementado.
-
-Resultados pending não são promovidos/recalculados automaticamente. Habilitar
-pontuação futura exige policy aprovada e operação auditável própria para os
-pending. Não declarar a M7 completa enquanto essas etapas permanecerem abertas.
+- Reavaliação de resultados legados em status `needs_product_decision`.
 
 ## Configuração e permissões
 

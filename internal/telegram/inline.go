@@ -16,7 +16,7 @@ import (
 )
 
 type InlineHandler struct {
-	finalize   func(context.Context, game.Outcome)
+	finalize   func(context.Context, game.Outcome) func()
 	bot        BotAPI
 	service    *game.Service
 	renderer   *Renderer
@@ -477,8 +477,9 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 			return
 		}
 
+		var notify func()
 		if h.finalize != nil {
-			h.finalize(taskCtx, outcome)
+			notify = h.finalize(taskCtx, outcome)
 		}
 		// Success!
 		h.tokens.SetActionResult(tokenStr, "confirmed")
@@ -518,6 +519,9 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 			params.ReplyMarkup = markup
 		}
 		_, _ = h.bot.SendMessage(taskCtx, params)
+		if notify != nil {
+			notify()
+		}
 	})
 	return accepted
 }

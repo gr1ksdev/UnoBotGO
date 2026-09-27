@@ -16,7 +16,7 @@ import (
 
 type CommandHandler struct {
 	knownUsers   groups.UserRepository
-	finalize     func(context.Context, game.Outcome)
+	finalize     func(context.Context, game.Outcome) func()
 	groupConfigs groups.Repository
 	bot          BotAPI
 	service      *game.Service
@@ -527,8 +527,9 @@ func (h *CommandHandler) handleSair(ctx context.Context, actorID uno.PlayerID, c
 		return
 	}
 
+	var notify func()
 	if h.finalize != nil {
-		h.finalize(ctx, outcome)
+		notify = h.finalize(ctx, outcome)
 	}
 	h.tokens.InvalidateUserGame(summary.GameID, actorID)
 
@@ -545,6 +546,9 @@ func (h *CommandHandler) handleSair(ctx context.Context, actorID uno.PlayerID, c
 			h.renderer.RenderPublicState(outcome.View),
 		)
 		h.reply(ctx, int64(chatID), msg, makeGameButtons(outcome.View))
+	}
+	if notify != nil {
+		notify()
 	}
 }
 

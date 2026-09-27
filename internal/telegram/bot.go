@@ -280,9 +280,12 @@ func (b *Bot) enqueueAutoSkip(candidate game.ExpiredTurn) bool {
 		if !applied {
 			return
 		}
-		b.finalizeOutcome(ctx, outcome)
+		notify := b.finalizeOutcome(ctx, outcome)
 		text := "⏱️ O tempo acabou; o turno foi pulado.\n\n" + b.renderer.RenderPublicState(outcome.View)
 		b.cmdHandler.reply(ctx, int64(candidate.ChatID), text, makeGameButtons(outcome.View))
+		if notify != nil {
+			notify()
+		}
 	})
 }
 func (b *Bot) submitUpdate(ctx context.Context, update telego.Update) bool {
