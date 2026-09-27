@@ -9,17 +9,19 @@ import (
 	"time"
 
 	"github.com/malbs/UnoGoBot/internal/game"
+	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/uno"
 	"github.com/mymmrac/telego"
 )
 
 type CommandHandler struct {
-	bot         BotAPI
-	service     *game.Service
-	renderer    *Renderer
-	tokens      *TokenStore
-	botUsername string
-	logger      *slog.Logger
+	groupConfigs groups.Repository
+	bot          BotAPI
+	service      *game.Service
+	renderer     *Renderer
+	tokens       *TokenStore
+	botUsername  string
+	logger       *slog.Logger
 }
 
 func NewCommandHandler(
@@ -168,9 +170,12 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 	}
 	switch cmdName {
 	case "novo":
-		mode := "classic"
-		if len(fields) > 1 && strings.EqualFold(fields[1], "caseiro") {
-			mode = "caseiro"
+		mode := ""
+		if len(fields) > 1 {
+			mode = "classic"
+			if strings.EqualFold(fields[1], "caseiro") {
+				mode = "caseiro"
+			}
 		}
 		h.handleNovo(ctx, actorID, chatID, msg.Chat.Title, mode)
 	case "trancar", "destrancar":
@@ -299,13 +304,27 @@ func (h *CommandHandler) HandleReset(ctx context.Context, msg *telego.Message, r
 }
 
 func (h *CommandHandler) handleNovo(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID, chatTitle, mode string) {
+	config := groups.Defaults(int64(chatID))
+	if h.groupConfigs != nil {
+		var err error
+		config, err = h.groupConfigs.GetOrCreateGroupConfig(ctx, int64(chatID))
+		if err != nil {
+			h.logger.Warn("failed to load group config", "chat_id", chatID, "error", err)
+			h.reply(ctx, int64(chatID), "❌ Não foi possível carregar a configuração do grupo. Tente novamente.", nil)
+			return
+		}
+	}
+	if mode == "" {
+		mode = string(config.DefaultGameMode)
+	}
 	rules := uno.BotRules()
 	if strings.EqualFold(mode, "caseiro") {
 		rules = uno.CaseiroRules()
 	}
 	req := game.CreateRequest{
-		ChatName: chatTitle,
-		Rules:    rules,
+		GroupConfig: config.Snapshot(),
+		ChatName:    chatTitle,
+		Rules:       rules,
 	}
 	actor := game.Actor{PlayerID: actorID, ChatID: chatID}
 

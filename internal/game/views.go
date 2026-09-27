@@ -3,6 +3,7 @@ package game
 import (
 	"slices"
 
+	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
 
@@ -26,6 +27,7 @@ const (
 // PublicGameView has no hands, draw pile or full inventory. OwnerID is metadata,
 // not a participant; Players contains only users explicitly registered via Join.
 type PublicGameView struct {
+	GroupConfig     groups.Snapshot
 	GameID          uno.GameID
 	ChatID          ChatID
 	ChatName        string
@@ -89,7 +91,7 @@ func (v PublicGameView) summary() GameSummary {
 }
 
 func publicView(entry *managedGame, state uno.State) PublicGameView {
-	v := PublicGameView{
+	v := PublicGameView{GroupConfig: entry.groupConfig,
 		GameID: state.ID, ChatID: entry.chatID, ChatName: entry.chatName,
 		CreatorID: entry.creatorID, OwnerID: entry.ownerID, Locked: entry.locked, Revision: state.Revision,
 		Phase: state.Phase, Rules: state.Rules, CurrentTurn: state.CurrentPlayerID,

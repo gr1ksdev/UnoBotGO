@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
 
@@ -20,8 +21,9 @@ type Actor struct {
 }
 
 type CreateRequest struct {
-	ChatName string
-	Rules    uno.Rules
+	ChatName    string
+	Rules       uno.Rules
+	GroupConfig groups.Snapshot
 }
 
 type Outcome struct {
@@ -71,6 +73,12 @@ func (s *Service) Create(ctx context.Context, actor Actor, req CreateRequest) (O
 		return Outcome{}, err
 	}
 	if actor.PlayerID <= 0 || actor.ChatID == 0 {
+		return Outcome{}, ErrInvalidArgument
+	}
+	if req.GroupConfig.RankingSystem == "" {
+		req.GroupConfig = groups.Defaults(int64(actor.ChatID)).Snapshot()
+	}
+	if !req.GroupConfig.RankingSystem.Valid() || req.GroupConfig.ConfigRevision <= 0 {
 		return Outcome{}, ErrInvalidArgument
 	}
 	return s.manager.create(ctx, actor, req)

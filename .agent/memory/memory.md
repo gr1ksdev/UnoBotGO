@@ -413,3 +413,5 @@
 - Usuário removeu worker/fila de resultados e outbox do plano. Fechamento síncrono após GameFinished; commit antes da mensagem de pontos. Nenhum snapshot de engine/mãos no DB.
 - M7.1: pgx/v5, DATABASE_URL obrigatório em cmd/bot, cmd/migrate explícito, migration ledger checksum/advisory lock. Primeiro schema: group_configs Classic/Legacy.
 - Testes de integração exigem TEST_DATABASE_URL, schemas temporários isolados. Decisões de produto continuam bloqueadas.
+
+- M7.2: internal/groups define defaults/repository/autorização; postgres GetOrCreate preserva Classic/Legacy. /novo consulta config uma vez; overrides não alteram default. Session snapshot de ranking/revision em game permanece independente de DB, lobby mantém seletor existente. API de modo valida permissão no serviço. Setup Telegram/troca de sistema ainda pendentes de UX/política; nenhum novo comando criado.

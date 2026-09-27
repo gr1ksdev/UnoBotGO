@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
 
@@ -37,6 +38,7 @@ type managedGame struct {
 	chatName    string
 	creatorID   uno.PlayerID
 	ownerID     uno.PlayerID
+	groupConfig groups.Snapshot
 	locked      bool // session admission policy, guarded by mu
 	turnStarted time.Time
 	final       *PublicGameView // public projection only, accessed under mu
@@ -72,7 +74,7 @@ func (m *manager) create(ctx context.Context, actor Actor, req CreateRequest) (O
 	if err != nil {
 		return Outcome{}, err
 	}
-	entry := &managedGame{engine: engine, chatID: actor.ChatID, chatName: req.ChatName, creatorID: actor.PlayerID, ownerID: actor.PlayerID, turnStarted: time.Now()}
+	entry := &managedGame{groupConfig: req.GroupConfig, engine: engine, chatID: actor.ChatID, chatName: req.ChatName, creatorID: actor.PlayerID, ownerID: actor.PlayerID, turnStarted: time.Now()}
 	view := publicView(entry, engine.Snapshot())
 	// Entry is still private to this call. Creation publishes only an empty lobby.
 	m.indexMu.Lock()

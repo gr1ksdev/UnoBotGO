@@ -156,3 +156,5 @@ Testes reais de PostgreSQL usam uma base exclusiva de testes e schemas temporár
 ```sh
 TEST_DATABASE_URL='postgres://postgres:senha@localhost:5432/unobot_test?sslmode=disable' go test -race -tags integration ./internal/storage/postgres/...
 ```
+
+A configuração do grupo é criada sob demanda com Clássico + Legado. `/novo` lê o modo padrão; `/novo classico` e `/novo caseiro` são overrides locais. O sistema de ranking/revisão é capturado por valor na criação. O seletor existente de modo no lobby continua válido até o início. A API de configuração de modo está preparada com autorização backend, mas o setup Telegram e a troca de sistema ainda dependem das decisões de produto/UX registradas no plano M7.

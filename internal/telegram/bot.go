@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/malbs/UnoGoBot/internal/game"
+	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/mymmrac/telego"
 )
 
@@ -41,6 +42,8 @@ type Bot struct {
 	transport     TransportConfig
 	dedupe        *updateDeduper
 }
+
+func (b *Bot) SetGroupConfigs(repository groups.Repository) { b.cmdHandler.groupConfigs = repository }
 
 func (b *Bot) SetTurnTimeout(timeout time.Duration) { b.turnTimeout = timeout }
 func (b *Bot) SetTransport(cfg TransportConfig)     { b.transport = cfg.normalized() }
