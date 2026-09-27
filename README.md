@@ -15,7 +15,8 @@ Bot de UNO em Go para o Telegram utilizando modo inline com stickers para visual
 - **Como executar o V2**:
   ```bash
   cp .env.example .env
-  # Configure TOKEN no .env
+  # Configure TOKEN e DATABASE_URL no .env
+  go run ./cmd/migrate
   go run ./cmd/bot
   ```
   Ou via Docker:
@@ -23,6 +24,7 @@ Bot de UNO em Go para o Telegram utilizando modo inline com stickers para visual
   docker build -f Dockerfile.v2 -t unobotgo:v2 .
   docker run --rm --env-file .env unobotgo:v2
   ```
+
 
   A imagem oficial da `main` é publicada em
   `ghcr.io/gr1ksdev/unobotgo:latest` e também recebe uma tag imutável
@@ -140,9 +142,9 @@ duas arquiteturas após as validações.
 
 Long polling é o padrão e o modo recomendado. Webhook permanece experimental, sem homologação real aprovada; consulte o [estado do projeto](docs/project-status.md#transportes-e-evidência-real). Para webhook, use `TELEGRAM_MODE=webhook`, `WEBHOOK_URL`, `WEBHOOK_SECRET` e `WEBHOOK_LISTEN_ADDR=:8080`; publique o endpoint HTTPS por um proxy externo. `WEBHOOK_DROP_PENDING_UPDATES=false` preserva updates pendentes.
 
-### PostgreSQL V2 (M7 em implementação)
+### PostgreSQL e Ranking V2
 
-O runtime V2 exige `DATABASE_URL` e schema atualizado. Antes de iniciar:
+O runtime V2 exige PostgreSQL configurado via `DATABASE_URL` e schema versionado atualizado. Antes de iniciar o bot:
 
 ```sh
 export DATABASE_URL='postgres://unobot:senha@localhost:5432/unobot?sslmode=disable'
@@ -150,7 +152,14 @@ go run ./cmd/migrate
 go run ./cmd/bot
 ```
 
-O comando de migrations não exige `TOKEN`. O bot verifica conexão e migrations com prazo de 10 segundos antes do transporte Telegram; falha provoca saída não zero, sem expor a URL nos logs. O schema não é alterado automaticamente pelo bot. Use TLS conforme o ambiente. Partidas ativas continuam em memória, sem recuperação após restart. Resultados públicos concluídos já são persistidos; a política competitiva e o setup Telegram ainda estão pendentes.
+O comando de migrations (`cmd/migrate`) não exige `TOKEN`. O bot valida a conexão e as migrations com prazo de 10 segundos antes de conectar ao Telegram; falhas encerram o processo com código de erro sem expor credenciais nos logs.
+
+**Configuração e Ranking:**
+- Cada grupo possui configuração própria criada sob demanda com os padrões **Clássico** e **Legado**.
+- O comando `/config` permite que administradores e o usuário que adicionou o bot configurem o modo padrão (`Clássico` / `Caseiro`) e o sistema de ranking (`Legado` / `Atualizado`) através de botões inline interativos.
+- Partidas iniciadas usam o snapshot de configuração capturado na criação; alterações posteriores afetam apenas as partidas futuras.
+- Ao final de cada partida pontuável (mínimo de 2 participantes elegíveis), o bot persiste o resultado de forma atômica e exibe uma mensagem dedicada anunciando os pontos distribuídos.
+- Troca de sistema de ranking em grupos que já acumularam histórico é bloqueada para preservar a integridade das pontuações.
 
 Testes reais de PostgreSQL usam uma base exclusiva de testes e schemas temporários isolados:
 
@@ -158,8 +167,4 @@ Testes reais de PostgreSQL usam uma base exclusiva de testes e schemas temporár
 TEST_DATABASE_URL='postgres://postgres:senha@localhost:5432/unobot_test?sslmode=disable' go test -race -tags integration ./internal/storage/postgres/...
 ```
 
-A configuração do grupo é criada sob demanda com Clássico + Legado. `/novo` lê o modo padrão; `/novo classico` e `/novo caseiro` são overrides locais. O sistema de ranking/revisão é capturado por valor na criação. O seletor existente de modo no lobby continua válido até o início. A API de configuração de modo está preparada com autorização backend, mas o setup Telegram e a troca de sistema ainda dependem das decisões de produto/UX registradas no plano M7.
-
-O fechamento oficial agora aguarda a transação de resultado fora dos locks do jogo. GameID e hash do resultado tornam retries idempotentes. Em falha, o resultado público permanece em RAM até retry síncrono; isso não recupera dados após crash. Sem outbox ou snapshots privados. As regras competitivas pendentes ainda impedem ativar ranking automático: o runtime salva `needs_product_decision`, com score NULL e sem alterar estatísticas. A mensagem compacta final permanece; nenhuma mensagem de pontos é enviada sem pontuação persistida. Fórmulas e atualização atômica de ranking já têm testes reais, com política exclusivamente de teste.
-
-Relatório, schema, limites e roteiro de homologação: [M7](docs/m7-persistence.md).
+Documentação de persistência e homologação: [M7](docs/m7-persistence.md).

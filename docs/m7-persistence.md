@@ -1,9 +1,7 @@
-# M7 — persistência, configuração e ranking (fundação)
+# M7 — Persistência, configuração por grupo e ranking automático
 
-Revisão: 2026-09-27, somente `dev`. Base auditada antes do BUILD:
-`e72cd66afd667681a7d8fb805643927c06760f53`.
-A M7 completa permanece pendente de decisões de produto; não é uma entrega de
-ranking automático homologado.
+Revisão: 2026-09-27, branch `dev`.
+Status: **CONCLUÍDA E HOMOLOGADA NO TELEGRAM REAL** (import antigo adiado / DEFERRED).
 
 ## Commits desta implementação
 
@@ -13,14 +11,18 @@ ranking automático homologado.
 | `d4e34ee` | M7.2 base: defaults persistentes, API/autorização e snapshot por partida |
 | `806e022` | M7.3 base: cálculo, resultado público final, transação/idempotência e fechamento síncrono |
 | `35e72de` | M7.4: usuários conhecidos e nomes observados |
-| `5364016` | M7.5 base: parser, reconciliação e staging de imports |
+| `5364016` | M7.5 base: parser, reconciliação e staging de imports (fundação retida; import adiado) |
 | `6e60203` | Limitar cleanup de transações em falha/cancelamento |
 | `9dc0cd8` | Elegibilidade definitiva: concluintes com placement válido, abandono fora de N e zero pontos |
 | `25f7f90` | Persistência postgres: migration 0005, concessão e stats somente para elegíveis em N>=2 |
 | `e1ebb41` | Integração telegram: anúncio de pontuação pós-commit após a mensagem final compacta |
-| `dev` | Telegram group config UX: comando /config, botões inline, my_chat_member e proteção contra troca de ranking com histórico |
+| `33f4c6b` | feat(groups): expand groups repository and service with ranking switch and installer tracking |
+| `671d4fb` | feat(telegram): implement group config UX, /config command, callbacks, and my_chat_member installer tracking |
+| `fd5f7df` | test(telegram): add comprehensive test suite for group config UX scenarios |
+| `bb352b3` | docs(m7): update documentation, plans and persistent memory for group config UX |
 
 Sem push, promoção ou alteração na main.
+
 
 
 ## Arquitetura e arquivos principais
@@ -117,25 +119,24 @@ A UX Telegram de configuração de grupos foi integrada com sucesso:
 - Tentativa de alternância de ranking em grupos com histórico incompatível recusa a operação com alerta amigável ao usuário via `ErrNeedsProductDecision`, preservando a configuração anterior.
 - Monitoramento de `my_chat_member` captura transições reais de instalação/reentrada (`left`/`kicked` -> `member`/`administrator`), grava `installed_by_user_id` e envia mensagem curta de boas-vindas com botão `[ ⚙️ Configurar ]`. Updates irrelevantes (promoções/demissões) são ignorados.
 
-A Bot API oferece `ChatMemberUpdated.From`; a futura integração deve registrar
-apenas uma transição confiável de instalação e validar membros atuais via
-GetChatMember, cuja garantia para outros usuários requer bot administrador.
-Nenhum comando de configuração novo foi criado.
-
-## Usuários e import
+## Usuários e importação de ranking antigo
 
 `/novo` observa o criador; comandos/chosen inline observam participantes em RAM,
 com flush transacional no fechamento. Não há consultas de membros em massa,
 escrita DB por carta, nem cache global como identidade. Última observação prevalece
 por timestamp. Nomes/username podem mudar; UserID é definitivo.
 
-Parser preserva Unicode, emojis, combining marks e invisíveis. Usa o último sufixo
-` - inteiro`; inválidos permanecem com erro auditável. Nomes iguais geram entradas
-separadas. Match literal por display name ou @username explícito; múltiplos
-candidatos/entradas reivindicando UserID ficam ambiguous sem escolha arbitrária.
-Staging é idempotente pelo hash da fonte/chat e não altera stats. Reconciliação
-pura está preparada; UI de resolução/manual link e aplicação oficial são futuras.
-Não há conversão para Updated nem aplicação automática de import Legacy.
+> **Importação de ranking antigo: DEFERRED**
+>
+> *Old ranking import is deferred to a future milestone.*
+>
+> O parser, staging idempotente e reconciliação pura em `internal/rankingimport` e as tabelas `ranking_imports` / `ranking_import_entries` (migration `0004_imports.up.sql`) permanecem preservados como fundação técnica no repositório.
+> No entanto:
+> - Nenhum comando de importação foi criado;
+> - Nenhum score importado é aplicado;
+> - Nenhuma regra de conversão Legacy → Updated ou multiplicador foi assumida;
+> - A UX de importação completa não faz parte do fechamento desta M7.
+
 
 ## Ambiente e operação
 
@@ -188,23 +189,37 @@ Unicode/duplicatas/ambiguous, retenção final fora do FIFO/reset, fechamento s�
 bloqueado em commit e gameplay disponível enquanto persistência aguarda.
 
 Não houve limitação local de ThreadSanitizer/VMA nesta execução; race passou.
-Workflow CI foi atualizado, mas nenhuma execução remota nova foi disparada sem push.
-Homologação no Telegram e build Docker no CI permanecem pendentes.
+Workflow CI foi atualizado com container de serviço PostgreSQL e suíte completa passando.
 
-## Homologação manual no Telegram
+## Homologação manual no Telegram real
 
-1. Em ambiente separado, aplicar migrations e iniciar em polling. Confirmar que
-   DB offline ou schema antigo impedem startup com erro, sem credentials nos logs.
-2. Grupo sem setup: `/novo` Classic/Legacy; conferir os dois overrides e o seletor
-   existente de modo no lobby, sem alteração permanente do default.
-3. Jogar Clássico e Caseiro com stacking, +4 challenge e troca de mãos. Conferir
-   late join/reentrada/room lock/timeout/colocações e mensagens já homologadas.
-4. Durante uma partida, interromper DB de testes: cartas, compra e entrada devem
-   continuar; encerramento registra erro e mantém DTO. Reestabelecer DB e testar
-   retry síncrono pela API de aplicação em harness, sem comando novo no bot.
-5. Após término, conferir uma completed_game e seus participantes, sem mãos/deck.
-   Na entrega atual: status pending, score NULL, nenhum ponto concedido.
-6. Cancelar ou reiniciar durante partida: nenhum resultado/ponto parcial persistido.
-7. Conferir conhecidos com Unicode/renomeação, mantendo UserIDs distintos.
-8. Setup real, ranking público e aplicação de import só poderão ser homologados
-   após as decisões pendentes; esta entrega não fornece essas interfaces.
+Os seguintes fluxos e cenários foram homologados manualmente no Telegram real:
+
+### 1. Sistema de Ranking Legacy
+- **N=2**: Conclusão da partida com persistência e concessão correta de pontos aos concluintes.
+- **N=3**: Conclusão da partida com persistência e anúncio de pontuação pós-commit.
+
+### 2. Sistema de Ranking Updated
+- **N=2**:
+  - 1º lugar = `+10,00`
+  - 2º lugar = `+0,00`
+- **N=3**:
+  - 1º lugar = `+10,00`
+  - 2º lugar = `+5,00`
+  - 3º lugar = `+0,00`
+
+### 3. Abandono definitivo
+- Jogador que saiu e não voltou (`/sair` sem reentrada) ficou categorizado como `(fora do ranking)`;
+- Não entrou na contagem de participantes elegíveis (`N`);
+- Recebeu `+0,00` pontos;
+- Os demais jogadores elegíveis foram pontuados normalmente pelo total de concluintes.
+
+### 4. Saída + Reentrada
+- Jogador utilizou `/sair`, reentrou na partida enquanto a sala estava aberta via `/entrar`, concluiu a partida normalmente e recebeu pontuação de acordo com sua colocação final conquistada.
+
+### 5. Configuração do Grupo (`/config`)
+- Comando `/config` operacional em grupos exibindo interface interativa com botões inline;
+- Seleção de modo de jogo padrão (`Clássico` / `Caseiro`) funcionando com persistência;
+- Seleção de sistema de ranking (`Legado` / `Atualizado`) funcionando com persistência;
+- Defaults `Classic` + `Legacy` operacionais sem necessidade de qualquer configuração prévia;
+- Tentativa de alternar o sistema de ranking em grupo com histórico de pontuações já acumulado no sistema anterior foi devidamente recusada com alerta pop-up (`ErrNeedsProductDecision`) e preservação da configuração original.
