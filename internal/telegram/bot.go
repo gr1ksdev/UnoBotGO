@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/malbs/UnoGoBot/internal/game"
+	"github.com/malbs/UnoGoBot/internal/groups"
+	"github.com/malbs/UnoGoBot/internal/ranking"
 	"github.com/mymmrac/telego"
 )
 
@@ -24,23 +26,57 @@ var (
 	ErrMissingBotUsername = errors.New("bot has no username configured in Telegram")
 )
 
-var allowedUpdates = []string{"message", "inline_query", "chosen_inline_result", "callback_query"}
+var allowedUpdates = []string{"message", "inline_query", "chosen_inline_result", "callback_query", "my_chat_member"}
 
 type Bot struct {
-	api           BotAPI
-	service       *game.Service
-	tokens        *TokenStore
-	renderer      *Renderer
-	dispatcher    *Dispatcher
-	cmdHandler    *CommandHandler
-	cbHandler     *CallbackHandler
-	inlineHandler *InlineHandler
-	logger        *slog.Logger
-	username      string
-	turnTimeout   time.Duration
-	transport     TransportConfig
-	dedupe        *updateDeduper
+	resultRepository ranking.Repository
+	groupConfigs     groups.Repository
+	knownUsers       groups.UserRepository
+	groupsService    *groups.Service
+	api              BotAPI
+	service          *game.Service
+	tokens           *TokenStore
+	renderer         *Renderer
+	dispatcher       *Dispatcher
+	cmdHandler       *CommandHandler
+	cbHandler        *CallbackHandler
+	inlineHandler    *InlineHandler
+	logger           *slog.Logger
+	username         string
+	turnTimeout      time.Duration
+	transport        TransportConfig
+	dedupe           *updateDeduper
 }
+
+func (b *Bot) SetGroupConfigs(repository groups.Repository) {
+	b.groupConfigs = repository
+	b.cmdHandler.groupConfigs = repository
+	b.updateGroupsService()
+}
+
+func (b *Bot) SetKnownUsers(repository groups.UserRepository) {
+	b.knownUsers = repository
+	b.cmdHandler.knownUsers = repository
+	b.cbHandler.knownUsers = repository
+}
+
+func (b *Bot) updateGroupsService() {
+	if b.groupConfigs == nil {
+		return
+	}
+	svc := &groups.Service{
+		Repository:       b.groupConfigs,
+		LookupMembership: b.lookupMembership,
+	}
+	b.groupsService = svc
+	b.cmdHandler.SetGroupsService(svc)
+	b.cbHandler.SetGroupsService(svc)
+}
+
+func (b *Bot) lookupMembership(ctx context.Context, chatID, userID int64) (groups.Membership, error) {
+	return lookupMembershipAPI(ctx, b.api, chatID, userID)
+}
+
 
 func (b *Bot) SetTurnTimeout(timeout time.Duration) { b.turnTimeout = timeout }
 func (b *Bot) SetTransport(cfg TransportConfig)     { b.transport = cfg.normalized() }
@@ -112,6 +148,7 @@ func (b *Bot) registerCommands(ctx context.Context) error {
 				{Command: "sair", Description: "Sair da partida em andamento"},
 				{Command: "cancelar", Description: "Cancelar a partida"},
 				{Command: "reset", Description: "Recuperar e limpar o grupo"},
+				{Command: "config", Description: "Configurar opções de jogo e ranking do grupo"},
 				{Command: "help", Description: "Ver comandos e instruções"},
 			},
 			Scope: &telego.BotCommandScopeAllGroupChats{Type: telego.ScopeTypeAllGroupChats},
@@ -274,8 +311,12 @@ func (b *Bot) enqueueAutoSkip(candidate game.ExpiredTurn) bool {
 		if !applied {
 			return
 		}
+		notify := b.finalizeOutcome(ctx, outcome)
 		text := "⏱️ O tempo acabou; o turno foi pulado.\n\n" + b.renderer.RenderPublicState(outcome.View)
 		b.cmdHandler.reply(ctx, int64(candidate.ChatID), text, makeGameButtons(outcome.View))
+		if notify != nil {
+			notify()
+		}
 	})
 }
 func (b *Bot) submitUpdate(ctx context.Context, update telego.Update) bool {
@@ -313,6 +354,10 @@ func (b *Bot) processUpdate(ctx context.Context, update telego.Update) bool {
 			chatID = game.ChatID(update.CallbackQuery.Message.GetChat().ID)
 		}
 		return b.dispatcher.EnqueueChat(chatID, func(c context.Context) { b.cbHandler.HandleCallback(c, update.CallbackQuery) })
+	case update.MyChatMember != nil:
+		chatID := game.ChatID(update.MyChatMember.Chat.ID)
+		return b.dispatcher.EnqueueChat(chatID, func(c context.Context) { b.cmdHandler.HandleMyChatMember(c, update.MyChatMember) })
 	}
+
 	return true
 }

@@ -4,7 +4,9 @@ Bot de UNO em Go para o Telegram utilizando modo inline com stickers para visual
 
 ---
 
-## UnoBotGO V2
+## Versões do Projeto
+
+### UnoBotGO V2
 - **Executável**: `cmd/bot/main.go`
 - **Arquitetura**:
   - Engine desacoplada (`internal/uno`): regras clássicas, atomicidade, revision estrita e política de colocações.
@@ -13,7 +15,8 @@ Bot de UNO em Go para o Telegram utilizando modo inline com stickers para visual
 - **Como executar o V2**:
   ```bash
   cp .env.example .env
-  # Configure TOKEN no .env
+  # Configure TOKEN e DATABASE_URL no .env
+  go run ./cmd/migrate
   go run ./cmd/bot
   ```
   Ou via Docker:
@@ -22,11 +25,16 @@ Bot de UNO em Go para o Telegram utilizando modo inline com stickers para visual
   docker run --rm --env-file .env unobotgo:v2
   ```
 
+
   A imagem oficial da `main` é publicada em
   `ghcr.io/gr1ksdev/unobotgo:latest` e também recebe uma tag imutável
   `sha-<commit>`. Ambas são manifestos multi-arquitetura para `linux/amd64` e
   `linux/arm64`; o Docker seleciona automaticamente a variante do servidor. O
   servidor precisa apenas de Docker e das variáveis descritas em `.env.example`.
+
+### UnoBotGO V1 (Legado)
+- **Executável**: `main.go` (na raiz do repositório)
+- Mantido intacto para fins de compatibilidade e histórico.
 
 ---
 
@@ -50,6 +58,7 @@ grupos exibem os comandos de partida.
 | `/sair` | Sai da partida em andamento (transfere responsabilidade se necessário). |
 | `/estado` | Exibe o estado público da partida ativa ou lobby. |
 | `/reset` | Recupera o grupo, cancela trabalhos pendentes e apaga a partida e o histórico daquele grupo (responsável ou administrador). |
+| `/config` | Configura o modo padrão (Clássico/Caseiro) e sistema de ranking (Legado/Atualizado) do grupo (admin ou instalador). |
 
 O `/reset` usa uma fila de recuperação separada. Assim, ele continua disponível
 mesmo quando a fila normal do grupo está cheia ou uma operação anterior ficou
@@ -90,6 +99,8 @@ Telegram, banco de dados nem variáveis do `.env`. No modo interativo, informe d
 2 a 10 jogadores e escolha `classico`/`1` ou `caseiro`/`2`:
 
 ```bash
+make simulator
+# ou
 go run ./cmd/simulator
 ```
 
@@ -125,7 +136,35 @@ duas arquiteturas após as validações.
 - [Regras da Engine V2](docs/v2-rules.md)
 - [Camada de Aplicação V2](docs/v2-application.md)
 - [Adapter Telegram V2 e Roteiro de Aceite](docs/v2-telegram.md)
+- [Auditoria Histórica do V1](docs/v2-audit.md)
 
 ### Transporte Telegram
 
 Long polling é o padrão e o modo recomendado. Webhook permanece experimental, sem homologação real aprovada; consulte o [estado do projeto](docs/project-status.md#transportes-e-evidência-real). Para webhook, use `TELEGRAM_MODE=webhook`, `WEBHOOK_URL`, `WEBHOOK_SECRET` e `WEBHOOK_LISTEN_ADDR=:8080`; publique o endpoint HTTPS por um proxy externo. `WEBHOOK_DROP_PENDING_UPDATES=false` preserva updates pendentes.
+
+### PostgreSQL e Ranking V2
+
+O runtime V2 exige PostgreSQL configurado via `DATABASE_URL` e schema versionado atualizado. Antes de iniciar o bot:
+
+```sh
+export DATABASE_URL='postgres://unobot:senha@localhost:5432/unobot?sslmode=disable'
+go run ./cmd/migrate
+go run ./cmd/bot
+```
+
+O comando de migrations (`cmd/migrate`) não exige `TOKEN`. O bot valida a conexão e as migrations com prazo de 10 segundos antes de conectar ao Telegram; falhas encerram o processo com código de erro sem expor credenciais nos logs.
+
+**Configuração e Ranking:**
+- Cada grupo possui configuração própria criada sob demanda com os padrões **Clássico** e **Legado**.
+- O comando `/config` permite que administradores e o usuário que adicionou o bot configurem o modo padrão (`Clássico` / `Caseiro`) e o sistema de ranking (`Legado` / `Atualizado`) através de botões inline interativos.
+- Partidas iniciadas usam o snapshot de configuração capturado na criação; alterações posteriores afetam apenas as partidas futuras.
+- Ao final de cada partida pontuável (mínimo de 2 participantes elegíveis), o bot persiste o resultado de forma atômica e exibe uma mensagem dedicada anunciando os pontos distribuídos.
+- Troca de sistema de ranking em grupos que já acumularam histórico é bloqueada para preservar a integridade das pontuações.
+
+Testes reais de PostgreSQL usam uma base exclusiva de testes e schemas temporários isolados:
+
+```sh
+TEST_DATABASE_URL='postgres://postgres:senha@localhost:5432/unobot_test?sslmode=disable' go test -race -tags integration ./internal/storage/postgres/...
+```
+
+Documentação de persistência e homologação: [M7](docs/m7-persistence.md).

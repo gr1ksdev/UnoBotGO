@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/malbs/UnoGoBot/internal/game"
+	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
 
@@ -422,4 +423,29 @@ func (r *Renderer) RenderHelp(botUsername string) string {
 	sb.WriteString("🇧🇷 Esta é uma versão brasileira desenvolvida em Go (Golang), baseada no @unopybot.")
 
 	return sb.String()
+}
+
+// RenderGroupConfig formats the current group configuration for the /config command.
+func (r *Renderer) RenderGroupConfig(config groups.Config) string {
+	modeLabel := "Clássico"
+	if config.DefaultGameMode == groups.Caseiro {
+		modeLabel = "Caseiro"
+	}
+	rankLabel := "Legado"
+	if config.RankingSystem == groups.Updated {
+		rankLabel = "Atualizado"
+	}
+
+	return fmt.Sprintf("⚙️ <b>Configuração do Grupo</b>\n\n"+
+		"<b>Modo padrão de partida:</b> %s\n"+
+		"<b>Sistema de ranking:</b> %s\n\n"+
+		"<i>Selecione abaixo para alterar. As mudanças afetarão as próximas partidas criadas.</i>",
+		modeLabel, rankLabel)
+}
+
+// RenderGroupWelcome formats the introductory message when the bot joins a group.
+func (r *Renderer) RenderGroupWelcome(config groups.Config) string {
+	return "👋 <b>Olá! Obrigado por adicionar o UnoBotGO ao grupo!</b>\n\n" +
+		"O bot já está pronto para jogar. Por padrão, as partidas usam o modo <b>Clássico</b> e o ranking <b>Legado</b>.\n\n" +
+		"Use /novo para iniciar uma partida ou clique no botão abaixo para personalizar as opções do grupo."
 }

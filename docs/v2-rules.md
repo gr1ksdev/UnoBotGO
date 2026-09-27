@@ -1,15 +1,5 @@
 # UnoBotGO V2 — engine (Milestone 1)
 
-## Atualização publicada — 2026-09-27
-
-- No Caseiro, +4 usado para responder a +2 acumula a penalidade, mas não pode
-  ser desafiado como blefe. O desafio normal de +4 permanece conforme as regras.
-- Quem saiu sem colocação pode reentrar, com sala aberta, recebendo nova mão e
-  entrando na cauda lógica. Quem já recebeu colocação não pode reentrar.
-- A ordem exibida parte do atual e segue Direction; a seta indica o próximo
-  na sequência. Lock/unlock são metadata da aplicação, não regras da engine.
-
-
 ## Atualização — apresentação e empilhamento Caseiro (2026-09-25)
 
 - O estado público do Telegram indica a direção somente pelas setas entre os
@@ -53,9 +43,9 @@ registram o contrato inicial e não substituem as regras atuais dos modos do bot
 
 A mão do jogador é privada e acessada digitando @usernamebot no campo de mensagem do Telegram.
 
-As seções históricas abaixo descrevem o contrato inicial de `internal/uno`.
-O executável público atual é `go run ./cmd/bot`; o estado atual dos modos está
-nas atualizações acima e em [Estado do projeto](project-status.md).
+Esta milestone entrega apenas `internal/uno`. O adapter Telegram ainda é o V1;
+nenhum comando passa a usar a engine nova automaticamente. `go run .` continua
+executando o V1, com seu token e PostgreSQL. A engine pode ser utilizada sem ambos.
 
 ## API e responsabilidades
 
@@ -139,11 +129,11 @@ extras específicas daquela edição.
 
 `Rules` contém apenas `EndPolicy` e `AllowLateJoin`; não há flags fictícias para
 modos ainda inexistentes. `BotRules` preserva a dinâmica de participação escolhida
-pelo usuário, não todas as adaptações do bot. Empilhamento, proibição de
+pelo usuário, não todos os desvios de regra do V1. Empilhamento, proibição de
 terminar com Wild e proibição de Wild sobre Wild não foram portados.
 
 - Até dez participantes **registrados** por jogo, inclusive quem saiu/terminou.
-  A reentrada atual de quem saiu segue a atualização acima; quem já tem colocação não reentra.
+  Não há reentrada com o mesmo ID; isso evita ganhar repetidamente na mesma rodada.
 - Entrada tardia compra sete cartas atomicamente e ocupa o assento imediatamente
   anterior ao atual na direção do jogo, mantendo o turno e o alvo de +4 pendente.
 - Quem zera recebe `PlayerWon` e colocação, sai da rotação e permanece no histórico.

@@ -1,6 +1,6 @@
 # UnoBotGO V2 — Milestone 2
 
-## Atualização — controle de entradas (2026-09-26; publicado na main em 2026-09-27)
+## Atualização — controle de entradas (2026-09-26, somente dev)
 
 `managedGame.locked` é metadata de sessão protegida por `entry.mu`, exposta como
 `Locked` nas views e no resumo. `Service.SetLocked` autoriza exclusivamente o
@@ -9,9 +9,7 @@ no lobby e durante o jogo; chamadas repetidas são idempotentes. Administrador d
 chat não recebe essa permissão apenas por ser administrador.
 
 `Service.Apply(JoinGame)` verifica o lock sob o mesmo mutex da mutação da engine:
-Participantes já colocados recebem `ErrAlreadyFinished`; ativos recebem
-`ErrAlreadyJoined`. Para novas entradas/reentradas, retorna `ErrRoomLocked`
-sem modificar estado quando a sala está trancada.
+retorna `ErrRoomLocked` sem modificar estado quando a sala está trancada.
 SetLocked não altera revision da engine, mãos, turno ou prazo; jogadores atuais
 continuam jogando. A transferência existente de owner transfere essa permissão.
 
@@ -73,7 +71,7 @@ chance de rebater ou turno adicional; o contador final é preservado como antes.
 
 
 `internal/game` fornece a camada de aplicação entre adapters futuros e
-`internal/uno`. Não inicia Telegram diretamente e não depende
+`internal/uno`. Não inicia Telegram, não substitui o executável V1 e não depende
 de banco, tokens inline, ranking, Match ou timers.
 
 ## API

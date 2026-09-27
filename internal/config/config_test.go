@@ -10,7 +10,8 @@ import (
 
 func TestLoadConfig_Defaults(t *testing.T) {
 	env := map[string]string{
-		"TOKEN": "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
+		"DATABASE_URL": "postgres://localhost/unobot_test",
+		"TOKEN":        "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
 	}
 	lookup := func(k string) (string, bool) {
 		v, ok := env[k]
@@ -44,6 +45,7 @@ func TestLoadConfig_Defaults(t *testing.T) {
 
 func TestLoadConfig_CustomValues(t *testing.T) {
 	env := map[string]string{
+		"DATABASE_URL":            "postgres://localhost/unobot_test",
 		"TOKEN":                   "987654321:XYZ_secret_token_12345",
 		"LOG_LEVEL":               "debug",
 		"HISTORY_LIMIT":           "50",
@@ -92,28 +94,32 @@ func TestLoadConfig_ValidationErrors(t *testing.T) {
 		{
 			name: "empty token",
 			env: map[string]string{
-				"TOKEN": "   ",
+				"DATABASE_URL": "postgres://localhost/unobot_test",
+				"TOKEN":        "   ",
 			},
 			expectedErr: ErrMissingToken,
 		},
 		{
 			name: "invalid token format",
 			env: map[string]string{
-				"TOKEN": "not-a-valid-telegram-token",
+				"DATABASE_URL": "postgres://localhost/unobot_test",
+				"TOKEN":        "not-a-valid-telegram-token",
 			},
 			expectedErr: ErrInvalidToken,
 		},
 		{
 			name: "invalid log level",
 			env: map[string]string{
-				"TOKEN":     "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
-				"LOG_LEVEL": "unknown",
+				"DATABASE_URL": "postgres://localhost/unobot_test",
+				"TOKEN":        "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
+				"LOG_LEVEL":    "unknown",
 			},
 			expectedErr: ErrInvalidLogLevel,
 		},
 		{
 			name: "negative history limit",
 			env: map[string]string{
+				"DATABASE_URL":  "postgres://localhost/unobot_test",
 				"TOKEN":         "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
 				"HISTORY_LIMIT": "-1",
 			},
@@ -122,6 +128,7 @@ func TestLoadConfig_ValidationErrors(t *testing.T) {
 		{
 			name: "invalid history limit string",
 			env: map[string]string{
+				"DATABASE_URL":  "postgres://localhost/unobot_test",
 				"TOKEN":         "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
 				"HISTORY_LIMIT": "abc",
 			},
@@ -130,6 +137,7 @@ func TestLoadConfig_ValidationErrors(t *testing.T) {
 		{
 			name: "negative TTL",
 			env: map[string]string{
+				"DATABASE_URL":     "postgres://localhost/unobot_test",
 				"TOKEN":            "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
 				"INLINE_TOKEN_TTL": "-10s",
 			},
@@ -138,6 +146,7 @@ func TestLoadConfig_ValidationErrors(t *testing.T) {
 		{
 			name: "zero TTL",
 			env: map[string]string{
+				"DATABASE_URL":     "postgres://localhost/unobot_test",
 				"TOKEN":            "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
 				"INLINE_TOKEN_TTL": "0s",
 			},
@@ -146,6 +155,7 @@ func TestLoadConfig_ValidationErrors(t *testing.T) {
 		{
 			name: "invalid token limit",
 			env: map[string]string{
+				"DATABASE_URL":       "postgres://localhost/unobot_test",
 				"TOKEN":              "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
 				"INLINE_TOKEN_LIMIT": "0",
 			},
@@ -154,6 +164,7 @@ func TestLoadConfig_ValidationErrors(t *testing.T) {
 		{
 			name: "invalid user limit",
 			env: map[string]string{
+				"DATABASE_URL":            "postgres://localhost/unobot_test",
 				"TOKEN":                   "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
 				"INLINE_TOKEN_USER_LIMIT": "-5",
 			},
@@ -186,7 +197,8 @@ func TestLoadConfig_ValidationErrors(t *testing.T) {
 
 func TestLoadWebhookConfig(t *testing.T) {
 	lookup := func(k string) (string, bool) {
-		m := map[string]string{"TOKEN": "123456789:abcdefghij", "TELEGRAM_MODE": "webhook", "WEBHOOK_URL": "https://bot.example/hook", "WEBHOOK_SECRET": "abc_DEF-123"}
+		m := map[string]string{"DATABASE_URL": "postgres://localhost/unobot_test",
+			"TOKEN": "123456789:abcdefghij", "TELEGRAM_MODE": "webhook", "WEBHOOK_URL": "https://bot.example/hook", "WEBHOOK_SECRET": "abc_DEF-123"}
 		v, ok := m[k]
 		return v, ok
 	}
@@ -199,9 +211,22 @@ func TestLoadWebhookConfig(t *testing.T) {
 	}
 }
 func TestLoadRejectsInvalidWebhookConfig(t *testing.T) {
-	base := map[string]string{"TOKEN": "123456789:abcdefghij", "TELEGRAM_MODE": "webhook", "WEBHOOK_URL": "http://bot.example/hook", "WEBHOOK_SECRET": "secret"}
+	base := map[string]string{"DATABASE_URL": "postgres://localhost/unobot_test",
+		"TOKEN": "123456789:abcdefghij", "TELEGRAM_MODE": "webhook", "WEBHOOK_URL": "http://bot.example/hook", "WEBHOOK_SECRET": "secret"}
 	_, err := LoadFromLookup(func(k string) (string, bool) { v, ok := base[k]; return v, ok })
 	if !errors.Is(err, ErrInvalidWebhookURL) {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestDatabaseURLRequired(t *testing.T) {
+	_, err := LoadFromLookup(func(k string) (string, bool) {
+		if k == "TOKEN" {
+			return "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345", true
+		}
+		return "", false
+	})
+	if !errors.Is(err, ErrMissingDatabaseURL) {
+		t.Fatalf("expected missing database URL, got %v", err)
 	}
 }

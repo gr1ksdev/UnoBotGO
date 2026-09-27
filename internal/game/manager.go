@@ -9,20 +9,23 @@ import (
 	"sync"
 	"time"
 
+	"github.com/malbs/UnoGoBot/internal/groups"
+	"github.com/malbs/UnoGoBot/internal/ranking"
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
 
 // The lock order is entry.mu -> indexMu. Lookup releases indexMu before waiting
 // for entry.mu. No engine operation, ID generation, factory or I/O under indexMu.
 type manager struct {
-	indexMu      sync.RWMutex
-	byID         map[uno.GameID]indexRecord
-	byChat       map[ChatID]uno.GameID
-	byPlayer     map[uno.PlayerID]map[uno.GameID]struct{}
-	history      []uno.GameID
-	historyLimit int
-	newID        func() (uno.GameID, error)
-	newGame      func(uno.GameID, uno.Rules) (*uno.Game, error)
+	indexMu        sync.RWMutex
+	pendingResults map[uno.GameID]ranking.Result
+	byID           map[uno.GameID]indexRecord
+	byChat         map[ChatID]uno.GameID
+	byPlayer       map[uno.PlayerID]map[uno.GameID]struct{}
+	history        []uno.GameID
+	historyLimit   int
+	newID          func() (uno.GameID, error)
+	newGame        func(uno.GameID, uno.Rules) (*uno.Game, error)
 }
 
 type indexRecord struct {
@@ -31,21 +34,24 @@ type indexRecord struct {
 }
 
 type managedGame struct {
-	mu          sync.Mutex
-	engine      *uno.Game // unique runtime owner; nil once closed
-	chatID      ChatID
-	chatName    string
-	creatorID   uno.PlayerID
-	ownerID     uno.PlayerID
-	locked      bool // session admission policy, guarded by mu
-	turnStarted time.Time
-	final       *PublicGameView // public projection only, accessed under mu
-	reset       bool
+	mu           sync.Mutex
+	startedAt    time.Time
+	participants map[uno.PlayerID]participantHistory
+	engine       *uno.Game // unique runtime owner; nil once closed
+	chatID       ChatID
+	chatName     string
+	creatorID    uno.PlayerID
+	ownerID      uno.PlayerID
+	groupConfig  groups.Snapshot
+	locked       bool // session admission policy, guarded by mu
+	turnStarted  time.Time
+	final        *PublicGameView // public projection only, accessed under mu
+	reset        bool
 }
 
 func newManager(limit int) *manager {
 	return &manager{
-		byID: make(map[uno.GameID]indexRecord), byChat: make(map[ChatID]uno.GameID),
+		pendingResults: make(map[uno.GameID]ranking.Result), byID: make(map[uno.GameID]indexRecord), byChat: make(map[ChatID]uno.GameID),
 		byPlayer: make(map[uno.PlayerID]map[uno.GameID]struct{}), historyLimit: limit,
 		newID:   randomID,
 		newGame: func(id uno.GameID, rules uno.Rules) (*uno.Game, error) { return uno.NewGame(id, rules) },
@@ -72,7 +78,7 @@ func (m *manager) create(ctx context.Context, actor Actor, req CreateRequest) (O
 	if err != nil {
 		return Outcome{}, err
 	}
-	entry := &managedGame{engine: engine, chatID: actor.ChatID, chatName: req.ChatName, creatorID: actor.PlayerID, ownerID: actor.PlayerID, turnStarted: time.Now()}
+	entry := &managedGame{groupConfig: req.GroupConfig, engine: engine, chatID: actor.ChatID, chatName: req.ChatName, creatorID: actor.PlayerID, ownerID: actor.PlayerID, turnStarted: time.Now()}
 	view := publicView(entry, engine.Snapshot())
 	// Entry is still private to this call. Creation publishes only an empty lobby.
 	m.indexMu.Lock()
@@ -116,6 +122,7 @@ func (m *manager) lockGame(ctx context.Context, id uno.GameID) (*managedGame, er
 // publish completes every successful engine action while the caller holds
 // entry.mu. No cancellation checks after Apply: an accepted action must publish.
 func (m *manager) publish(entry *managedGame, before, after uno.State, result uno.Result) Outcome {
+	observeLifecycle(entry, before, after, result.Events)
 	if after.Phase == uno.Finished {
 		entry.turnStarted = time.Time{}
 	} else if before.CurrentPlayerID != after.CurrentPlayerID || before.Phase != after.Phase {
@@ -123,6 +130,7 @@ func (m *manager) publish(entry *managedGame, before, after uno.State, result un
 	}
 	transferOwner(entry, before, after)
 	view := publicView(entry, after)
+	completed := finalResult(entry, after)
 	if view.Closed {
 		final := view.clone()
 		entry.final = &final
@@ -150,6 +158,9 @@ func (m *manager) publish(entry *managedGame, before, after uno.State, result un
 			m.byPlayer[p.ID][after.ID] = struct{}{}
 		}
 	}
+	if completed != nil {
+		m.pendingResults[after.ID] = completed.Clone()
+	}
 	m.byID[after.ID] = indexRecord{entry: entry, summary: view.summary()}
 	if view.Closed {
 		delete(m.byChat, entry.chatID)
@@ -159,7 +170,7 @@ func (m *manager) publish(entry *managedGame, before, after uno.State, result un
 			m.history = slices.Delete(m.history, 0, 1)
 		}
 	}
-	return Outcome{View: view, Events: slices.Clone(result.Events)}
+	return Outcome{View: view, Events: slices.Clone(result.Events), Completed: completed}
 }
 
 func transferOwner(entry *managedGame, before, after uno.State) {

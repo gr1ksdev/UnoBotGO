@@ -9,17 +9,41 @@ import (
 	"time"
 
 	"github.com/malbs/UnoGoBot/internal/game"
+	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/uno"
 	"github.com/mymmrac/telego"
 )
 
 type CommandHandler struct {
-	bot         BotAPI
-	service     *game.Service
-	renderer    *Renderer
-	tokens      *TokenStore
-	botUsername string
-	logger      *slog.Logger
+	knownUsers    groups.UserRepository
+	finalize      func(context.Context, game.Outcome) func()
+	groupConfigs  groups.Repository
+	groupsService *groups.Service
+	bot           BotAPI
+	service       *game.Service
+	renderer      *Renderer
+	tokens        *TokenStore
+	botUsername   string
+	logger        *slog.Logger
+}
+
+func (h *CommandHandler) SetGroupsService(s *groups.Service) {
+	h.groupsService = s
+}
+
+func (h *CommandHandler) getGroupsService() *groups.Service {
+	if h.groupsService != nil {
+		return h.groupsService
+	}
+	if h.groupConfigs != nil {
+		return &groups.Service{
+			Repository: h.groupConfigs,
+			LookupMembership: func(ctx context.Context, chatID, userID int64) (groups.Membership, error) {
+				return lookupMembershipAPI(ctx, h.bot, chatID, userID)
+			},
+		}
+	}
+	return nil
 }
 
 func NewCommandHandler(
@@ -42,6 +66,7 @@ func NewCommandHandler(
 		logger:      logger,
 	}
 }
+
 
 func stringPtr(s string) *string {
 	return &s
@@ -99,6 +124,63 @@ func makePrivateStartButtons(botUsername string) *telego.InlineKeyboardMarkup {
 		}}},
 	}
 }
+
+func makeGroupConfigButtons(config groups.Config) *telego.InlineKeyboardMarkup {
+	classicText := "Clássico"
+	caseiroText := "Caseiro"
+	if config.DefaultGameMode == groups.Caseiro {
+		caseiroText = "✅ Caseiro"
+	} else {
+		classicText = "✅ Clássico"
+	}
+
+	legacyText := "Legado"
+	updatedText := "Atualizado"
+	if config.RankingSystem == groups.Updated {
+		updatedText = "✅ Atualizado"
+	} else {
+		legacyText = "✅ Legado"
+	}
+
+	return &telego.InlineKeyboardMarkup{
+		InlineKeyboard: [][]telego.InlineKeyboardButton{
+			{
+				{
+					Text:         classicText,
+					CallbackData: fmt.Sprintf("cfg_mode_classic_%d", config.ChatID),
+				},
+				{
+					Text:         caseiroText,
+					CallbackData: fmt.Sprintf("cfg_mode_caseiro_%d", config.ChatID),
+				},
+			},
+			{
+				{
+					Text:         legacyText,
+					CallbackData: fmt.Sprintf("cfg_rank_legacy_%d", config.ChatID),
+				},
+				{
+					Text:         updatedText,
+					CallbackData: fmt.Sprintf("cfg_rank_updated_%d", config.ChatID),
+				},
+			},
+		},
+	}
+}
+
+func makeGroupWelcomeButtons(chatID int64) *telego.InlineKeyboardMarkup {
+	return &telego.InlineKeyboardMarkup{
+		InlineKeyboard: [][]telego.InlineKeyboardButton{
+			{
+				{
+					Text:         "⚙️ Configurar",
+					CallbackData: fmt.Sprintf("cfg_open_%d", chatID),
+				},
+			},
+		},
+	}
+}
+
 
 func (h *CommandHandler) reply(ctx context.Context, chatID int64, text string, markup *telego.InlineKeyboardMarkup) {
 	params := &telego.SendMessageParams{
@@ -162,14 +244,21 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		return
 	}
 
+	// Observed names stay in RAM during gameplay and are flushed at closure.
+	if summary, err := h.service.FindChatGame(ctx, chatID); err == nil {
+		_ = h.service.ObservePlayer(ctx, game.Actor{PlayerID: actorID, ChatID: chatID}, summary.GameID, observedName(*msg.From), msg.From.Username)
+	}
 	// Group command handling
 	switch cmdName {
 	case "novo":
-		mode := "classic"
-		if len(fields) > 1 && strings.EqualFold(fields[1], "caseiro") {
-			mode = "caseiro"
+		mode := ""
+		if len(fields) > 1 {
+			mode = "classic"
+			if strings.EqualFold(fields[1], "caseiro") {
+				mode = "caseiro"
+			}
 		}
-		h.handleNovo(ctx, actorID, chatID, msg.Chat.Title, mode)
+		h.handleNovoObserved(ctx, actorID, chatID, msg.Chat.Title, mode, msg.From)
 	case "trancar", "destrancar":
 		h.handleRoomLock(ctx, actorID, chatID, cmdName == "trancar")
 	case "entrar":
@@ -190,6 +279,8 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		h.handleEstado(ctx, chatID)
 	case "reset":
 		h.HandleReset(ctx, msg, nil)
+	case "config":
+		h.handleConfig(ctx, msg)
 	case "ajuda", "help":
 		h.reply(ctx, msg.Chat.ID, h.renderer.RenderHelp(h.botUsername), nil)
 	}
@@ -296,13 +387,35 @@ func (h *CommandHandler) HandleReset(ctx context.Context, msg *telego.Message, r
 }
 
 func (h *CommandHandler) handleNovo(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID, chatTitle, mode string) {
+	h.handleNovoObserved(ctx, actorID, chatID, chatTitle, mode, nil)
+}
+func (h *CommandHandler) handleNovoObserved(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID, chatTitle, mode string, user *telego.User) {
+	config := groups.Defaults(int64(chatID))
+	if h.groupConfigs != nil {
+		var err error
+		config, err = h.groupConfigs.GetOrCreateGroupConfig(ctx, int64(chatID))
+		if err != nil {
+			h.logger.Warn("failed to load group config", "chat_id", chatID, "error", err)
+			h.reply(ctx, int64(chatID), "❌ Não foi possível carregar a configuração do grupo. Tente novamente.", nil)
+			return
+		}
+	}
+	if h.knownUsers != nil && user != nil {
+		if err := h.knownUsers.ObserveGroupUser(ctx, groups.KnownUser{ChatID: int64(chatID), UserID: user.ID, DisplayName: observedName(*user), Username: user.Username, LastSeenAt: time.Now().UTC()}); err != nil {
+			h.logger.Warn("failed to observe group user", "chat_id", chatID, "error", err)
+		}
+	}
+	if mode == "" {
+		mode = string(config.DefaultGameMode)
+	}
 	rules := uno.BotRules()
 	if strings.EqualFold(mode, "caseiro") {
 		rules = uno.CaseiroRules()
 	}
 	req := game.CreateRequest{
-		ChatName: chatTitle,
-		Rules:    rules,
+		GroupConfig: config.Snapshot(),
+		ChatName:    chatTitle,
+		Rules:       rules,
 	}
 	actor := game.Actor{PlayerID: actorID, ChatID: chatID}
 
@@ -491,6 +604,10 @@ func (h *CommandHandler) handleSair(ctx context.Context, actorID uno.PlayerID, c
 		return
 	}
 
+	var notify func()
+	if h.finalize != nil {
+		notify = h.finalize(ctx, outcome)
+	}
 	h.tokens.InvalidateUserGame(summary.GameID, actorID)
 
 	if outcome.View.Closed {
@@ -506,6 +623,9 @@ func (h *CommandHandler) handleSair(ctx context.Context, actorID uno.PlayerID, c
 			h.renderer.RenderPublicState(outcome.View),
 		)
 		h.reply(ctx, int64(chatID), msg, makeGameButtons(outcome.View))
+	}
+	if notify != nil {
+		notify()
 	}
 }
 
@@ -559,4 +679,100 @@ func (h *CommandHandler) handleRoomLock(ctx context.Context, actorID uno.PlayerI
 		}
 	}
 	h.reply(ctx, int64(chatID), text, nil)
+}
+
+func (h *CommandHandler) handleConfig(ctx context.Context, msg *telego.Message) {
+	if msg == nil || msg.From == nil {
+		return
+	}
+	chatID := msg.Chat.ID
+	actorID := msg.From.ID
+
+	if h.knownUsers != nil {
+		if err := h.knownUsers.ObserveGroupUser(ctx, groups.KnownUser{
+			ChatID:      chatID,
+			UserID:      actorID,
+			DisplayName: observedName(*msg.From),
+			Username:    msg.From.Username,
+			LastSeenAt:  time.Now().UTC(),
+		}); err != nil {
+			h.logger.WarnContext(ctx, "failed to observe user in /config", "chat_id", chatID, "error", err)
+		}
+	}
+
+	svc := h.getGroupsService()
+	if svc == nil {
+		h.reply(ctx, chatID, "❌ Configuração não disponível no momento.", nil)
+		return
+	}
+
+	cfg, allowed, err := svc.CanConfigureUser(ctx, chatID, actorID)
+	if err != nil && !errors.Is(err, groups.ErrForbidden) {
+		h.logger.WarnContext(ctx, "failed to check config permissions", "chat_id", chatID, "user_id", actorID, "error", err)
+	}
+
+	if !allowed {
+		h.reply(ctx, chatID, "⚠️ Somente administradores ou quem adicionou o bot pode alterar esta configuração.", nil)
+		return
+	}
+
+	text := h.renderer.RenderGroupConfig(cfg)
+	buttons := makeGroupConfigButtons(cfg)
+	h.reply(ctx, chatID, text, buttons)
+}
+
+func (h *CommandHandler) HandleMyChatMember(ctx context.Context, update *telego.ChatMemberUpdated) {
+	if update == nil {
+		return
+	}
+	chatID := update.Chat.ID
+	isGroup := update.Chat.Type == "group" || update.Chat.Type == "supergroup"
+	if !isGroup {
+		return
+	}
+
+	if update.OldChatMember == nil || update.NewChatMember == nil {
+		return
+	}
+
+	oldStatus := update.OldChatMember.MemberStatus()
+	newStatus := update.NewChatMember.MemberStatus()
+
+	wasAbsent := oldStatus == telego.MemberStatusLeft || oldStatus == telego.MemberStatusBanned
+	isPresent := newStatus == telego.MemberStatusMember || newStatus == telego.MemberStatusAdministrator
+
+	if !wasAbsent || !isPresent {
+		return
+	}
+
+	svc := h.getGroupsService()
+	if update.From.ID > 0 && !update.From.IsBot {
+		if svc != nil {
+			if _, err := svc.RecordInstallation(ctx, chatID, update.From.ID); err != nil {
+				h.logger.WarnContext(ctx, "failed to record bot installation", "chat_id", chatID, "user_id", update.From.ID, "error", err)
+			}
+		}
+		if h.knownUsers != nil {
+			if err := h.knownUsers.ObserveGroupUser(ctx, groups.KnownUser{
+				ChatID:      chatID,
+				UserID:      update.From.ID,
+				DisplayName: observedName(update.From),
+				Username:    update.From.Username,
+				LastSeenAt:  time.Now().UTC(),
+			}); err != nil {
+				h.logger.WarnContext(ctx, "failed to observe installer user", "chat_id", chatID, "error", err)
+			}
+		}
+	}
+
+	config := groups.Defaults(chatID)
+	if svc != nil && svc.Repository != nil {
+		if c, err := svc.Repository.GetOrCreateGroupConfig(ctx, chatID); err == nil {
+			config = c
+		}
+	}
+
+	text := h.renderer.RenderGroupWelcome(config)
+	buttons := makeGroupWelcomeButtons(chatID)
+	h.reply(ctx, chatID, text, buttons)
 }

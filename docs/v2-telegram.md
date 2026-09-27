@@ -1,6 +1,6 @@
 # UnoBotGO V2 — Telegram Adapter (Milestone 3)
 
-## Gameplay UX Polish (2026-09-26; publicado na main em 2026-09-27)
+## Gameplay UX Polish (2026-09-26, somente dev)
 
 - `/trancar` e `/destrancar`: controle exclusivo do responsável, incluindo owner
   observador, no lobby ou durante a partida; respostas idempotentes. `/entrar`

@@ -1,6 +1,4 @@
+UnoGoBot
 .env
-.agent/
-.opencode/
-.reports/
-AGENTS.md
-*.prompt
+ranking_data.json
+.reports/simulations/

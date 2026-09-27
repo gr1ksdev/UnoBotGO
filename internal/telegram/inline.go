@@ -16,6 +16,7 @@ import (
 )
 
 type InlineHandler struct {
+	finalize   func(context.Context, game.Outcome) func()
 	bot        BotAPI
 	service    *game.Service
 	renderer   *Renderer
@@ -469,12 +470,17 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 	// Schedule the state change in the designated chat worker queue to ensure in-order execution
 	accepted := h.dispatcher.EnqueueChat(actionToken.ChatID, func(taskCtx context.Context) {
 		actor := game.Actor{PlayerID: actorID, ChatID: actionToken.ChatID}
+		_ = h.service.ObservePlayer(taskCtx, actor, actionToken.GameID, observedName(chosen.From), chosen.From.Username)
 		outcome, err := h.service.Apply(taskCtx, actor, actionToken.GameID, actionToken.Action)
 		if err != nil {
 			h.replyActionError(taskCtx, actorID, tokenStr, actionToken, err)
 			return
 		}
 
+		var notify func()
+		if h.finalize != nil {
+			notify = h.finalize(taskCtx, outcome)
+		}
 		// Success!
 		h.tokens.SetActionResult(tokenStr, "confirmed")
 		if outcome.View.Closed {
@@ -513,6 +519,9 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 			params.ReplyMarkup = markup
 		}
 		_, _ = h.bot.SendMessage(taskCtx, params)
+		if notify != nil {
+			notify()
+		}
 	})
 	return accepted
 }
