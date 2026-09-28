@@ -10,7 +10,7 @@
   um `+2` da cor escolhida pode responder a um `+4`.
 - O modo Clássico preserva sua configuração vigente de `+4 → +4`.
 
-## Atualização — Trocar cartas no Caseiro (2026-09-25)
+## Atualização — Trocar cartas no Caseiro (2026-09-28)
 
 Esta seção descreve a feature atual da V2; as seções da Milestone 1 abaixo
 registram o contrato inicial e não substituem as regras atuais dos modos do bot.
@@ -18,21 +18,30 @@ registram o contrato inicial e não substituem as regras atuais dos modos do bot
 - `CaseiroRules()` habilita `AllowSwapHands`; o inventário padrão recebe uma
   `SwapHands` sem cor, totalizando 109 cartas. `ClassicDeck()` e os modos
   `ClassicRules()`/`BotRules()` continuam com 108, sem a nova carta.
-- Jogar `SwapHands` descarta a carta e abre `ChoosingPlayer`. O jogador atual
-  permanece responsável. `ChoosePlayer` exige `TargetID` de outro jogador ativo.
-  A troca inclui todas as cartas restantes de ambos, preservando cor ativa,
-  assentos e direção, e então avança o turno normalmente.
-- A carta segue as restrições de coringa do caseiro: não pode ser a última carta,
-  não pode ser jogada sobre coringa (incluindo outra troca) e não responde a
-  penalidades pendentes. Não aparece como carta inicial da mesa.
-- UNO é anunciado após a troca para cada um dos dois jogadores que ficar com uma
-  carta. Não há anúncio provisório ao descartar a carta de troca.
-- Enquanto escolhe, o autor não pode jogar, comprar, passar ou sair. Os demais
-  podem sair, e novos participantes podem entrar conforme as regras existentes.
-  A revisão muda, invalidando seleções antigas. Cancelamento e encerramento por
-  saída continuam disponíveis; o timer não pula a escolha.
-- `PlayerChoiceRequired` e `HandsSwapped` são eventos públicos. O segundo contém
-  apenas os IDs dos participantes, sem revelar suas mãos.
+- Jogar `SwapHands` descarta a carta. Se restarem cartas, abre `ChoosingPlayer`:
+  `ChoosePlayer` seleciona outro jogador ativo; `KeepHand` mantém a própria mão.
+  Ambas abrem `ChoosingColor`, sem transferir cartas nem avançar turno.
+- `ChooseColor` resolve a troca opcional, define a cor ativa e avança o turno na
+  mesma transição atômica. A troca inclui todas as cartas restantes após o descarte,
+  preservando IDs físicos, assentos e direção. Manter não transfere cartas.
+- Cada ação aceita tem sua revisão: jogar `r+1`, alvo/manter `r+2`, cor `r+3`.
+  `ColorChoice.SwapHands` identifica o efeito; `SwapTarget == 0` representa manter.
+- Como **última carta**, encerra o jogador imediatamente pelo fluxo normal de
+  colocações. Não abre escolhas, não troca nem transfere mão vazia. Se a partida
+  continuar, mantém a cor anterior. É exceção específica a `NoWildFinish`;
+  Wild/+4 e Clássico não mudam.
+- Continua proibida sobre coringa (incluindo outra troca), sob penalidades e como
+  carta inicial da mesa. Continua exclusiva do Caseiro na configuração do bot.
+- UNO é anunciado ao resolver a cor: para ambos que ficarem com uma carta na troca,
+  ou para o autor que mantiver uma carta. Não há anúncio provisório no descarte.
+- Enquanto escolhe, o autor não pode jogar, comprar, passar ou sair. Demais saídas
+  e entradas seguem as regras existentes e invalidam tokens pela revisão. Se o
+  alvo selecionado sair antes da cor, volta a `ChoosingPlayer`, sem alvo substituto
+  nem transferência. Encerramento por saída/cancelamento limpa escolhas normalmente.
+- `TURN_TIMEOUT` não intervém em `ChoosingPlayer` nem `ChoosingColor`: abandono
+  mantém a política atual, sem escolha automática ou expiração nova.
+- `HandsSwapped` só é emitido na transferência real; `HandKept` distingue a opção
+  de manter. Eventos não revelam IDs de cartas das mãos.
 - Alternar modo no lobby reconstrói somente o inventário padrão, antes da
   distribuição. `WithDeck` marca `State.CustomDeck` e preserva inventário/ordem
   personalizados, inclusive após serializar/restaurar snapshots. Desabilitar a

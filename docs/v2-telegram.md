@@ -21,18 +21,25 @@ no lobby e durante partida, links, Wild/+4, efeitos, placements, escolha de alvo
 e encerramento com dois jogadores. Testes automáticos não substituem esse aceite.
 
 
-## Trocar cartas — exclusivo do Caseiro (2026-09-25)
+## Trocar cartas — exclusivo do Caseiro (2026-09-28)
 
 O sticker `CAACAgEAAxkBAAER8VtqteJsR8-zG10NFeLTIZyxuZYsBQACBwkAAkkSsEU562tb90Ja3D0E`
 representa a carta **🔀 Trocar cartas**. Depois de jogá-la, abrir **Suas cartas**
-mostra um menu como o do coringa, com nomes e contagens de cartas dos demais
-participantes ativos. Selecionar um nome confirma a troca integral das mãos
-restantes, mantém a cor da mesa e passa a vez. O menu não pede cor.
+mostra os demais participantes ativos (`🔄 Trocar com Nome`) e
+`➡️ Manter minha mão`. Após qualquer opção, abrir novamente mostra as quatro cores
+no fluxo existente de Wild/+4. Só a escolha de cor resolve a troca ou manutenção e
+passa a vez. Todas as decisões usam **InlineQuery → ChosenInlineResult**,
+sem teclado de callbacks de gameplay e sem etapa anterior de Sim/Não.
+
+Se for a última carta, encerra o jogador diretamente, sem alvo/manter ou cor.
+A mensagem final distingue “trocou as mãos com Nome” de “manteve sua mão” e mostra
+no estado público a nova cor. Stickers e identidade da carta permanecem iguais.
 
 Somente quem jogou a carta recebe tokens de escolha; os demais veem a mensagem de
 espera e o resumo privado da própria mão. Tokens são pessoais, opacos, de uso
 único e vinculados à revisão. Um alvo que sair deixa de ser elegível, e menus
-anteriores precisam ser reabertos. O responsável pela escolha recebe a menção
+anteriores precisam ser reabertos. Se o alvo sair após ser selecionado, o autor
+volta a escolher alvo/manter; nenhuma troca inválida ou automática é aplicada. O responsável pela escolha recebe a menção
 real; os demais nomes seguem a política de links ao bot.
 
 O sticker cinza
@@ -43,7 +50,10 @@ continua sendo usado quando a carta é jogável.
 
 Homologação manual: abrir uma mão com Trocar cartas indisponível (ex: sob +2 ou
 coringa no topo) e confirmar que o sticker cinza é renderizado normalmente sem erros.
-Depois de desbloquear a carta, conferir o sticker colorido e a troca normal.
+Depois de desbloquear a carta, conferir o sticker colorido. Homologação do novo
+fluxo pendente: testar trocar + verde, manter + azul, dois jogadores, e última
+carta (término imediato sem escolhas). Confirmar que mãos e turno só mudam na cor,
+menus antigos são recusados e somente o responsável pela decisão é mencionado.
 
 
 > Atualização de 2026-09-23: as regras abaixo descrevem a milestone corretiva.

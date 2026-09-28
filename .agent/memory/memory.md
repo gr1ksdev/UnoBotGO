@@ -475,3 +475,10 @@
     - `callbacks.go`: tratamento de callbacks `cfg_` (`cfg_open_`, `cfg_mode_`, `cfg_rank_`), revalidação a cada clique, atualização do status e edição limpa da mensagem.
     - `KnownGroupUser` atualizado em `/config`, callbacks `cfg_` e `my_chat_member`.
   - Suíte completa em `internal/telegram/config_test.go` cobrindo todos os 23 cenários + regra de conflito de histórico.
+
+# Trocar Mãos opcional — 2026-09-28
+- Implementado sobre bce47d0 após aprovação explícita: alvo/manter → cor via Inline Mode, transferência somente no ChooseColor. KeepHand/HandKept; revisões r+1/r+2/r+3. Última carta termina sem escolhas e sem trocar mãos.
+- Testes novos em uno/game/telegram optional_swap_test.go: quatro cores, dois/três jogadores, ambas direções, mãos/IDs, snapshot/replay, última carta, UNO, autenticação, revisão, replay, multigrupo, alvo saindo, concorrência de cor e resultado M7. Testes existentes preservados/adaptados; relatório conta HandsSwapped real.
+- go test -count=1 ./... e variante debugcards, vet/build normais/debugcards, diff check aprovados. Race não executável localmente: CGO padrão 0; CGO_ENABLED=1 falha ThreadSanitizer VMA 39 (requer 48). Não declarar race aprovado. Integração com PostgreSQL real não reexecutada nesta correção sem alterações de banco.
+- Simulador: Caseiro 4 players seed 20260924 (126 ações), Clássico 2 players seed 20260928 (23 ações), concluídos; relatórios somente /tmp.
+- Homologação Telegram pendente; nenhum push nem promoção. main permanece 62fc344. A documentação geral de status possuía referências de publicação antigas; esta atualização documenta o novo fluxo, não reaudita toda a matriz.

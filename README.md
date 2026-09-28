@@ -72,9 +72,11 @@ comando não afeta partidas de outros grupos.
 
 Selecione **Caseiro** no lobby para jogar com uma carta extra **🔀 Trocar cartas**
 (109 cartas no total). Ao jogá-la, abra **Suas cartas** e escolha outro participante
-no menu: vocês trocam as mãos inteiras restantes, a cor da mesa é mantida e a vez
-passa normalmente. A carta não pode finalizar a mão, ser jogada sobre coringa ou
-responder a uma penalidade +2/+4. O modo clássico mantém suas 108 cartas.
+ou **Manter minha mão**. Depois, abra novamente e escolha a cor. A troca, quando
+escolhida, só acontece nessa última etapa e inclui as mãos inteiras após o descarte.
+Se for sua última carta, você termina normalmente, sem troca nem escolha de cor.
+A carta não pode ser jogada sobre coringa nem responder a uma penalidade +2/+4.
+O modo clássico mantém suas 108 cartas. O novo fluxo aguarda homologação no Telegram.
 
 ## Testes Automatizados
 

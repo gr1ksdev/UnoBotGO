@@ -289,3 +289,10 @@
 - Transição de ranking protegida: troca `Legacy` ↔ `Updated` é bloqueada caso o grupo já contenha pontuações ou partidas pontuadas no sistema anterior (`groups.ErrNeedsProductDecision`), emitindo alerta explicativo no callback e preservando a configuração anterior sem conversão, reset ou rankings paralelos.
 - Suporte a `my_chat_member`: detecta transição real de instalação/reentrada (`left`/`kicked` -> `member`/`administrator`), registra `installed_by_user_id` a partir do ator e envia mensagem curta de boas-vindas com botão `[ ⚙️ Configurar ]`. Updates de status irrelevantes (promoções/demissões de cargo do bot) não disparam mensagem.
 - Registro monotônico de `KnownGroupUser` integrado em `/config`, callbacks `cfg_` e `my_chat_member`.
+
+# Trocar Mãos opcional — 2026-09-28 (dev, sem push)
+- Base bce47d0. PlayCard → ChoosingPlayer → ChoosePlayer/KeepHand → ChoosingColor → ChooseColor. Revisão por ação (r+1/r+2/r+3).
+- ColorChoice.SwapHands/SwapTarget guardam decisão. Zero representa manter; mãos e turno só mudam na cor. Inline/tokens existentes, sem callbacks novos.
+- Última carta: completePlay imediato, sem escolhas/troca; conserva cor anterior se partida continua. Exceção só para SwapHands em NoWildFinish; +4/Wild intactos.
+- Alvo que sai durante cor invalida seleção, reabre ChoosingPlayer; tokens anteriores stale. Timeout pendente segue sem intervenção.
+- M7/config/ranking/storage preservados. Novo fluxo aguarda homologação Telegram; não publicado na main.

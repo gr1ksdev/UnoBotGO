@@ -717,3 +717,23 @@ Aplicar as regras explícitas de produto, preservando engine/placements e fórmu
 
 ## Impacto
 Policy completed-placements-v1 é aplicada numa cópia do resultado final. Validação rejeita placement duplicado, posição em Left, gaps e score divergente. N<2 será identificado no storage como insufficient_eligible_players. Dados antigos pending não serão pontuados retroativamente.
+
+# Decisão: troca opcional e resolução por cor
+
+## Data
+2026-09-28
+
+## Contexto
+A base bce47d0 obrigava troca em ChoosePlayer, mantinha cor e proibia última carta. Usuário aprovou explicitamente as exceções após auditoria.
+
+## Decisão tomada
+- Última SwapHands encerra autor pelo lifecycle normal, sem escolher alvo/cor ou transferir mão vazia. Cor anterior permanece se houver continuidade.
+- Com cartas restantes, ChoosePlayer/KeepHand guarda decisão; ChooseColor resolve mãos, cor e turno atomicamente. Uma revisão por ação aceita, não uma por fluxo inteiro.
+- Preservar timeout atual: nenhuma expiração/seleção automática nas escolhas pendentes.
+- Saída do alvo invalida a seleção e exige nova escolha alvo/manter, sem fallback para outro jogador.
+
+## Motivo
+Evitar troca obrigatória e término artificial de um alvo por mão vazia; preservar invariantes, tokens e arquitetura de escolhas.
+
+## Impacto
+KeepHand e HandKept explícitos; ColorChoice reutilizado com metadados de troca. Snapshot pendente novo requer runtime compatível. Sem mudança de M7/GroupConfig/ranking, Classic, transporte ou banco. Somente dev; sem push, main intacta.

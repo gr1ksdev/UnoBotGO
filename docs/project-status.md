@@ -1,8 +1,9 @@
 # UnoBotGO V2 — Estado do projeto
 
-Última revisão: **2026-09-27**. Esta versão acompanha a **dev**.
-Base desta revisão: `dev@badf81c` antes de Gameplay UX Polish e `main@fd011ab`.
-Esta revisão inclui Gameplay UX Polish e a fundação M7 na dev; nenhum código foi promovido à main.
+Última revisão da troca opcional: **2026-09-28** (base `dev@bce47d0`, implementação `9afc944`). Esta versão acompanha a **dev**.
+Base da auditoria geral anterior (colunas Main e diferenças abaixo são históricas): `dev@badf81c` antes de Gameplay UX Polish e `main@fd011ab`.
+A revisão geral anterior incluiu Gameplay UX Polish e M7 na dev. A atualização atual
+é restrita à troca opcional, sem promoção à main.
 A M7 foi auditada sobre `e72cd66`; implementação e limitações em [M7](m7-persistence.md).
 
 Este documento descreve **maturidade, validação e publicação**, não arquitetura.
@@ -39,7 +40,7 @@ A coluna Implementado considera a `dev`; Main indica a presença na base públic
 | Recovery / reset | IMPLEMENTED + HOMOLOGATED | Autorização, isolamento, filas/panic | Telegram real | Sim | /reset por grupo na fila de recuperação |
 | GameFinished / lifecycle | IMPLEMENTED + HOMOLOGATED | Dois jogadores, botões e timeout | Telegram real | Sim | Encerramento limpo sem novo turno |
 | Menções / links | IMPLEMENTED + HOMOLOGATED | Destinos e estados do renderer | Telegram real | Sim, base | UserID apenas do responsável atual |
-| Trocar cartas | IMPLEMENTED + HOMOLOGATED | Engine, serviço, inline e renderer | Telegram real | Não | Exclusiva do Caseiro na dev |
+| Troca opcional + cor | IMPLEMENTED BUT NOT HOMOLOGATED | Engine, serviço, inline, renderer e simulador; race local bloqueado por VMA | Pendente | Não (fluxo novo) | Última carta encerra sem escolhas |
 | Comandos privados | IMPLEMENTED + HOMOLOGATED | Boas-vindas, ajuda, escopos | Telegram real | Não | /start, /help e botão adicionar ao grupo |
 | Correção de falso tópico | IMPLEMENTED + HOMOLOGATED | Threads comuns e tópicos reais | Telegram real | Não | Apenas IsTopicMessage identifica tópico |
 | Gameplay UX Polish | IMPLEMENTED + HOMOLOGATED | Ordem, lock, renderer e regressões | Telegram real | Não | Ordem a partir do atual e /trancar /destrancar |
@@ -76,20 +77,24 @@ Skip/bloqueio, Reverse, coringa, +2 e +4 estão presentes em ambos os modos.
 **Caseiro** possui regras próprias de resposta às penalidades:
 `+2 → +4` acumula **6**, e `+4 → +2` exige a cor escolhida.
 A correção que preserva o total acumulado já está nas duas branches.
-Na **dev**, Caseiro recusa `+4 → +4`; na **main auditada**, ainda permite essa resposta.
+Caseiro recusa `+4 → +4` na dev e na main atual (`62fc344`).
 O Clássico mantém `+4 → +4` em ambas. Esta publicação documental não muda essas regras.
 
-O baralho Clássico tem 108 cartas. Caseiro tem 108 na main e 109 na dev,
-onde foi acrescentada uma única **Trocar cartas**, sem reduzir as demais especiais.
+O baralho Clássico tem 108 cartas. Caseiro tem 109 em ambas as branches atuais,
+com uma única **Trocar cartas**, sem reduzir as demais especiais.
 Poucas aparições em algumas partidas não demonstram distribuição incorreta.
 
-**Trocar cartas — apenas dev:** descarta a carta, abre `ChoosingPlayer` e permite
-escolher outro jogador ativo para trocar integralmente as mãos restantes.
-Preserva cor, ordem e direção; o renderer/inline apresenta seleção de jogador,
-contagens e stickers colorido/cinza. Há validação de autorização e revisão.
-Não pode ser última carta, responder a penalidade ou ser jogada sobre coringa.
-A renderização do sticker cinza foi confirmada em Telegram real; esse aceite
-é específico e não substitui a homologação completa da troca e de seus casos extremos.
+**Trocar cartas — fluxo opcional na dev:** descarta a carta, oferece outro jogador
+ativo ou **Manter minha mão**, e exige cor nos dois caminhos. Somente a cor aplica
+a troca/manutenção e avança turno. Última carta termina imediatamente, sem troca
+ou escolhas, preservando o fluxo normal de colocações/ranking. Cada ação aceita
+avança uma revisão; escolhas pendentes continuam fora de TURN_TIMEOUT.
+
+Implementado e testado automaticamente; **homologação Telegram real pendente**.
+O aceite da carta anterior não homologa este fluxo novo. Esta correção não foi
+publicada na main (`62fc344`, que já contém a versão anterior da carta); a matriz
+histórica de publicação acima não representa uma nova auditoria completa de branches.
+Nenhuma promoção ou push faz parte desta entrega.
 
 ## Lifecycle, contexto e decisões mantidas
 
@@ -155,7 +160,7 @@ Diferenças de produto confirmadas pelas árvores Git, sem promoção nesta mile
   garantem essa regra. Lock pertence à sessão e não altera turno/revisão da engine.
   Implementado e testado na dev; homologação Telegram real pendente; main: não.
 
-- Trocar cartas, seleção de jogador, stickers e suporte no simulador.
+- Troca opcional + cor via Inline Mode e exceção de última carta (novo fluxo somente dev).
 - Recusa de `+4` sobre `+4` no Caseiro.
 - Remoção da linha textual redundante de direção do estado público.
 - Boas-vindas privadas, `/help` por contexto, escopos de comandos e botão de grupo
