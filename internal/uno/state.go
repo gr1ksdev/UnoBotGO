@@ -23,9 +23,11 @@ const (
 	FinishedByCancellation FinishReason = "cancelled"
 )
 
-// ColorChoice records the pre-play evidence needed by a future challenge flow.
+// ColorChoice records pending color effects and pre-play evidence for challenges.
 // Initial Wild color choice retains the chooser's turn; played Wild advances it.
 type ColorChoice struct {
+	SwapHands             bool     // Resolve optional SwapHands only when the color is accepted.
+	SwapTarget            PlayerID // Zero means explicitly keeping the actor's hand.
 	Actor                 PlayerID
 	Target                PlayerID
 	PreviousColor         Color
@@ -236,7 +238,7 @@ func (s State) Validate() error {
 			return bad("active color")
 		}
 		for _, p := range players {
-			if p.Status == Playing && len(p.Hand) == 0 && !(s.Phase == ChoosingColor && s.Pending != nil && s.Pending.Actor == p.ID) {
+			if p.Status == Playing && len(p.Hand) == 0 && !(s.Phase == ChoosingColor && s.Pending != nil && s.Pending.Actor == p.ID && !s.Pending.SwapHands) {
 				return bad("empty active hand")
 			}
 		}
@@ -271,8 +273,19 @@ func (s State) Validate() error {
 			return bad("pending actors")
 		}
 		top := inventory[s.DiscardPile[len(s.DiscardPile)-1]]
-		if (top.Rank != Wild && top.Rank != WildDrawFour) || (p.DrawCount != 0 && p.DrawCount != 4) || (top.Rank == WildDrawFour) != (p.DrawCount == 4) {
+		if (top.Rank != Wild && top.Rank != WildDrawFour && top.Rank != SwapHands) || (p.DrawCount != 0 && p.DrawCount != 4) || (top.Rank == WildDrawFour) != (p.DrawCount == 4) {
 			return bad("pending wild")
+		}
+		if p.SwapHands != (top.Rank == SwapHands) || (!p.SwapHands && p.SwapTarget != 0) {
+			return bad("pending swap identity")
+		}
+		if p.SwapHands {
+			if !s.Rules.AllowSwapHands || p.Initial || p.Bluffing || p.DrawFourChallengeable || s.DrawCounter != 0 || s.PendingBluff != nil {
+				return bad("pending swap state")
+			}
+			if p.SwapTarget != 0 && (p.SwapTarget == p.Actor || !order[p.SwapTarget]) {
+				return bad("pending swap target")
+			}
 		}
 		if p.Initial && (top.Rank != Wild || p.PreviousColor != NoColor) {
 			return bad("initial wild")

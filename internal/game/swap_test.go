@@ -47,6 +47,14 @@ func TestServiceSwapHandsAuthorizationViewsAndTimeout(t *testing.T) {
 		t.Fatal("timeout skipped choice")
 	}
 	chosen := act(t, s, v.GameID, Actor{PlayerID: 1}, uno.Action{Type: uno.ChoosePlayer, TargetID: 2})
+	if chosen.View.Phase != uno.ChoosingColor || chosen.View.CurrentTurn != 1 {
+		t.Fatal(chosen.View)
+	}
+	entry.turnStarted = time.Now().Add(-time.Hour)
+	if candidates := s.ExpiredTurns(t.Context(), time.Second); len(candidates) != 0 {
+		t.Fatal("color choice eligible for timeout")
+	}
+	chosen = act(t, s, v.GameID, Actor{PlayerID: 1}, uno.Action{Type: uno.ChooseColor, Color: played.View.ActiveColor})
 	if chosen.View.Phase != uno.TakingTurn || chosen.View.PlayerChooserID != 0 || chosen.View.CurrentTurn != 2 || chosen.View.ActiveColor != played.View.ActiveColor {
 		t.Fatal(chosen.View)
 	}

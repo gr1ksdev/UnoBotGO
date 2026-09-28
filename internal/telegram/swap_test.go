@@ -26,8 +26,8 @@ func TestSwapChoiceMenuFiltersTargetsAndProtectsTokens(t *testing.T) {
 		},
 	}
 	results := h.playerChoiceResults(1, view)
-	if len(results) != 3 {
-		t.Fatalf("expected two targets and private hand summary: %d", len(results))
+	if len(results) != 4 {
+		t.Fatalf("expected two targets, keep hand and private hand summary: %d", len(results))
 	}
 	for i, target := range []uno.PlayerID{2, 3} {
 		article, ok := results[i].(*telego.InlineQueryResultArticle)
@@ -49,7 +49,7 @@ func TestSwapChoiceMenuFiltersTargetsAndProtectsTokens(t *testing.T) {
 		}
 	}
 	// Sending the private summary publishes only public state.
-	summary := results[2].(*telego.InlineQueryResultArticle)
+	summary := results[3].(*telego.InlineQueryResultArticle)
 	if strings.Contains(summary.InputMessageContent.(*telego.InputTextMessageContent).MessageText, "private") {
 		t.Fatal("private data published")
 	}
@@ -58,7 +58,7 @@ func TestSwapChoiceMenuFiltersTargetsAndProtectsTokens(t *testing.T) {
 		t.Fatal(waiting)
 	}
 	confirmation := renderer.RenderActionConfirmation(1, uno.Action{Type: uno.ChoosePlayer, TargetID: 2}, game.Outcome{View: view.Public})
-	if !strings.Contains(confirmation, "trocou todas as cartas") || !strings.Contains(confirmation, "Bob &lt;&amp;&gt;") {
+	if !strings.Contains(confirmation, "selecionou") || !strings.Contains(confirmation, "Bob &lt;&amp;&gt;") {
 		t.Fatal(confirmation)
 	}
 	if !strings.Contains(renderer.PlayerLink(1, view.Public), "id=1") || !strings.Contains(renderer.PlayerLink(2, view.Public), "id=999") {
@@ -152,8 +152,8 @@ func TestSwapInlineFlowExchangesHandsAndRejectsOldSelection(t *testing.T) {
 		t.Fatal(err)
 	}
 	results, next := b.inlineHandler.buildPlayerHandResults(t.Context(), actor, view.GameID, "")
-	if next != "" || len(results) != 2 {
-		t.Fatal("expected opponent and summary")
+	if next != "" || len(results) != 3 {
+		t.Fatal("expected opponent, keep and summary")
 	}
 	choice := results[0].(*telego.InlineQueryResultArticle)
 	oldResults, _ := b.inlineHandler.buildPlayerHandResults(t.Context(), actor, view.GameID, "")
@@ -165,6 +165,19 @@ func TestSwapInlineFlowExchangesHandsAndRejectsOldSelection(t *testing.T) {
 		t.Fatal("third party confirmed swap")
 	}
 	b.inlineHandler.HandleChosenInlineResult(t.Context(), &telego.ChosenInlineResult{ResultID: choice.ID, From: telego.User{ID: int64(actor)}})
+	flushChat(t, b, view.ChatID)
+	colorResults, _ := b.inlineHandler.buildPlayerHandResults(t.Context(), actor, view.GameID, "")
+	var colorToken string
+	for _, result := range colorResults {
+		article, ok := result.(*telego.InlineQueryResultArticle)
+		if ok && article.Title == "Escolha sua cor" && strings.HasSuffix(article.Description, ColorNamePT(view.ActiveColor)) {
+			colorToken = article.ID
+		}
+	}
+	if colorToken == "" {
+		t.Fatal("missing color decision after target")
+	}
+	b.inlineHandler.HandleChosenInlineResult(t.Context(), &telego.ChosenInlineResult{ResultID: colorToken, From: telego.User{ID: int64(actor)}})
 	flushChat(t, b, view.ChatID)
 	final, err := svc.PublicView(t.Context(), view.GameID)
 	if err != nil {

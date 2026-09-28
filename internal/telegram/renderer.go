@@ -274,7 +274,7 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 	sb.WriteString("\n")
 	switch view.Phase {
 	case uno.ChoosingPlayer:
-		sb.WriteString(fmt.Sprintf("🔀 <b>Aguardando %s escolher um jogador para trocar cartas!</b>\n", r.PlayerLink(view.PlayerChooserID, view)))
+		sb.WriteString(fmt.Sprintf("🔀 <b>Aguardando %s escolher com quem trocar ou manter a mão!</b>\n", r.PlayerLink(view.PlayerChooserID, view)))
 	case uno.ChoosingColor:
 		sb.WriteString(fmt.Sprintf("🎨 <b>Aguardando %s escolher a cor!</b>\n", r.PlayerLink(view.ColorChooserID, view)))
 	default:
@@ -342,9 +342,27 @@ func (r *Renderer) RenderActionConfirmation(actorID uno.PlayerID, action uno.Act
 	case uno.PassTurn:
 		sb.WriteString(fmt.Sprintf("%s passou a vez.", actorLink))
 	case uno.ChoosePlayer:
-		sb.WriteString(fmt.Sprintf("🔀 %s trocou todas as cartas com %s!", actorLink, r.PlayerLink(action.TargetID, outcome.View)))
+		sb.WriteString(fmt.Sprintf("🔄 %s selecionou %s. A troca será resolvida após escolher a cor.", actorLink, r.PlayerLink(action.TargetID, outcome.View)))
+	case uno.KeepHand:
+		sb.WriteString(fmt.Sprintf("➡️ %s decidiu manter a mão. Falta escolher a cor.", actorLink))
 	case uno.ChooseColor:
-		sb.WriteString(fmt.Sprintf("%s escolheu %s <b>%s</b>!", actorLink, ColorIcon(action.Color), ColorNamePT(action.Color)))
+		resolvedSwap := false
+		for _, event := range outcome.Events {
+			if event.Type != uno.HandsSwapped && event.Type != uno.HandKept {
+				continue
+			}
+			resolvedSwap = true
+			sb.WriteString(fmt.Sprintf("%s jogou 🔀 <b>Trocar cartas</b>!\n", actorLink))
+			if event.Type == uno.HandsSwapped {
+				sb.WriteString(fmt.Sprintf("🔄 %s trocou as mãos com %s.", actorLink, r.PlayerLink(event.TargetID, outcome.View)))
+			} else {
+				sb.WriteString(fmt.Sprintf("➡️ %s manteve sua mão.", actorLink))
+			}
+			break
+		}
+		if !resolvedSwap {
+			sb.WriteString(fmt.Sprintf("%s escolheu %s <b>%s</b>!", actorLink, ColorIcon(action.Color), ColorNamePT(action.Color)))
+		}
 	case uno.CallBluff:
 		var bluffEv *uno.Event
 		for i := range outcome.Events {
@@ -418,7 +436,7 @@ func (r *Renderer) RenderHelp(botUsername string) string {
 		sb.WriteString("<code>@seubot</code>\n\n")
 	}
 	sb.WriteString("Sua mão privada aparecerá no menu inline. Toque em uma carta jogável (colorida) para jogá-la! ")
-	sb.WriteString("No modo caseiro, a carta 🔀 Trocar cartas permite escolher outro jogador em <b>Suas cartas</b> e trocar as mãos inteiras, mantendo a cor da mesa. ")
+	sb.WriteString("No modo caseiro, a carta 🔀 Trocar cartas permite escolher outro jogador ou manter a mão em <b>Suas cartas</b>, e depois escolher a cor. Se for a última carta, encerra sua participação sem escolhas. ")
 	sb.WriteString("A confirmação oficial e o estado atualizado serão enviados no grupo da partida.\n\n")
 	sb.WriteString("🇧🇷 Esta é uma versão brasileira desenvolvida em Go (Golang), baseada no @unopybot.")
 

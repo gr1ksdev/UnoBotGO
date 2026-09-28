@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -167,16 +168,23 @@ func TestSwapHandsSimulationAndReport(t *testing.T) {
 	}
 	swaps := 0
 	for _, step := range result.Steps {
-		if step.Action.Type != uno.ChoosePlayer {
-			continue
+		if step.Action.Type == uno.ChoosePlayer || step.Action.Type == uno.KeepHand {
+			if !reflect.DeepEqual(step.Before.HandSizes, step.After.HandSizes) || step.Before.CurrentPlayer != step.After.CurrentPlayer {
+				t.Fatal("selection mutated hands or turn")
+			}
 		}
-		swaps++
-		actor, target := step.Action.PlayerID, step.Action.TargetID
-		if actor == target || step.After.HandSizes[actor] != step.Before.HandSizes[target] || step.After.HandSizes[target] != step.Before.HandSizes[actor] || step.After.ActiveColor != step.Before.ActiveColor {
-			t.Fatal(step)
-		}
-		if !strings.Contains(DescribeStep(step), "trocou todas as cartas") || len(ExplainStep(step)) != 1 {
-			t.Fatal("missing swap description")
+		for _, event := range step.Events {
+			if event.Type != uno.HandsSwapped {
+				continue
+			}
+			swaps++
+			actor, target := event.PlayerID, event.TargetID
+			if step.Action.Type != uno.ChooseColor || actor == target || step.After.HandSizes[actor] != step.Before.HandSizes[target] || step.After.HandSizes[target] != step.Before.HandSizes[actor] || step.After.ActiveColor != step.Action.Color {
+				t.Fatal(step)
+			}
+			if !strings.Contains(strings.Join(ExplainStep(step), " "), "trocou todas as cartas") {
+				t.Fatal("missing actual swap description")
+			}
 		}
 	}
 	if swaps == 0 || CollectStats(result).HandSwaps != swaps {
@@ -187,5 +195,21 @@ func TestSwapHandsSimulationAndReport(t *testing.T) {
 		if !strings.Contains(report, want) {
 			t.Fatal("missing", want)
 		}
+	}
+}
+
+func TestOptionalSwapReportCountsOnlyTransfers(t *testing.T) {
+	selected := Step{Action: uno.Action{Type: uno.ChoosePlayer, PlayerID: 1, TargetID: 2}}
+	kept := Step{Action: uno.Action{Type: uno.ChooseColor, PlayerID: 1, Color: uno.Blue}, Events: []uno.Event{{Type: uno.HandKept, PlayerID: 1}}}
+	swapped := Step{Action: uno.Action{Type: uno.ChooseColor, PlayerID: 1, Color: uno.Red}, Events: []uno.Event{{Type: uno.HandsSwapped, PlayerID: 1, TargetID: 2}}}
+	if stats := CollectStats(Result{Config: Config{Players: 2}, Steps: []Step{selected, kept, swapped}}); stats.HandSwaps != 1 {
+		t.Fatal(stats)
+	}
+	if !strings.Contains(strings.Join(ExplainStep(selected), " "), "aguarda a escolha de cor") {
+		t.Fatal("selection reported as transfer")
+	}
+	explanation := strings.Join(ExplainStep(kept), " ")
+	if !strings.Contains(explanation, "manteve sua mão") || strings.Contains(explanation, "trocou") {
+		t.Fatal(explanation)
 	}
 }
