@@ -15,6 +15,7 @@ const (
 	CallBluff
 	SetRules
 	ChoosePlayer
+	KeepHand
 )
 
 // Action uses only domain IDs. The application authenticates PlayerID and

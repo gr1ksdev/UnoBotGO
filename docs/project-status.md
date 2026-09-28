@@ -39,15 +39,15 @@ A coluna Implementado considera a `dev`; Main indica a presença na base públic
 | Recovery / reset | IMPLEMENTED + HOMOLOGATED | Autorização, isolamento, filas/panic | Telegram real | Sim | /reset por grupo na fila de recuperação |
 | GameFinished / lifecycle | IMPLEMENTED + HOMOLOGATED | Dois jogadores, botões e timeout | Telegram real | Sim | Encerramento limpo sem novo turno |
 | Menções / links | IMPLEMENTED + HOMOLOGATED | Destinos e estados do renderer | Telegram real | Sim, base | UserID apenas do responsável atual |
-| Trocar cartas | IMPLEMENTED + HOMOLOGATED | Engine, serviço, inline e renderer | Telegram real | Não | Exclusiva do Caseiro na dev |
+| Troca opcional + cor | IMPLEMENTED + HOMOLOGATED | Engine, serviço, inline, renderer e simulador | Telegram real | Sim | Troca opcional no Caseiro; término imediato se última carta |
 | Comandos privados | IMPLEMENTED + HOMOLOGATED | Boas-vindas, ajuda, escopos | Telegram real | Não | /start, /help e botão adicionar ao grupo |
 | Correção de falso tópico | IMPLEMENTED + HOMOLOGATED | Threads comuns e tópicos reais | Telegram real | Não | Apenas IsTopicMessage identifica tópico |
 | Gameplay UX Polish | IMPLEMENTED + HOMOLOGATED | Ordem, lock, renderer e regressões | Telegram real | Não | Ordem a partir do atual e /trancar /destrancar |
 | Blefe em +4 sobre +2 | IMPLEMENTED + HOMOLOGATED | Counter legal não desafiável | Telegram real | Não | Caseiro: +4 sobre +2 não é blefe |
 | Reentrada e colocação | IMPLEMENTED + HOMOLOGATED | Late join após saída vs finalizados | Telegram real | Não | Reentrada de quem saiu; colocado bloqueado |
-| M7 Persistência e Snapshots | IMPLEMENTED + HOMOLOGATED | PostgreSQL real, race, migrations, snapshots | Telegram real | Não | Defaults Classic+Legacy; snapshot imutável por jogo |
-| M7 Ranking Legacy e Updated | IMPLEMENTED + HOMOLOGATED | Cálculo determinístico, half-up, elegibilidade | Telegram real | Não | Concessão e anúncio pós-commit homologados N=2 e N=3 |
-| M7 UX de Configuração (/config) | IMPLEMENTED + HOMOLOGATED | /config, botões inline, my_chat_member, 23 cenários | Telegram real | Não | Admin/installer, boas-vindas e bloqueio de conflito |
+| M7 Persistência e Snapshots | IMPLEMENTED + HOMOLOGATED | PostgreSQL real, race, migrations, snapshots | Telegram real | Sim | Defaults Classic+Legacy; snapshot imutável por jogo |
+| M7 Ranking Legacy e Updated | IMPLEMENTED + HOMOLOGATED | Cálculo determinístico, half-up, elegibilidade | Telegram real | Sim | Concessão e anúncio pós-commit homologados N=2 e N=3 |
+| M7 UX de Configuração (/config) | IMPLEMENTED + HOMOLOGATED | /config, botões inline, my_chat_member, 23 cenários | Telegram real | Sim | Admin/installer, boas-vindas e garantia de config antes de observação |
 | M7 Import de ranking antigo | DEFERRED | Parser, reconciliação e staging | N/A | Não | Adiado para milestone futura; sem comando ou aplicação |
 | /dar | IMPLEMENTED BUT NOT HOMOLOGATED | Testes debugcards e exclusão normal | Uso de desenvolvimento | Não | Fora do produto/build padrão (com tag) |
 
@@ -79,17 +79,15 @@ A correção que preserva o total acumulado já está nas duas branches.
 Na **dev**, Caseiro recusa `+4 → +4`; na **main auditada**, ainda permite essa resposta.
 O Clássico mantém `+4 → +4` em ambas. Esta publicação documental não muda essas regras.
 
-O baralho Clássico tem 108 cartas. Caseiro tem 108 na main e 109 na dev,
-onde foi acrescentada uma única **Trocar cartas**, sem reduzir as demais especiais.
-Poucas aparições em algumas partidas não demonstram distribuição incorreta.
+O baralho Clássico tem 108 cartas. Caseiro tem 109 cartas,
+onde há uma única **Trocar cartas**, sem reduzir as demais especiais.
 
-**Trocar cartas — apenas dev:** descarta a carta, abre `ChoosingPlayer` e permite
-escolher outro jogador ativo para trocar integralmente as mãos restantes.
-Preserva cor, ordem e direção; o renderer/inline apresenta seleção de jogador,
-contagens e stickers colorido/cinza. Há validação de autorização e revisão.
-Não pode ser última carta, responder a penalidade ou ser jogada sobre coringa.
-A renderização do sticker cinza foi confirmada em Telegram real; esse aceite
-é específico e não substitui a homologação completa da troca e de seus casos extremos.
+**Trocar cartas no Caseiro:** descarta a carta, abre `ChoosingPlayer` e permite
+escolher outro jogador ativo ou manter a própria mão (`KeepHand`). Ambas as opções
+avançam para a escolha de cor via Inline Mode; somente a cor aplica a decisão e
+passa a vez. Jogada como última carta, encerra a participação do jogador imediatamente,
+sem trocas nem escolhas, respeitando a colocação e o ranking.
+A renderização e o novo fluxo foram homologados em uso real no Telegram.
 
 ## Lifecycle, contexto e decisões mantidas
 

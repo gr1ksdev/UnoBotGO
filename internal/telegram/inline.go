@@ -613,9 +613,19 @@ func (h *InlineHandler) playerChoiceResults(actorID uno.PlayerID, view game.Play
 			}
 			name := h.renderer.userCache.GetRawName(player.ID)
 			results = append(results, &telego.InlineQueryResultArticle{
-				Type: "article", ID: token, Title: "Trocar cartas com " + name,
+				Type: "article", ID: token, Title: "🔄 Trocar com " + name,
 				Description:         fmt.Sprintf("%d carta(s)", player.CardCount),
 				InputMessageContent: &telego.InputTextMessageContent{MessageText: "Escolhendo " + name + " para trocar cartas."},
+			})
+		}
+		token, err := h.tokens.CreateActionToken(actorID, view.Public.GameID, view.Public.ChatID, uno.Action{
+			Type: uno.KeepHand, PlayerID: actorID, Revision: view.Public.Revision,
+		}, h.tokenTTL)
+		if err == nil {
+			results = append(results, &telego.InlineQueryResultArticle{
+				Type: "article", ID: token, Title: "➡️ Manter minha mão",
+				Description:         "Não troca cartas; continue escolhendo a cor",
+				InputMessageContent: &telego.InputTextMessageContent{MessageText: "Mantendo minha mão; vou escolher a cor."},
 			})
 		}
 	} else {

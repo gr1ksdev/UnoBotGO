@@ -19,18 +19,21 @@ durável de sessão atualmente: snapshots de `uno.State` não contêm metadata d
 admissão e não são snapshots completos de `internal/game`.
 
 
-## Troca de mãos — 2026-09-25
+## Troca de mãos — 2026-09-28
 
-`ChoosePlayer` é autorizada como ação inline, vinculada ao `Actor.PlayerID` real,
-à partida e à revisão. A engine valida turno, fase e alvo ativo; o serviço aplica
-a troca sob o mutex da partida. `PublicGameView.PlayerChooserID` identifica quem
-escolhe, enquanto `Players` fornece os alvos ativos e suas contagens públicas.
-Cada `PlayerView` passa a refletir somente a nova mão do próprio solicitante.
-Nenhum ID de carta trocada é publicado em eventos ou na view pública.
+`ChoosePlayer`, `KeepHand` e `ChooseColor` são ações autenticadas pelo `Actor`,
+partida e revisão. O mutex por partida serializa cada ação. A engine descarta a
+carta, guarda alvo/manter em `ColorChoice` e só transfere mãos na escolha de cor.
+Cada ação aceita avança uma revisão. Views privadas refletem apenas a mão do
+solicitante; eventos públicos nunca expõem os IDs das cartas transferidas.
 
-`ChoosingPlayer` não é elegível para timeout, assim como a escolha de cor.
-Após confirmar a troca, o próximo turno recebe um prazo novo. Seleções antigas
-são recusadas pela revisão, mesmo quando a carta ainda existe na partida.
+`PublicGameView.PlayerChooserID` identifica quem escolhe alvo/manter; o fluxo
+seguinte reutiliza `ColorChooserID`. Última carta termina diretamente e conserva
+os hooks normais de resultado/ranking da M7, sem mudanças de GroupConfig/storage.
+
+`ChoosingPlayer` e `ChoosingColor` não são elegíveis para timeout. O próximo turno
+recebe prazo novo após a resolução. Seleções antigas são recusadas por revisão;
+saída do alvo durante a escolha de cor reabre alvo/manter, sem transferência.
 
 
 > Atualização de 2026-09-23: o contrato de timeout e encerramento vigente está

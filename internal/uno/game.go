@@ -79,7 +79,7 @@ func (g *Game) Apply(a Action) (Result, error) {
 	if g.state.Revision == math.MaxUint64 {
 		return Result{}, ErrInvalidState
 	}
-	if a.PlayerID <= 0 || a.Type < JoinGame || a.Type > ChoosePlayer {
+	if a.PlayerID <= 0 || a.Type < JoinGame || a.Type > KeepHand {
 		return Result{}, ErrInvalidAction
 	}
 	if (a.Type != PlayCard && a.CardID != "") || (a.Type != ChooseColor && a.Color != NoColor) || (a.Type != StartGame && a.DealerID != 0) || (a.Type != ChoosePlayer && a.TargetID != 0) {
@@ -218,6 +218,12 @@ func (g *Game) leave(s *State, id PlayerID, events *[]Event) error {
 		finish(s, FinishedByDeparture, events)
 		return nil
 	}
+	if s.Pending != nil && s.Pending.SwapHands && s.Pending.SwapTarget == id {
+		// An invalidated selection must be made again; never substitute a target.
+		s.Pending = nil
+		s.Phase = ChoosingPlayer
+		*events = append(*events, Event{Type: PlayerChoiceRequired, PlayerID: s.CurrentPlayerID})
+	}
 	if s.Pending != nil && s.Pending.Target == id {
 		s.Pending.Target = s.next(s.Pending.Actor, 1)
 	}
@@ -328,10 +334,19 @@ func (g *Game) takeAction(s *State, a Action, events *[]Event) error {
 		return ErrNotYourTurn
 	}
 	if s.Phase == ChoosingPlayer {
-		if a.Type != ChoosePlayer {
+		if a.Type != ChoosePlayer && a.Type != KeepHand {
 			return ErrPlayerChoiceRequired
 		}
-		return g.swapHands(s, a.TargetID, events)
+		if a.Type == ChoosePlayer {
+			other := s.player(a.TargetID)
+			if a.TargetID == a.PlayerID || other == nil || other.Status != Playing {
+				return ErrInvalidSwapTarget
+			}
+		}
+		s.Pending = &ColorChoice{Actor: a.PlayerID, Target: s.next(a.PlayerID, 1), PreviousColor: s.ActiveColor, SwapHands: true, SwapTarget: a.TargetID}
+		s.Phase = ChoosingColor
+		*events = append(*events, Event{Type: ColorChoiceRequired, PlayerID: a.PlayerID})
+		return nil
 	}
 	if s.Pending != nil {
 		if a.Type != ChooseColor {
@@ -429,10 +444,10 @@ func playable(s *State, player PlayerID, id CardID) error {
 	if !s.Rules.FreePlayAfterDraw && s.DrawnCardID != "" && s.DrawnCardID != id {
 		return ErrCardNotPlayable
 	}
-	if card.Rank == SwapHands && (!s.Rules.AllowSwapHands || len(p.Hand) == 1) {
+	if card.Rank == SwapHands && !s.Rules.AllowSwapHands {
 		return ErrCardNotPlayable
 	}
-	if s.Rules.NoWildFinish && len(p.Hand) == 1 && card.Rank >= Wild {
+	if s.Rules.NoWildFinish && len(p.Hand) == 1 && card.Rank >= Wild && card.Rank != SwapHands {
 		return ErrCardNotPlayable
 	}
 	if s.DrawCounter > 0 {
@@ -500,6 +515,10 @@ func (g *Game) play(s *State, id CardID, events *[]Event) error {
 	s.DrawnCardID = ""
 	*events = append(*events, Event{Type: CardPlayed, PlayerID: actor, CardID: id})
 	if card.Rank == SwapHands {
+		if len(p.Hand) == 0 {
+			completePlay(s, actor, s.next(actor, 1), events)
+			return nil
+		}
 		s.Phase = ChoosingPlayer
 		*events = append(*events, Event{Type: PlayerChoiceRequired, PlayerID: actor})
 		return nil
@@ -574,6 +593,18 @@ func (g *Game) choose(s *State, color Color, events *[]Event) error {
 		return ErrInvalidColor
 	}
 	pending := *s.Pending
+	if pending.SwapHands {
+		if pending.SwapTarget != 0 {
+			if err := g.swapHands(s, pending.SwapTarget, events); err != nil {
+				return err
+			}
+		} else {
+			*events = append(*events, Event{Type: HandKept, PlayerID: pending.Actor})
+			if len(s.player(pending.Actor).Hand) == 1 {
+				*events = append(*events, Event{Type: UnoAnnounced, PlayerID: pending.Actor})
+			}
+		}
+	}
 	s.ActiveColor = color
 	s.Pending = nil
 	s.Phase = TakingTurn
@@ -699,7 +730,7 @@ func (g *Game) bluff(s *State, challenger PlayerID, events *[]Event) error {
 	return nil
 }
 
-// swapHands commits only after the chooser and target have been validated.
+// swapHands resolves the transfer inside the final color action. It does not advance the turn.
 func (g *Game) swapHands(s *State, target PlayerID, events *[]Event) error {
 	actor := s.CurrentPlayerID
 	other := s.player(target)
@@ -708,13 +739,11 @@ func (g *Game) swapHands(s *State, target PlayerID, events *[]Event) error {
 	}
 	player := s.player(actor)
 	player.Hand, other.Hand = other.Hand, player.Hand
-	s.Phase = TakingTurn
 	*events = append(*events, Event{Type: HandsSwapped, PlayerID: actor, TargetID: target})
 	for _, p := range []*Player{player, other} {
 		if len(p.Hand) == 1 {
 			*events = append(*events, Event{Type: UnoAnnounced, PlayerID: p.ID})
 		}
 	}
-	changeTurn(s, s.next(actor, 1), events)
 	return nil
 }

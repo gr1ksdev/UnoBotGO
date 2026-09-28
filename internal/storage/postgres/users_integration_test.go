@@ -50,3 +50,46 @@ func TestResultStoresObservedUsersAtomically(t *testing.T) {
 		t.Fatal(users)
 	}
 }
+
+func TestObserveGroupUserRequiresGroupConfigFK(t *testing.T) {
+	s := prepareRanking(t, groups.Legacy)
+	ctx := t.Context()
+	nonExistentChatID := int64(99999)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	// Observar usuário em chat sem group_configs prévio DEVE falhar pela restrição de FK
+	err := s.ObserveGroupUser(ctx, groups.KnownUser{
+		ChatID:      nonExistentChatID,
+		UserID:      1,
+		DisplayName: "Usuário Teste",
+		Username:    "teste",
+		LastSeenAt:  now,
+	})
+	if err == nil {
+		t.Fatal("expected foreign key violation error when observing user without group_configs, got nil")
+	}
+
+	// Criar a configuração do grupo via GetOrCreateGroupConfig (ordem correta)
+	if _, err := s.GetOrCreateGroupConfig(ctx, nonExistentChatID); err != nil {
+		t.Fatalf("failed to create group config: %v", err)
+	}
+
+	// Agora a observação DEVE ter sucesso
+	if err := s.ObserveGroupUser(ctx, groups.KnownUser{
+		ChatID:      nonExistentChatID,
+		UserID:      1,
+		DisplayName: "Usuário Teste",
+		Username:    "teste",
+		LastSeenAt:  now,
+	}); err != nil {
+		t.Fatalf("expected ObserveGroupUser to succeed after group config created, got: %v", err)
+	}
+
+	users, err := s.KnownGroupUsers(ctx, nonExistentChatID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(users) != 1 || users[0].UserID != 1 || users[0].DisplayName != "Usuário Teste" {
+		t.Fatalf("unexpected users: %+v", users)
+	}
+}

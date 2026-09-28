@@ -131,7 +131,7 @@ func TestGameplayChoicesMentionsEscapingAndPlacements(t *testing.T) {
 		assertMentionTargets(t, text, r.userCache, 22, 999)
 		requireGameplay(t, text, "Freddy &lt;&amp;&gt;")
 		if phase == uno.ChoosingPlayer {
-			requireGameplay(t, text, "escolher um jogador para trocar cartas")
+			requireGameplay(t, text, "escolher com quem trocar ou manter a mão")
 		}
 		if phase == uno.ChoosingColor {
 			requireGameplay(t, text, "escolher a cor")
@@ -147,9 +147,9 @@ func TestGameplayChoicesMentionsEscapingAndPlacements(t *testing.T) {
 	requireGameplay(t, plainGameplay(text), "Mezi escolheu 💛 Amarelo!", "🎨 Cor: 💛 Amarelo", "Compra acumulada: 4 cartas")
 	v.TopCard = &uno.Card{Color: uno.NoColor, Rank: uno.SwapHands}
 	v.DrawCounter = 0
-	text = r.RenderActionConfirmation(22, uno.Action{Type: uno.ChoosePlayer, TargetID: 11}, game.Outcome{View: v})
+	text = r.RenderActionConfirmation(22, uno.Action{Type: uno.ChooseColor, Color: uno.Yellow}, game.Outcome{View: v, Events: []uno.Event{{Type: uno.HandsSwapped, PlayerID: 22, TargetID: 11}}})
 	assertMentionTargets(t, text, r.userCache, 33, 999)
-	requireGameplay(t, text, "trocou todas as cartas", "🎨 Cor:")
+	requireGameplay(t, text, "trocou as mãos", "🎨 Cor:")
 	v.Placements = []uno.Placement{{PlayerID: 11, Position: 1}, {PlayerID: 22, Position: 2}}
 	v.Order = []uno.PlayerID{33}
 	v.Players[0].Active = false

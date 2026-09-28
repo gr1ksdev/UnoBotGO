@@ -87,14 +87,14 @@ func CollectStats(result Result) Stats {
 				stats.PenaltyEvents++
 				player.PenaltiesReceived++
 			}
-		case uno.ChoosePlayer:
-			stats.HandSwaps++
 		case uno.CallBluff:
 			stats.BluffsCalled++
 			player.BluffsCalled++
 		}
 		for _, event := range step.Events {
 			switch event.Type {
+			case uno.HandsSwapped:
+				stats.HandSwaps++
 			case uno.CardsDrawn:
 				stats.CardsDrawn += event.Count
 				ensurePlayerStats(&stats, event.PlayerID).CardsDrawn += event.Count
@@ -151,7 +151,10 @@ func ExplainStep(step Step) []string {
 		case uno.DrawTwo:
 			return []string{fmt.Sprintf("%s jogou %s: a penalidade pendente passou a %d carta(s).%s", player, CardName(*step.Card), step.After.DrawCounter, stack)}
 		case uno.SwapHands:
-			return []string{fmt.Sprintf("%s jogou Trocar cartas e deve escolher outro jogador; a cor ativa permanece %s.", player, ColorName(step.After.ActiveColor))}
+			if step.After.Phase != uno.ChoosingPlayer {
+				return []string{fmt.Sprintf("%s jogou Trocar cartas como última carta e terminou sem troca ou escolha de cor.", player)}
+			}
+			return []string{fmt.Sprintf("%s jogou Trocar cartas: deve escolher outro jogador ou manter a mão, e depois escolher a cor.", player)}
 		case uno.Wild:
 			return []string{fmt.Sprintf("%s jogou Coringa e deve escolher a nova cor ativa.", player)}
 		case uno.WildDrawFour:
@@ -159,9 +162,20 @@ func ExplainStep(step Step) []string {
 		}
 	}
 	if step.Action.Type == uno.ChoosePlayer {
-		return []string{fmt.Sprintf("%s trocou todas as cartas com %s; a cor ativa permanece %s.", player, PlayerName(step.Action.TargetID), ColorName(step.After.ActiveColor))}
+		return []string{fmt.Sprintf("%s selecionou %s; a troca aguarda a escolha de cor.", player, PlayerName(step.Action.TargetID))}
+	}
+	if step.Action.Type == uno.KeepHand {
+		return []string{player + " decidiu manter a mão; falta escolher a cor."}
 	}
 	if step.Action.Type == uno.ChooseColor {
+		for _, event := range step.Events {
+			if event.Type == uno.HandsSwapped {
+				return []string{fmt.Sprintf("%s trocou todas as cartas com %s e escolheu %s.", player, PlayerName(event.TargetID), ColorName(step.Action.Color))}
+			}
+			if event.Type == uno.HandKept {
+				return []string{fmt.Sprintf("%s manteve sua mão e escolheu %s.", player, ColorName(step.Action.Color))}
+			}
+		}
 		return []string{fmt.Sprintf("%s escolheu %s como nova cor ativa; a penalidade pendente agora é de %d carta(s).", player, ColorName(step.Action.Color), step.After.DrawCounter)}
 	}
 	if step.Action.Type == uno.DrawCard && step.Before.DrawCounter > 0 {
@@ -316,7 +330,9 @@ func DescribeStep(step Step) string {
 	case uno.PassTurn:
 		return player + " passou a vez"
 	case uno.ChoosePlayer:
-		return fmt.Sprintf("%s trocou todas as cartas com %s", player, PlayerName(step.Action.TargetID))
+		return fmt.Sprintf("%s selecionou %s para a troca pendente", player, PlayerName(step.Action.TargetID))
+	case uno.KeepHand:
+		return player + " decidiu manter a mão"
 	case uno.ChooseColor:
 		return fmt.Sprintf("%s escolheu %s", player, ColorName(step.Action.Color))
 	case uno.CallBluff:
@@ -339,6 +355,8 @@ func ActionName(action uno.ActionType) string {
 		return "passar"
 	case uno.ChoosePlayer:
 		return "escolher jogador"
+	case uno.KeepHand:
+		return "manter mão"
 	case uno.ChooseColor:
 		return "escolher cor"
 	case uno.CallBluff:
@@ -437,7 +455,9 @@ func describeEvents(events []uno.Event) string {
 			}
 			descriptions = append(descriptions, "sentido alterado para "+direction)
 		case uno.PlayerChoiceRequired:
-			descriptions = append(descriptions, PlayerName(event.PlayerID)+" deve escolher um jogador")
+			descriptions = append(descriptions, PlayerName(event.PlayerID)+" deve escolher um jogador ou manter a mão")
+		case uno.HandKept:
+			descriptions = append(descriptions, PlayerName(event.PlayerID)+" manteve sua mão")
 		case uno.HandsSwapped:
 			descriptions = append(descriptions, PlayerName(event.PlayerID)+" trocou todas as cartas com "+PlayerName(event.TargetID))
 		case uno.ColorChoiceRequired:
