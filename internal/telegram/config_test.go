@@ -83,17 +83,29 @@ func (m *mockGroupRepo) SetInstalledBy(ctx context.Context, chatID int64, instal
 }
 
 type mockUserRepo struct {
-	mu    sync.Mutex
-	users map[string]groups.KnownUser
+	mu        sync.Mutex
+	users     map[string]groups.KnownUser
+	groupRepo *mockGroupRepo
 }
 
-func newMockUserRepo() *mockUserRepo {
-	return &mockUserRepo{users: make(map[string]groups.KnownUser)}
+func newMockUserRepo(groupRepo *mockGroupRepo) *mockUserRepo {
+	return &mockUserRepo{
+		users:     make(map[string]groups.KnownUser),
+		groupRepo: groupRepo,
+	}
 }
 
 func (m *mockUserRepo) ObserveGroupUser(ctx context.Context, user groups.KnownUser) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.groupRepo != nil {
+		m.groupRepo.mu.Lock()
+		_, ok := m.groupRepo.configs[user.ChatID]
+		m.groupRepo.mu.Unlock()
+		if !ok {
+			return fmt.Errorf("foreign key violation: chat_id %d not in group_configs", user.ChatID)
+		}
+	}
 	key := fmt.Sprintf("%d:%d", user.ChatID, user.UserID)
 	m.users[key] = user
 	return nil
@@ -130,7 +142,7 @@ func newTestHarness() *testHarness {
 	renderer := NewRenderer(nil)
 	bot := New(api, svc, tokens, renderer, time.Minute, nil)
 	groupRepo := newMockGroupRepo()
-	userRepo := newMockUserRepo()
+	userRepo := newMockUserRepo(groupRepo)
 	bot.SetGroupConfigs(groupRepo)
 	bot.SetKnownUsers(userRepo)
 	return &testHarness{
@@ -824,3 +836,162 @@ func TestConfig_WelcomeButtonOpensConfig(t *testing.T) {
 	}
 }
 
+// Regressão 1: Primeiro /config em grupo sem group_configs prévio observa usuário com sucesso
+// após criar a configuração e exibe o menu para administradores.
+func TestConfig_FirstConfigInGroupWithoutExistingConfig_ObservesUser(t *testing.T) {
+	h := newTestHarness()
+	ctx := t.Context()
+	chatID := int64(-1026)
+	adminID := int64(10)
+	h.api.ChatMembers[adminID] = &telego.ChatMemberOwner{Status: telego.MemberStatusCreator}
+
+	// Verifica que o grupo não possui config prévia
+	h.groupRepo.mu.Lock()
+	if _, exists := h.groupRepo.configs[chatID]; exists {
+		t.Fatal("expected no existing group config")
+	}
+	h.groupRepo.mu.Unlock()
+
+	// Admin executa /config pela primeira vez no grupo
+	h.cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+		From: &telego.User{ID: adminID, FirstName: "AdminNovo", Username: "admin_novo"},
+		Text: "/config",
+	})
+
+	// 1. Group config deve existir com os defaults (Classic + Legacy)
+	h.groupRepo.mu.Lock()
+	cfg, exists := h.groupRepo.configs[chatID]
+	h.groupRepo.mu.Unlock()
+	if !exists {
+		t.Fatal("expected group config to be created")
+	}
+	if cfg.DefaultGameMode != groups.Classic || cfg.RankingSystem != groups.Legacy {
+		t.Fatalf("expected defaults Classic + Legacy, got mode=%v rank=%v", cfg.DefaultGameMode, cfg.RankingSystem)
+	}
+
+	// 2. Usuário deve ter sido observado com sucesso (sem erro de foreign key)
+	key := fmt.Sprintf("%d:%d", chatID, adminID)
+	h.userRepo.mu.Lock()
+	user, observed := h.userRepo.users[key]
+	h.userRepo.mu.Unlock()
+	if !observed {
+		t.Fatal("expected admin user to be observed in userRepo")
+	}
+	if user.DisplayName != "AdminNovo" || user.Username != "admin_novo" {
+		t.Fatalf("unexpected user details: %+v", user)
+	}
+
+	// 3. Resposta de configuração enviada com botões
+	if len(h.api.SentMessages) == 0 {
+		t.Fatal("expected config message sent")
+	}
+	lastMsg := h.api.SentMessages[len(h.api.SentMessages)-1]
+	if !strings.Contains(lastMsg.Text, "Configuração do Grupo") {
+		t.Fatalf("expected config menu text, got: %s", lastMsg.Text)
+	}
+}
+
+// Regressão 2: Primeiro /config em grupo sem group_configs por usuário comum observa o usuário,
+// preserva autorização (bloqueia alteração) e cria a configuração com defaults.
+func TestConfig_FirstConfigInGroupWithoutExistingConfig_NonAdmin_ObservesUserAndPreservesAuth(t *testing.T) {
+	h := newTestHarness()
+	ctx := t.Context()
+	chatID := int64(-1027)
+	regularUserID := int64(25)
+	h.api.ChatMembers[regularUserID] = &telego.ChatMemberMember{Status: telego.MemberStatusMember}
+
+	// Verifica que o grupo não possui config prévia
+	h.groupRepo.mu.Lock()
+	if _, exists := h.groupRepo.configs[chatID]; exists {
+		t.Fatal("expected no existing group config")
+	}
+	h.groupRepo.mu.Unlock()
+
+	// Usuário comum executa /config pela primeira vez no grupo
+	h.cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+		From: &telego.User{ID: regularUserID, FirstName: "ComumNovo", Username: "comum_novo"},
+		Text: "/config",
+	})
+
+	// 1. Group config deve ter sido criada com defaults
+	h.groupRepo.mu.Lock()
+	cfg, exists := h.groupRepo.configs[chatID]
+	h.groupRepo.mu.Unlock()
+	if !exists {
+		t.Fatal("expected group config to be created")
+	}
+	if cfg.DefaultGameMode != groups.Classic || cfg.RankingSystem != groups.Legacy {
+		t.Fatalf("expected defaults Classic + Legacy, got mode=%v rank=%v", cfg.DefaultGameMode, cfg.RankingSystem)
+	}
+
+	// 2. Usuário comum deve ter sido observado com sucesso
+	key := fmt.Sprintf("%d:%d", chatID, regularUserID)
+	h.userRepo.mu.Lock()
+	user, observed := h.userRepo.users[key]
+	h.userRepo.mu.Unlock()
+	if !observed {
+		t.Fatal("expected regular user to be observed in userRepo")
+	}
+	if user.DisplayName != "ComumNovo" {
+		t.Fatalf("unexpected user details: %+v", user)
+	}
+
+	// 3. Autorização preservada: mensagem de acesso negado
+	if len(h.api.SentMessages) == 0 {
+		t.Fatal("expected permission denied message")
+	}
+	lastMsg := h.api.SentMessages[len(h.api.SentMessages)-1]
+	if !strings.Contains(lastMsg.Text, "Somente administradores ou quem adicionou o bot") {
+		t.Fatalf("expected permission denied, got: %s", lastMsg.Text)
+	}
+}
+
+// Regressão 3: Callback de configuração em grupo recém-criado (sem config prévia)
+// garante a criação da config antes de observar o usuário e processa a ação corretamente.
+func TestConfig_CallbackInNewlyCreatedGroup_ObservesUser(t *testing.T) {
+	h := newTestHarness()
+	ctx := t.Context()
+	chatID := int64(-1028)
+	adminID := int64(10)
+	h.api.ChatMembers[adminID] = &telego.ChatMemberOwner{Status: telego.MemberStatusCreator}
+
+	// Sem config prévia
+	h.groupRepo.mu.Lock()
+	if _, exists := h.groupRepo.configs[chatID]; exists {
+		t.Fatal("expected no existing group config")
+	}
+	h.groupRepo.mu.Unlock()
+
+	// Callback de alteração de modo acionado
+	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
+		ID:      "cb_new_group",
+		From:    telego.User{ID: adminID, FirstName: "AdminCb", Username: "admin_cb"},
+		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 200},
+		Data:    fmt.Sprintf("cfg_mode_caseiro_%d", chatID),
+	})
+
+	// 1. Group config deve existir e ter sido alterada para Caseiro
+	h.groupRepo.mu.Lock()
+	cfg, exists := h.groupRepo.configs[chatID]
+	h.groupRepo.mu.Unlock()
+	if !exists {
+		t.Fatal("expected group config to be created")
+	}
+	if cfg.DefaultGameMode != groups.Caseiro {
+		t.Fatalf("expected Caseiro mode after callback, got %v", cfg.DefaultGameMode)
+	}
+
+	// 2. Usuário do callback observado com sucesso
+	key := fmt.Sprintf("%d:%d", chatID, adminID)
+	h.userRepo.mu.Lock()
+	user, observed := h.userRepo.users[key]
+	h.userRepo.mu.Unlock()
+	if !observed {
+		t.Fatal("expected callback user to be observed in userRepo")
+	}
+	if user.DisplayName != "AdminCb" {
+		t.Fatalf("unexpected user details: %+v", user)
+	}
+}

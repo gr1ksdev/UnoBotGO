@@ -314,18 +314,6 @@ func (h *CallbackHandler) handleConfigCallback(ctx context.Context, cq *telego.C
 		return
 	}
 
-	if h.knownUsers != nil {
-		if err := h.knownUsers.ObserveGroupUser(ctx, groups.KnownUser{
-			ChatID:      targetChatID,
-			UserID:      actorID,
-			DisplayName: observedName(cq.From),
-			Username:    cq.From.Username,
-			LastSeenAt:  time.Now().UTC(),
-		}); err != nil {
-			h.logger.WarnContext(ctx, "failed to observe user in callback", "chat_id", targetChatID, "error", err)
-		}
-	}
-
 	svc := h.getGroupsService()
 	if svc == nil {
 		_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
@@ -334,6 +322,22 @@ func (h *CallbackHandler) handleConfigCallback(ctx context.Context, cq *telego.C
 			ShowAlert:       true,
 		})
 		return
+	}
+
+	if svc.Repository != nil {
+		if _, err := svc.Repository.GetOrCreateGroupConfig(ctx, targetChatID); err != nil {
+			h.logger.WarnContext(ctx, "failed to ensure group config in callback", "chat_id", targetChatID, "error", err)
+		} else if h.knownUsers != nil {
+			if err := h.knownUsers.ObserveGroupUser(ctx, groups.KnownUser{
+				ChatID:      targetChatID,
+				UserID:      actorID,
+				DisplayName: observedName(cq.From),
+				Username:    cq.From.Username,
+				LastSeenAt:  time.Now().UTC(),
+			}); err != nil {
+				h.logger.WarnContext(ctx, "failed to observe user in callback", "chat_id", targetChatID, "error", err)
+			}
+		}
 	}
 
 	switch actionType {

@@ -1,3 +1,21 @@
+# Correção de observação de usuário no /config e callbacks — 2026-09-28 (somente dev)
+
+- Pedido do usuário aprovado no plano: `corrigir-observacao-config_2026-09-28_22-26.md`.
+- Causa raiz da falha em `ObserveGroupUser`: em grupos novos (onde `/novo` ainda não havia sido executado), `group_configs` não possuía registro para aquele `chat_id`. A tabela `known_group_users` possui chave estrangeira `chat_id REFERENCES group_configs(chat_id)`. Em `handleConfig` e `handleConfigCallback`, `ObserveGroupUser` era chamado antes da resolução/criação da configuração, resultando em erro 23503 (violação de foreign key).
+- Correção implementada:
+  - Em `internal/telegram/commands.go:handleConfig`, `svc.Repository.GetOrCreateGroupConfig` é chamado antes de `ObserveGroupUser`, garantindo que o registro do grupo exista no banco de dados com os defaults (`Classic` + `Legacy`).
+  - Em `internal/telegram/callbacks.go:handleConfigCallback`, a mesma garantia foi aplicada antes de invocar `ObserveGroupUser`.
+  - Se `GetOrCreateGroupConfig` falhar (ex: indisponibilidade do banco), a observação de usuário é omitida de forma segura, impedindo inserção de registros órfãos ou erros de FK.
+  - Regras de autorização (`CanConfigureUser`, `SetDefaultGameMode`, `SetRankingSystem`), instalador registrado (`installed_by_user_id`), defaults e regras de `/novo` permanecem 100% preservadas.
+  - Schemas e migrations intactos: a chave estrangeira foi mantida e respeitada.
+- Testes e regressões:
+  - Adicionado suporte a verificação de foreign key no mock de repositório de usuários em `internal/telegram/config_test.go`.
+  - Testes de regressão adicionados cobrindo primeiro `/config` por admin, primeiro `/config` por usuário comum (bloqueado na autorização mas observado) e callbacks de configuração em grupo novo.
+  - Teste de integração PostgreSQL `TestObserveGroupUserRequiresGroupConfigFK` adicionado em `internal/storage/postgres/users_integration_test.go` validando o comportamento real da restrição de chave estrangeira.
+  - Validações aprovadas: `go test -count=1 ./...`, `go test -tags debugcards ./...`, `go vet ./...`, `go build ./...`, `git diff --check` e testes de integração PostgreSQL `go test -count=1 -tags integration ./internal/storage/postgres/...`.
+
+---
+
 # Encerramento da Milestone M7 e Adiamento de Import de Ranking Antigo — 2026-09-27 (somente dev)
 
 - Status final: Milestone M7 CONCLUÍDA e HOMOLOGADA NO TELEGRAM REAL.

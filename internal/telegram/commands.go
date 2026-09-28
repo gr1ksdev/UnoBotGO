@@ -691,22 +691,26 @@ func (h *CommandHandler) handleConfig(ctx context.Context, msg *telego.Message) 
 	chatID := msg.Chat.ID
 	actorID := msg.From.ID
 
-	if h.knownUsers != nil {
-		if err := h.knownUsers.ObserveGroupUser(ctx, groups.KnownUser{
-			ChatID:      chatID,
-			UserID:      actorID,
-			DisplayName: observedName(*msg.From),
-			Username:    msg.From.Username,
-			LastSeenAt:  time.Now().UTC(),
-		}); err != nil {
-			h.logger.WarnContext(ctx, "failed to observe user in /config", "chat_id", chatID, "error", err)
-		}
-	}
-
 	svc := h.getGroupsService()
 	if svc == nil {
 		h.reply(ctx, chatID, "❌ Configuração não disponível no momento.", nil)
 		return
+	}
+
+	if svc.Repository != nil {
+		if _, err := svc.Repository.GetOrCreateGroupConfig(ctx, chatID); err != nil {
+			h.logger.WarnContext(ctx, "failed to ensure group config in /config", "chat_id", chatID, "error", err)
+		} else if h.knownUsers != nil {
+			if err := h.knownUsers.ObserveGroupUser(ctx, groups.KnownUser{
+				ChatID:      chatID,
+				UserID:      actorID,
+				DisplayName: observedName(*msg.From),
+				Username:    msg.From.Username,
+				LastSeenAt:  time.Now().UTC(),
+			}); err != nil {
+				h.logger.WarnContext(ctx, "failed to observe user in /config", "chat_id", chatID, "error", err)
+			}
+		}
 	}
 
 	cfg, allowed, err := svc.CanConfigureUser(ctx, chatID, actorID)
