@@ -6,6 +6,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/ranking"
@@ -34,6 +35,7 @@ func TestListGroupRankingAccumulationIsolationAndHistory(t *testing.T) {
 	}
 	b := a.Clone()
 	b.GameID = "B"
+	b.FinishedAt = a.FinishedAt.Add(time.Second)
 	b.Players[0].UserID, b.Players[1].UserID = 2, 1
 	b.Players[0].DisplayName, b.Players[1].DisplayName = "Mezi", "Freddy"
 	if _, err := s.RecordCompletedGame(ctx, b); err != nil {
@@ -57,11 +59,11 @@ func TestListGroupRankingAccumulationIsolationAndHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []ranking.Entry{
-		{UserID: 1, DisplayName: "Freddy", Score: 1500, CompletedGames: 2, Wins: 1},
 		{UserID: 2, DisplayName: "Mezi", Score: 1500, CompletedGames: 2, Wins: 1},
+		{UserID: 1, DisplayName: "Freddy", Score: 1500, CompletedGames: 2, Wins: 1},
 		{UserID: 99, DisplayName: "Ana histórica 🦊", Score: 1000, CompletedGames: 1, Wins: 1},
-		{UserID: 3, DisplayName: "João <&>", Score: 0, CompletedGames: 2, Wins: 0},
 		{UserID: 100, DisplayName: "2", Score: 0, CompletedGames: 1, Wins: 0},
+		{UserID: 3, DisplayName: "João <&>", Score: 0, CompletedGames: 2, Wins: 0},
 	}
 	if got.System != groups.Updated || got.Total != 5 || !reflect.DeepEqual(got.Entries, want) {
 		t.Fatalf("ranking=%+v; want %+v", got, want)

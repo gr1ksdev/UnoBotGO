@@ -1,4 +1,17 @@
-# Ranking acumulado visível — 2026-09-29 (dev; homologação pendente)
+# Desempate atualizado — 2026-09-29 (dev; homologação pendente)
+
+- Autorização posterior do usuário: “faça o commit e o push pra dev”. Libera commit desta correção e push exclusivo da dev, incluindo 64bb97d já local. Não autoriza main, deploy ou publicação de container; não implica confirmação de homologação.
+
+- Regra operacional: NÃO executar commit, push, amend ou rebase sem autorização explícita em mensagem futura. HEAD deve permanecer 64bb97d durante esta homologação.
+- A decisão anterior de empate competitivo foi substituída: posições sempre únicas, score_units DESC → última colocação elegível ASC → finished_at dessa partida DESC → user_id ASC.
+- Última participação individual vem de completed_games JOIN completed_game_players, filtrando scored e elegibilidade; DISTINCT ON por user_id, finished_at DESC/game_id DESC. JOIN com stats antes do LIMIT, sem N+1, migration ou duplicação de campos.
+- Renderer compartilhado usa índice+1. Abandono, pending e N<2 não substituem a última referência; idempotência/transação mantidas. Score continua exclusivamente em player_group_stats.
+- PostgreSQL real validou 3000/3000/0 e mudança de ordem após jogos individuais; normal/debugcards/vet/build passaram (debugcards teve intermitência preexistente, registrada no plano). Race bloqueado por VMA39/48.
+- Nome “.” preservado; caminho usa nome observado/persistido diretamente, sem evidência de corrupção. Valor real do usuário em homologação não consultado.
+
+---
+
+# Histórico: ranking acumulado visível — 2026-09-29 (regra de empate substituída acima)
 
 - Após commit pontuado: resultado da partida com ganhos e ranking histórico em mensagens separadas. /ranking usa o mesmo RenderGroupRanking, disponível a qualquer membro do grupo.
 - Application: ranking.Service → ranking.ReadRepository → postgres.Store.ListGroupRanking → player_group_stats. Leitura limitada (512), total exato/config no mesmo snapshot; ordenação score_units DESC,user_id. Sem nova fonte de verdade ou alteração da transação homologada.

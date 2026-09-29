@@ -1,4 +1,23 @@
-# Decisão: leitura acumulada e encerramento pós-commit
+# Decisão: posições únicas e desempate pela última participação elegível
+
+## Data
+2026-09-29
+
+## Contexto
+Na homologação de 64bb97d, usuário substituiu expressamente a regra de empate competitivo. A repetição de medalhas era comportamento previamente especificado, não erro de acúmulo.
+
+## Decisão tomada
+Ordenação no SQL: score DESC, última colocação elegível ASC, finished_at dessa participação DESC, UserID ASC. Consulta única com DISTINCT ON e JOIN; renderer sequencial. Não duplicar informações em stats ou criar migration. Sem referência histórica, NULLS LAST. Em timestamps iguais entre jogos do mesmo jogador, GameID DESC estabiliza qual registro é considerado último.
+
+## Motivo
+Dados existentes são suficientes; resultado individual e timestamps já persistidos na transação homologada. Score permanece autoritativo em stats; partidas sem elegibilidade/commit não entram no desempate.
+
+## Impacto
+Substitui a decisão anterior de 1/1/3. Consulta lê histórico elegível para selecionar últimas participações e ordena antes do LIMIT; sem N+1. Nenhum commit/push autorizado nesta homologação: mudanças devem permanecer no working tree da dev. Nome “.” não foi alterado.
+
+---
+
+# Decisão histórica: leitura acumulada e encerramento pós-commit (empate substituído acima)
 
 ## Data
 2026-09-29

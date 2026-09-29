@@ -1,4 +1,19 @@
-# Ranking acumulado visível — 2026-09-29 (somente dev)
+# Correção do desempate — 2026-09-29
+
+- Autorização posterior explícita: “faça o commit e o push pra dev”. Exceção à suspensão registrada abaixo, restrita a esta entrega na dev. Push inclui o commit local 64bb97d e a correção; main/deploy/publicação de container continuam fora do escopo.
+
+- Regra operacional obrigatória do usuário: não executar git commit/push/amend/rebase; alterações somente no working tree da dev até autorização explícita FUTURA. Preservar HEAD 64bb97d e main 6eea6c1.
+- Decisão anterior 1/1/3 obsoleta. Agora score DESC, última colocação elegível ASC, conclusão da última partida elegível DESC, UserID ASC. Cada jogador usa sua própria última partida; não precisam ter jogado juntos.
+- Sem schema novo: CTE DISTINCT ON seleciona completed_game_players.position + completed_games.finished_at por jogador, apenas scored e participação com placement/status/went_out elegíveis. GameID DESC estabiliza escolha se há partidas distintas do mesmo usuário no mesmo timestamp. Join com stats antes do limite; NULLS LAST se referência ausente.
+- Renderer compartilhado apenas enumera posições 1..N. Pontos continuam em stats, nenhum recálculo/alteração de escrita/fórmula/elegibilidade. UTF-16/layout/comando público preservados.
+- Integração real PostgreSQL18.6 local passou: score primário, placements 1/2/3/5, data, UserID, partidas pessoais, histórico ausente, 3000/3000/0, inversão após novas vitórias individuais, duplicata, abandono, pending/N<2 e commit diferido rejeitado.
+- Gates normal, debugcards (segunda execução), vet/build padrão e tagged, diff check aprovados. Primeira debugcards falhou em TestSwapInlineTargetDepartureInvalidatesColor, optional_swap_test.go:224, “not enough drawable cards”; reproduzido 4/20 na cópia da base 4f25eeb. Arquivos desse teste/fixture idênticos à base 64bb97d e intocados. Não ocultar intermitência. Race CGO=1 falhou por ThreadSanitizer VMA 39, suportado 48.
+- Nome “.”: observedName concatena FirstName/LastName, stats preserva nome observado e renderer só escapa HTML. Teste confirma preservação do ponto. Não foi consultado o banco de homologação para confirmar aquele UserID; não alterar nomes nesta tarefa.
+- Documentação pública e plano atualizados; sem publicação/deploy/migration de produção. Aguardar homologação do usuário.
+
+---
+
+# Histórico: ranking acumulado visível — 2026-09-29 (empates substituídos acima)
 
 - Pedido autorizou implementação direta após auditoria, sem push/main/container/deploy/produção. Base dev 4f25eeb; main preservada em 6eea6c1399d287b58116d5be16a1807238653397.
 - Novo `ranking.ReadRepository`, `ranking.GroupRanking` e `ranking.Service.ListGroupRanking`; Store lê somente player_group_stats do ChatID, ordenando score_units DESC/user_id. Config, contagem e prefixo de até 512 em um snapshot SQL. Incompatibilidade de sistema em qualquer linha recusa leitura. Escrita, fórmulas, elegibilidade e migrations inalteradas.

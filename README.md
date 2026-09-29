@@ -73,7 +73,9 @@ partida, e **🏆 Ranking do grupo**, com os totais históricos atualizados. `/r
 mostra esse mesmo ranking, incluindo jogadores que não participaram da última partida.
 Legacy usa `1 pt`, `2 pts`, `0 pts`; Updated usa centésimos, como `8,57 pts`.
 As medalhas são somente `🥇`, `🥈`, `🥉`; depois vêm `4.`, `5.` etc.
-No ranking acumulado, empates compartilham posição (`1, 1, 3`). Abandono definitivo
+No ranking acumulado, posições são únicas: scores iguais são ordenados pela melhor
+colocação na última partida elegível de cada jogador, depois pela conclusão mais
+recente e, por estabilidade técnica, pelo UserID crescente. Abandono definitivo
 aparece como `Nome · fora do ranking` no resultado, sem posição nem pontos elegíveis.
 Rankings extensos exibem as linhas que cabem e a quantidade de jogadores restantes.
 Sem partidas pontuadas, o bot informa isso; no privado, orienta consultar em um grupo.

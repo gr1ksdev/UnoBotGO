@@ -18,7 +18,7 @@ Carlos · fora do ranking
 
 🥇 Ana · 20,00 pts
 🥈 Freddy · 15,00 pts
-🥈 Mezi · 15,00 pts
+🥉 Mezi · 15,00 pts
 4. João · 0,00 pts
 ```
 
@@ -26,8 +26,10 @@ Os números são ilustrativos. A primeira mensagem usa os pontos calculados pelo
 sistema/snapshot da partida; a segunda lê os totais de `player_group_stats`,
 incluindo participantes históricos ausentes, como Ana. Legacy apresenta inteiros
 (`+1 pt`, `+0 pts`), sem casas artificiais; Updated usa centésimos com vírgula.
-Empates históricos compartilham posição e pulam as seguintes; a colocação da
-partida continua sendo a conquistada na engine. Somente o top 3 usa medalhas;
+Posições históricas são únicas e sequenciais. Scores iguais são desempatados pela
+melhor colocação na última partida elegível de cada jogador, depois pela conclusão
+mais recente e pelo UserID crescente. Não é necessário terem jogado juntos.
+A colocação da partida continua sendo a conquistada na engine. Somente o top 3 usa medalhas;
 as demais posições aparecem como `4.`, `5.` etc.
 
 `/ranking` usa o mesmo renderer, sem exigir admin, sem buscar membros no Telegram
@@ -45,7 +47,7 @@ Homologar manualmente antes de publicar:
 1. Consultar `/ranking` em grupo vazio, em privado e como membro sem admin.
 2. Concluir duas partidas Updated e conferir resultado separado dos totais acumulados.
 3. Conferir histórico de quem não participou da segunda partida e isolamento de outro grupo.
-4. Repetir em grupo Legacy; conferir inteiros, pluralização e empate `1,1,3`.
+4. Repetir em grupo Legacy; conferir inteiros, pluralização e posições únicas nos empates, pela última colocação elegível e data de conclusão.
 5. Conferir abandono definitivo como “fora do ranking” e reentrada elegível normal.
 6. Conferir nomes Unicode/HTML, posições a partir de `4.` e aviso de jogadores omitidos.
 

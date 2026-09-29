@@ -107,16 +107,32 @@ resultados permanecem inalteradas. Não há recomputação do histórico, cache 
 migration nova ou conversão entre sistemas.
 
 Uma única instrução SQL retorna configuração, total e até 512 entradas, ordenadas
-por `score_units DESC, user_id`. O índice existente suporta essa ordenação; o total
-exato exige examinar as stats do grupo, mas apenas o prefixo limitado é transferido.
+por `score_units DESC, last_placement ASC, last_completed_game_at DESC, user_id ASC`.
+Uma CTE com `DISTINCT ON (user_id)` faz JOIN de `completed_games` e
+`completed_game_players`, filtrando ChatID, status `scored` e participação elegível
+(posição válida e status/went_out coerentes com `ranking.Player.Eligible`). Ordena
+por `finished_at DESC, game_id DESC` para selecionar a última partida de cada jogador;
+GameID apenas estabiliza a seleção se duas partidas dele têm o mesmo timestamp.
+`last_placement` vem de `position`; `last_completed_game_at` vem de `finished_at`.
+Abandono, N<2 e resultados sem política pontuada não substituem essa referência.
+
+O JOIN do histórico selecionado com stats ocorre antes do LIMIT. Nenhum campo foi
+duplicado em stats e nenhuma migration foi necessária. O índice de stats por ChatID
+e as chaves de GameID já existem; a seleção da última participação examina o histórico
+pontuado do grupo e a nova ordenação exige sort. Não há N+1 nem soma de scores a partir
+do histórico: score continua exclusivamente em stats. Somente até 512 registros são
+transferidos à aplicação. Histórico muito volumoso pode justificar futuramente um
+índice adicional após medição; não foi criado schema por conveniência nesta correção.
+Referência ausente usa NULLS LAST, sem inventar colocação ou timestamp.
 O snapshot único evita divergência entre total, sistema e linhas. Incompatibilidade
 de sistema em qualquer registro (mesmo fora do prefixo) recusa a leitura.
 Stats de jogadores com score zero continuam válidas; grupo ausente/vazio não é erro.
 
 `RenderGroupRanking` é usado tanto no pós-commit quanto no comando público `/ranking`.
 Nomes vêm de `display_name`, escapados em HTML, sem chamadas `GetChatMember`.
-UserID só estabiliza a ordem dos empatados: a posição competitiva depende unicamente
-do score exato (`1,1,3`; `1,2,2,4`). O resultado individual mantém a colocação da engine,
+Posições são únicas (`1,2,3,4...`): o renderer usa índice + 1 na ordem recebida.
+UserID só resolve igualdade absoluta de score, última colocação e timestamp,
+sem representar mérito adicional. O resultado individual mantém a colocação da engine,
 mesmo quando os ganhos Legacy são iguais. Medalhas somente para posições 1–3;
 posições seguintes usam `4.`, `5.` etc.
 

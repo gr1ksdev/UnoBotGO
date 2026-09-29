@@ -9,7 +9,8 @@ import (
 )
 
 // GroupRanking is a bounded prefix of the group's cumulative standings.
-// Entries are ordered by exact Score descending, then UserID for stability only.
+// Entries are ordered by Score DESC, latest eligible placement ASC,
+// latest eligible completion DESC, then UserID ASC for technical stability.
 type GroupRanking struct {
 	System  groups.RankingSystem
 	Entries []Entry

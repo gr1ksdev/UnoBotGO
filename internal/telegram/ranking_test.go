@@ -22,15 +22,15 @@ func (f rankingReadFunc) ListGroupRanking(ctx context.Context, id int64) (rankin
 	return f(ctx, id)
 }
 
-func TestRenderGroupRankingCompetitionRanks(t *testing.T) {
+func TestRenderGroupRankingUniqueSequentialRanks(t *testing.T) {
 	for _, tc := range []struct {
 		scores []ranking.Units
 		labels []string
 	}{
-		{[]ranking.Units{1000, 1000, 500}, []string{"🥇", "🥇", "🥉"}},
-		{[]ranking.Units{1000, 800, 800, 500, 0}, []string{"🥇", "🥈", "🥈", "4.", "5."}},
+		{[]ranking.Units{1000, 1000, 500}, []string{"🥇", "🥈", "🥉"}},
+		{[]ranking.Units{1000, 800, 800, 500, 0}, []string{"🥇", "🥈", "🥉", "4.", "5."}},
 		{[]ranking.Units{1000, 857, 500, 100, 0}, []string{"🥇", "🥈", "🥉", "4.", "5."}},
-		{[]ranking.Units{0, 0, 0}, []string{"🥇", "🥇", "🥇"}},
+		{[]ranking.Units{0, 0, 0, 0, 0, 0}, []string{"🥇", "🥈", "🥉", "4.", "5.", "6."}},
 	} {
 		for _, system := range []groups.RankingSystem{groups.Legacy, groups.Updated} {
 			group := ranking.GroupRanking{System: system, Total: int64(len(tc.scores))}
@@ -69,6 +69,14 @@ func TestRenderGroupRankingFormatsAndUnicode(t *testing.T) {
 		if strings.Contains(text, "+") {
 			t.Fatal("accumulated score has gain prefix", text)
 		}
+	}
+}
+
+func TestRankingPreservesObservedDotName(t *testing.T) {
+	name := observedName(telego.User{ID: 123, FirstName: "."})
+	group := ranking.GroupRanking{System: groups.Updated, Total: 1, Entries: []ranking.Entry{{UserID: 123, DisplayName: name, Score: 3000}}}
+	if name != "." || RenderGroupRanking(group) != "🏆 Ranking do grupo\n\n🥇 . · 30,00 pts" {
+		t.Fatal("observed name was changed")
 	}
 }
 

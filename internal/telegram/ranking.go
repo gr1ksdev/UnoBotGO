@@ -29,20 +29,16 @@ func messageUnits(text string) int {
 }
 
 // RenderGroupRanking is shared by /ranking and post-commit notifications.
-// Equal scores share competition rank (1,1,3), independent of stable SQL order.
+// The repository resolves ties; visual positions are always unique and sequential.
 func RenderGroupRanking(group ranking.GroupRanking) string {
 	const title = "🏆 Ranking do grupo\n\n"
 	if group.Total == 0 {
 		return title + "Ainda não há partidas pontuadas neste grupo."
 	}
 	text := title
-	position := 0
 	shown := 0
 	for i, entry := range group.Entries {
-		if i == 0 || entry.Score != group.Entries[i-1].Score {
-			position = i + 1
-		}
-		line := fmt.Sprintf("%s %s · %s", placementLabel(position), rankingName(entry.DisplayName, entry.UserID), ranking.FormatScore(group.System, entry.Score))
+		line := fmt.Sprintf("%s %s · %s", placementLabel(i+1), rankingName(entry.DisplayName, entry.UserID), ranking.FormatScore(group.System, entry.Score))
 		candidate := text
 		if shown > 0 {
 			candidate += "\n"
