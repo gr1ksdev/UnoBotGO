@@ -1,3 +1,17 @@
+# Ranking acumulado visível — 2026-09-29 (somente dev)
+
+- Pedido autorizou implementação direta após auditoria, sem push/main/container/deploy/produção. Base dev 4f25eeb; main preservada em 6eea6c1399d287b58116d5be16a1807238653397.
+- Novo `ranking.ReadRepository`, `ranking.GroupRanking` e `ranking.Service.ListGroupRanking`; Store lê somente player_group_stats do ChatID, ordenando score_units DESC/user_id. Config, contagem e prefixo de até 512 em um snapshot SQL. Incompatibilidade de sistema em qualquer linha recusa leitura. Escrita, fórmulas, elegibilidade e migrations inalteradas.
+- `ranking.FormatScore` compartilha inteiros Legacy e centésimos Updated; `RenderGroupRanking` atende /ranking e pós-commit. Empates exatos 1/1/3, UserID somente estabilidade. Limite 4000 unidades UTF-16 após entidades HTML, linhas completas e total omitido; sem truncar nomes.
+- Fechamento pontuado envia resultado com ganhos e ranking histórico em duas mensagens, substituindo resumo redundante; paths comando/inline/timeout mantêm tokens invalidados. Falhas/AlreadyPersisted/N<2 preservam comportamento de finalização sem falso anúncio. Retry existente preservado; Telegram continua sem outbox.
+- /ranking público no grupo, ajuda/menu; privado orienta grupo, sem dados informa vazio, falha de leitura informa indisponibilidade. Nomes persistidos, sem GetChatMember. Abandonado sem posição/score na mensagem: “fora do ranking”; histórico anterior continua intacto.
+- Testes reais PostgreSQL 18.6 local isolado passaram: A/B 1500/1500/0, histórico ausente, grupo isolado, idempotência, abandono, limite de consulta, incompatibilidade além do prefixo e trigger diferido que força falha no COMMIT.
+- Gates finais: go test -count=1 ./..., debugcards, vet/build normal e debugcards e diff check passaram. Race com CGO=1 não executável: ThreadSanitizer VMA 39, requer 48; não declarar aprovado.
+- Primeiras execuções normal/debugcards falharam em TestKeepHandInlineFlowStaleColorAndMultigroup, optional_swap_test.go:117 (“not enough drawable cards”). Reproduzido na base 4f25eeb extraída em /tmp, com -count=20 (4 execuções falharam). Teste preexistente não alterado; últimas execuções completas passaram. Não confundir com falha V1 ou regressão de ranking.
+- Homologação Telegram pelo usuário ainda pendente; roteiro em docs/v2-telegram.md. Artefatos .agent ficam somente na dev.
+
+---
+
 # Correção de observação de usuário no /config e callbacks — 2026-09-28 (somente dev)
 
 - Pedido do usuário aprovado no plano: `corrigir-observacao-config_2026-09-28_22-26.md`.

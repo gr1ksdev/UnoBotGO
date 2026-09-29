@@ -77,25 +77,59 @@ transação integralmente. Não há reset ou conversão silenciosa.
 100 unidades inteiras = 1 ponto. Legacy concede 100 unidades para posições antes
 do último e 0 ao último. Updated calcula `1000*(N-position)/(N-1)`, arredondado a
 unidades inteiras pelo método half-up. Exibição preparada com vírgula e duas casas
-decimais para Updated (`fmt.Sprintf("%d,%02d", p.Score/100, p.Score%100)`) e inteiro
-para Legacy.
+decimais para Updated e inteiro para Legacy, com pluralização `1 pt`/`0 pts`/`2 pts`.
+O formatter compartilhado `ranking.FormatScore` usa somente inteiros armazenados.
 
 A política de elegibilidade definitiva foi aprovada e integrada (`completed-placements-v1`):
 - Participam do cálculo (`N`) e recebem pontuação apenas os jogadores que concluíram
   efetivamente a partida e possuem colocação válida no resultado.
 - Abandono definitivo: jogador que sai e não retorna recebe 0 pontos, fica fora de `N`,
   sem colocação artificial, permanecendo no registro persistido para fins de auditoria
-  e exibido no Telegram como `(fora do ranking)`.
+  e exibido no resultado como `Nome · fora do ranking`, sem medalha ou score competitivo.
 - Late join e saída com reentrada válida: se o jogador concluiu normalmente a partida,
   participa de `N` e pontua pela sua colocação final sem penalidade.
 - Partidas com `N < 2` elegíveis (ex: encerramento por departure com 1 jogador restante)
   são persistidas para auditoria com status `insufficient_eligible_players`, com scores
   zerados e sem alteração de `player_group_stats`. Partidas canceladas não são persistidas.
 - A finalização síncrona aguarda o COMMIT do PostgreSQL e, quando confirmado com concessão
-  de pontos (`commit.Scored == true`), dispara uma mensagem adicional de pontuação logo
-  após a mensagem final compacta do jogo. Em caso de retry já persistido (`AlreadyPersisted`),
-  a mensagem de pontos não é reenviada. Falhas temporárias de DB retêm o resultado na
+  de pontos (`commit.Scored == true`), envia o resultado com pontos daquela partida e,
+  em outra mensagem, consulta e apresenta o ranking histórico atualizado. O resultado
+  substitui o resumo redundante no fechamento pontuado. Em retry já persistido
+  (`AlreadyPersisted`), as duas notificações não são reenviadas. Falhas de DB retêm o resultado na
   memória do serviço para retry síncrono via `RetryPendingResults`.
+
+### Leitura acumulada e /ranking (dev, 2026-09-29)
+
+`Telegram → ranking.Service.ListGroupRanking → ranking.ReadRepository →
+postgres.Store.ListGroupRanking` consulta exclusivamente `player_group_stats` pelo
+ChatID solicitado. A interface de escrita `ranking.Repository` e a transação de
+resultados permanecem inalteradas. Não há recomputação do histórico, cache de ranking,
+migration nova ou conversão entre sistemas.
+
+Uma única instrução SQL retorna configuração, total e até 512 entradas, ordenadas
+por `score_units DESC, user_id`. O índice existente suporta essa ordenação; o total
+exato exige examinar as stats do grupo, mas apenas o prefixo limitado é transferido.
+O snapshot único evita divergência entre total, sistema e linhas. Incompatibilidade
+de sistema em qualquer registro (mesmo fora do prefixo) recusa a leitura.
+Stats de jogadores com score zero continuam válidas; grupo ausente/vazio não é erro.
+
+`RenderGroupRanking` é usado tanto no pós-commit quanto no comando público `/ranking`.
+Nomes vêm de `display_name`, escapados em HTML, sem chamadas `GetChatMember`.
+UserID só estabiliza a ordem dos empatados: a posição competitiva depende unicamente
+do score exato (`1,1,3`; `1,2,2,4`). O resultado individual mantém a colocação da engine,
+mesmo quando os ganhos Legacy são iguais. Medalhas somente para posições 1–3;
+posições seguintes usam `4.`, `5.` etc.
+
+O renderer admite até 4000 unidades UTF-16 após interpretar entidades HTML (margem
+abaixo de 4096), reservando espaço para `… e mais N jogadores.`. Preserva linhas e
+nomes completos; até um nome excepcionalmente grande é omitido com o restante,
+sem quebrar Unicode ou entidades. As 512 entradas excedem a capacidade de linhas
+mínimas dessa mensagem. Não há callbacks de paginação.
+
+Falha de consulta pós-commit não desfaz pontos: uma resposta curta orienta usar
+`/ranking` novamente. Falha no envio Telegram continua sem outbox/reenvio automático;
+não se repete a gravação. Persistência, consulta e envio têm prazos limitados.
+Sem concessão (N<2), mantém-se apenas o encerramento sem anúncio de ganhos.
 
 Continuam NEEDS PRODUCT DECISION:
 

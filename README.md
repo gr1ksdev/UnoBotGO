@@ -57,6 +57,7 @@ grupos exibem os comandos de partida.
 | `/cancelar` (ou `/kill`) | Cancela a partida (autorizado apenas para o responsável). |
 | `/sair` | Sai da partida em andamento (transfere responsabilidade se necessário). |
 | `/estado` | Exibe o estado público da partida ativa ou lobby. |
+| `/ranking` | Consulta o ranking histórico acumulado deste grupo; disponível a qualquer membro. |
 | `/reset` | Recupera o grupo, cancela trabalhos pendentes e apaga a partida e o histórico daquele grupo (responsável ou administrador). |
 | `/config` | Configura o modo padrão (Clássico/Caseiro) e sistema de ranking (Legado/Atualizado) do grupo (admin ou instalador). |
 
@@ -65,6 +66,19 @@ mesmo quando a fila normal do grupo está cheia ou uma operação anterior ficou
 presa. Depois da autorização, o bot invalida o trabalho antigo daquele grupo,
 remove seu estado e seus tokens e abre uma fila limpa para novos comandos. O
 comando não afeta partidas de outros grupos.
+
+Ao terminar uma partida pontuada, após o commit no PostgreSQL, o bot envia duas
+mensagens separadas: **🏁 Partida encerrada**, com colocação e pontos ganhos naquela
+partida, e **🏆 Ranking do grupo**, com os totais históricos atualizados. `/ranking`
+mostra esse mesmo ranking, incluindo jogadores que não participaram da última partida.
+Legacy usa `1 pt`, `2 pts`, `0 pts`; Updated usa centésimos, como `8,57 pts`.
+As medalhas são somente `🥇`, `🥈`, `🥉`; depois vêm `4.`, `5.` etc.
+No ranking acumulado, empates compartilham posição (`1, 1, 3`). Abandono definitivo
+aparece como `Nome · fora do ranking` no resultado, sem posição nem pontos elegíveis.
+Rankings extensos exibem as linhas que cabem e a quantidade de jogadores restantes.
+Sem partidas pontuadas, o bot informa isso; no privado, orienta consultar em um grupo.
+
+Esta UX está na `dev`, aguardando homologação manual antes de publicação.
 
 ---
 

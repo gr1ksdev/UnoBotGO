@@ -1,3 +1,14 @@
+# Ranking acumulado visível — 2026-09-29 (dev; homologação pendente)
+
+- Após commit pontuado: resultado da partida com ganhos e ranking histórico em mensagens separadas. /ranking usa o mesmo RenderGroupRanking, disponível a qualquer membro do grupo.
+- Application: ranking.Service → ranking.ReadRepository → postgres.Store.ListGroupRanking → player_group_stats. Leitura limitada (512), total exato/config no mesmo snapshot; ordenação score_units DESC,user_id. Sem nova fonte de verdade ou alteração da transação homologada.
+- Ranking histórico inclui participantes ausentes da última partida; empate competitivo por score exato (1/1/3), formato Legacy inteiro/Updated centésimos, medalhas top 3 e números “4.” em diante. Abandono definitivo explícito sem posição/pontos na mensagem.
+- Mensagem até 4000 unidades UTF-16, preservando nomes/linhas completos e informando omitidos. Sem chamadas individuais Telegram ou callbacks de paginação.
+- Testes PostgreSQL reais passaram em instância local isolada. Suites normal/debugcards e vet/build passaram; race bloqueado por VMA 39/48. Intermitência preexistente do teste de Trocar Mãos reproduzida na base e registrada no plano.
+- Sem push, main, publicação de container, deploy ou migrations de produção; aceite Telegram depende do usuário.
+
+---
+
 # Encerramento formal da Milestone M7 (Persistência, Configuração e Ranking) e Adiamento de Import — 2026-09-27 (somente dev)
 
 - A Milestone M7 foi encerrada formalmente no escopo atual da branch `dev`, devidamente testada e homologada manualmente no Telegram real.

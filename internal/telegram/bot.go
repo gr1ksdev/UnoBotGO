@@ -77,7 +77,6 @@ func (b *Bot) lookupMembership(ctx context.Context, chatID, userID int64) (group
 	return lookupMembershipAPI(ctx, b.api, chatID, userID)
 }
 
-
 func (b *Bot) SetTurnTimeout(timeout time.Duration) { b.turnTimeout = timeout }
 func (b *Bot) SetTransport(cfg TransportConfig)     { b.transport = cfg.normalized() }
 func New(api BotAPI, service *game.Service, tokens *TokenStore, renderer *Renderer, tokenTTL time.Duration, logger *slog.Logger) *Bot {
@@ -145,6 +144,7 @@ func (b *Bot) registerCommands(ctx context.Context) error {
 				{Command: "destrancar", Description: "Permite novas entradas"},
 				{Command: "iniciar", Description: "Iniciar a partida"},
 				{Command: "estado", Description: "Ver o estado atual da partida"},
+				{Command: "ranking", Description: "Ver o ranking acumulado do grupo"},
 				{Command: "sair", Description: "Sair da partida em andamento"},
 				{Command: "cancelar", Description: "Cancelar a partida"},
 				{Command: "reset", Description: "Recuperar e limpar o grupo"},
@@ -312,11 +312,13 @@ func (b *Bot) enqueueAutoSkip(candidate game.ExpiredTurn) bool {
 			return
 		}
 		notify := b.finalizeOutcome(ctx, outcome)
+		if notify != nil {
+			b.tokens.InvalidateGame(outcome.View.GameID)
+			notify()
+			return
+		}
 		text := "⏱️ O tempo acabou; o turno foi pulado.\n\n" + b.renderer.RenderPublicState(outcome.View)
 		b.cmdHandler.reply(ctx, int64(candidate.ChatID), text, makeGameButtons(outcome.View))
-		if notify != nil {
-			notify()
-		}
 	})
 }
 func (b *Bot) submitUpdate(ctx context.Context, update telego.Update) bool {

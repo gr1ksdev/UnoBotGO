@@ -486,6 +486,10 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 		if outcome.View.Closed {
 			h.tokens.InvalidateGame(actionToken.GameID)
 		}
+		if notify != nil {
+			notify()
+			return
+		}
 
 		for _, ev := range outcome.Events {
 			if ev.Type == uno.UnoAnnounced {
@@ -519,9 +523,6 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 			params.ReplyMarkup = markup
 		}
 		_, _ = h.bot.SendMessage(taskCtx, params)
-		if notify != nil {
-			notify()
-		}
 	})
 	return accepted
 }

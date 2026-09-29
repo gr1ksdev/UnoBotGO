@@ -10,6 +10,7 @@ import (
 
 	"github.com/malbs/UnoGoBot/internal/config"
 	"github.com/malbs/UnoGoBot/internal/game"
+	"github.com/malbs/UnoGoBot/internal/ranking"
 	"github.com/malbs/UnoGoBot/internal/storage/postgres"
 	"github.com/malbs/UnoGoBot/internal/telegram"
 )
@@ -74,6 +75,7 @@ func main() {
 	bot := telegram.New(telegoBot, svc, tokens, renderer, cfg.InlineTokenTTL, logger)
 	bot.SetGroupConfigs(store)
 	bot.SetResultRepository(store)
+	bot.SetRankingService(&ranking.Service{Repository: store})
 	bot.SetKnownUsers(store)
 	bot.SetTurnTimeout(cfg.TurnTimeout)
 	bot.SetTransport(telegram.TransportConfig{Mode: telegram.TransportMode(cfg.TelegramMode), WebhookURL: cfg.WebhookURL, WebhookSecret: cfg.WebhookSecret, ListenAddr: cfg.WebhookListenAddr, DropPendingUpdates: cfg.WebhookDropPending})

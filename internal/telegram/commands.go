@@ -10,21 +10,23 @@ import (
 
 	"github.com/malbs/UnoGoBot/internal/game"
 	"github.com/malbs/UnoGoBot/internal/groups"
+	"github.com/malbs/UnoGoBot/internal/ranking"
 	"github.com/malbs/UnoGoBot/internal/uno"
 	"github.com/mymmrac/telego"
 )
 
 type CommandHandler struct {
-	knownUsers    groups.UserRepository
-	finalize      func(context.Context, game.Outcome) func()
-	groupConfigs  groups.Repository
-	groupsService *groups.Service
-	bot           BotAPI
-	service       *game.Service
-	renderer      *Renderer
-	tokens        *TokenStore
-	botUsername   string
-	logger        *slog.Logger
+	rankingService *ranking.Service
+	knownUsers     groups.UserRepository
+	finalize       func(context.Context, game.Outcome) func()
+	groupConfigs   groups.Repository
+	groupsService  *groups.Service
+	bot            BotAPI
+	service        *game.Service
+	renderer       *Renderer
+	tokens         *TokenStore
+	botUsername    string
+	logger         *slog.Logger
 }
 
 func (h *CommandHandler) SetGroupsService(s *groups.Service) {
@@ -66,7 +68,6 @@ func NewCommandHandler(
 		logger:      logger,
 	}
 }
-
 
 func stringPtr(s string) *string {
 	return &s
@@ -181,7 +182,6 @@ func makeGroupWelcomeButtons(chatID int64) *telego.InlineKeyboardMarkup {
 	}
 }
 
-
 func (h *CommandHandler) reply(ctx context.Context, chatID int64, text string, markup *telego.InlineKeyboardMarkup) {
 	params := &telego.SendMessageParams{
 		ChatID:    telego.ChatID{ID: chatID},
@@ -238,6 +238,8 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 			h.reply(ctx, msg.Chat.ID, h.renderer.RenderWelcome(), makePrivateStartButtons(h.botUsername))
 		case "ajuda", "help":
 			h.reply(ctx, msg.Chat.ID, h.renderer.RenderHelp(h.botUsername), nil)
+		case "ranking":
+			h.reply(ctx, msg.Chat.ID, "🏆 Consulte o ranking em um grupo.", nil)
 		default:
 			h.reply(ctx, msg.Chat.ID, "⚠️ Este comando só pode ser utilizado em grupos. Adicione o bot a um grupo para jogar!\n\nUse /help para mais instruções.", nil)
 		}
@@ -253,6 +255,8 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		return
 	}
 	switch cmdName {
+	case "ranking":
+		h.handleRanking(ctx, msg.Chat.ID)
 	case "novo":
 		mode := ""
 		if len(fields) > 1 {
@@ -612,6 +616,11 @@ func (h *CommandHandler) handleSair(ctx context.Context, actorID uno.PlayerID, c
 		notify = h.finalize(ctx, outcome)
 	}
 	h.tokens.InvalidateUserGame(summary.GameID, actorID)
+	if notify != nil {
+		h.tokens.InvalidateGame(summary.GameID)
+		notify()
+		return
+	}
 
 	if outcome.View.Closed {
 		h.tokens.InvalidateGame(summary.GameID)
@@ -626,9 +635,6 @@ func (h *CommandHandler) handleSair(ctx context.Context, actorID uno.PlayerID, c
 			h.renderer.RenderPublicState(outcome.View),
 		)
 		h.reply(ctx, int64(chatID), msg, makeGameButtons(outcome.View))
-	}
-	if notify != nil {
-		notify()
 	}
 }
 

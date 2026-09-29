@@ -1,5 +1,56 @@
 # UnoBotGO V2 — Telegram Adapter (Milestone 3)
 
+## Resultado e ranking acumulado (2026-09-29, dev; homologação pendente)
+
+Depois do commit de uma partida pontuada, são enviadas duas mensagens independentes:
+
+```text
+🏁 Partida encerrada
+
+🥇 Freddy · +10,00 pts
+🥈 Mezi · +5,00 pts
+🥉 João · +0,00 pts
+Carlos · fora do ranking
+```
+
+```text
+🏆 Ranking do grupo
+
+🥇 Ana · 20,00 pts
+🥈 Freddy · 15,00 pts
+🥈 Mezi · 15,00 pts
+4. João · 0,00 pts
+```
+
+Os números são ilustrativos. A primeira mensagem usa os pontos calculados pelo
+sistema/snapshot da partida; a segunda lê os totais de `player_group_stats`,
+incluindo participantes históricos ausentes, como Ana. Legacy apresenta inteiros
+(`+1 pt`, `+0 pts`), sem casas artificiais; Updated usa centésimos com vírgula.
+Empates históricos compartilham posição e pulam as seguintes; a colocação da
+partida continua sendo a conquistada na engine. Somente o top 3 usa medalhas;
+as demais posições aparecem como `4.`, `5.` etc.
+
+`/ranking` usa o mesmo renderer, sem exigir admin, sem buscar membros no Telegram
+e sem misturar grupos. Está na ajuda e no menu de grupos. No privado, orienta
+consultar em um grupo. Sem stats válidas: “Ainda não há partidas pontuadas neste grupo.”
+Mensagens grandes preservam linhas completas até 4000 unidades UTF-16 e informam
+`… e mais N jogadores.`. Nomes são escapados para HTML, preservando Unicode.
+
+Falha no commit mantém o encerramento sem ganhos e o retry existente. Commit
+idempotente não repete notificações. Falha na leitura do ranking após commit
+informa indisponibilidade, sem fingir ranking vazio nem refazer pontuação.
+
+Homologar manualmente antes de publicar:
+
+1. Consultar `/ranking` em grupo vazio, em privado e como membro sem admin.
+2. Concluir duas partidas Updated e conferir resultado separado dos totais acumulados.
+3. Conferir histórico de quem não participou da segunda partida e isolamento de outro grupo.
+4. Repetir em grupo Legacy; conferir inteiros, pluralização e empate `1,1,3`.
+5. Conferir abandono definitivo como “fora do ranking” e reentrada elegível normal.
+6. Conferir nomes Unicode/HTML, posições a partir de `4.` e aviso de jogadores omitidos.
+
+Nenhuma publicação ou deploy faz parte desta entrega.
+
 ## Gameplay UX Polish (2026-09-26, somente dev)
 
 - `/trancar` e `/destrancar`: controle exclusivo do responsável, incluindo owner

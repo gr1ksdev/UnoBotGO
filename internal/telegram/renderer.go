@@ -228,7 +228,7 @@ func placementLabel(position int) string {
 	case 3:
 		return "🥉"
 	default:
-		return fmt.Sprintf("%dº", position)
+		return fmt.Sprintf("%d.", position)
 	}
 }
 
@@ -392,9 +392,6 @@ func (r *Renderer) RenderActionConfirmation(actorID uno.PlayerID, action uno.Act
 			}
 		case uno.PlayerWon:
 			medal := placementLabel(ev.Position)
-			if ev.Position > 3 {
-				medal = "🏅"
-			}
 			sb.WriteString(fmt.Sprintf("\n%s <b>%s terminou em %dº lugar!</b>", medal, r.PlayerLink(ev.PlayerID, outcome.View), ev.Position))
 		}
 	}
@@ -423,6 +420,7 @@ func (r *Renderer) RenderHelp(botUsername string) string {
 	sb.WriteString("<b>/destrancar</b> — Permite novas entradas.\n")
 	sb.WriteString("<b>/iniciar</b> — Inicia a partida quando houver pelo menos dois jogadores.\n")
 	sb.WriteString("<b>/estado</b> — Mostra o lobby ou o estado atual da partida.\n")
+	sb.WriteString("<b>/ranking</b> — Mostra o ranking acumulado deste grupo.\n")
 	sb.WriteString("<b>/sair</b> — Sai da partida em andamento.\n")
 	sb.WriteString("<b>/cancelar</b> — Cancela a partida. O comando /kill é um alias.\n")
 	sb.WriteString("<b>/reset</b> — Recupera o grupo e limpa sua partida e histórico.")

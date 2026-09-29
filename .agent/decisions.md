@@ -1,3 +1,22 @@
+# Decisão: leitura acumulada e encerramento pós-commit
+
+## Data
+2026-09-29
+
+## Contexto
+Persistência cumulativa já homologada; Telegram anunciava apenas ganhos da partida e não oferecia leitura do histórico.
+
+## Decisão tomada
+Interface de leitura separada da escrita, com serviço no pacote ranking e consulta PostgreSQL exclusiva de player_group_stats. Mesmo snapshot para sistema, total e prefixo ordenado/limitado. Renderer compartilhado para comando e mensagem automática; duas mensagens pós-commit substituem resumo redundante. Empates por score exato; ordem secundária por UserID somente para estabilidade. Limite conservador UTF-16 e linhas completas.
+
+## Motivo
+Preservar a transação/semântica homologada, impedir anúncios antes do commit, reutilizar arquitetura existente, evitar queries por jogador e UI de paginação.
+
+## Impacto
+Nenhum schema, fórmula, elegibilidade ou conversão muda. Consultas trazem até 512 registros e contagem exata; examinam stats do grupo para contar e validar compatibilidade. Falha de leitura orienta repetir /ranking, sem regravar pontos. Homologação manual pendente na dev, sem publicação.
+
+---
+
 # Decisão: encerramento formal da Milestone M7 no escopo homologado e adiamento (DEFERRED) do import antigo
 
 ## Data

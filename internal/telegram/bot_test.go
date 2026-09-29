@@ -58,8 +58,8 @@ func TestBot_RunAndShutdown(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	cmds := mockAPI.GetRegisteredCommands()
-	if len(cmds) != 11 {
-		t.Errorf("expected 11 registered commands, got %d", len(cmds))
+	if len(cmds) != 12 {
+		t.Errorf("expected 12 registered commands, got %d", len(cmds))
 	}
 	foundReset := false
 	foundConfig := false
@@ -80,7 +80,7 @@ func TestBot_RunAndShutdown(t *testing.T) {
 	wantByScope := map[string][]string{
 		telego.ScopeTypeDefault:         {"help"},
 		telego.ScopeTypeAllPrivateChats: {"start", "help"},
-		telego.ScopeTypeAllGroupChats:   {"novo", "entrar", "trancar", "destrancar", "iniciar", "estado", "sair", "cancelar", "reset", "config", "help"},
+		telego.ScopeTypeAllGroupChats:   {"novo", "entrar", "trancar", "destrancar", "iniciar", "estado", "ranking", "sair", "cancelar", "reset", "config", "help"},
 	}
 
 	for _, registration := range registrations {
