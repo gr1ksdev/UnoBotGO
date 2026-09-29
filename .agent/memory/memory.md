@@ -1,3 +1,19 @@
+# Correção de intermitência em testes de Trocar Mãos (Swap Hands) — 2026-09-29 (somente dev)
+
+- Pedido do usuário aprovado no plano: `corrigir-intermitencia-swap-hands_2026-09-29_13-26.md`.
+- Causa raiz: o helper de teste `readyToSwap` em `internal/telegram/swap_test.go` realizava compras e passes sucessivos até encontrar a carta `SwapHands`, sem descartar nenhuma carta. Quando o embaralhamento aleatório (`rand.Shuffle`) posicionava a carta nas últimas 6 posições da pilha (posições 88 a 93 de 94 cartas), restavam menos de 7 cartas no `DrawPile`. Testes subsequentes que realizavam `uno.JoinGame` (`TestKeepHandInlineFlowStaleColorAndMultigroup:117` e `TestSwapInlineTargetDepartureInvalidatesColor:224`) falhavam intermitentemente com `uno.ErrDeckEmpty` ("not enough drawable cards"), pois entradas tardias exigem a compra obrigatória de 7 cartas pela regra do UNO.
+- Correção implementada:
+  - No helper `readyToSwap` (`internal/telegram/swap_test.go`), adicionado controle de tentativas (até 5) com `ChatID` isolado a cada tentativa (`ChatID(-901 - int64(attempt)*10)`).
+  - Rastreamento da quantidade de compras (`cardsDrawn`): se `SwapHands` for encontrada com `cardsDrawn <= 80`, a partida é aceita e retornada (garantindo pelo menos 14 cartas no `DrawPile`).
+  - Se a pilha for excessivamente drenada (`cardsDrawn > 80`), a tentativa é descartada e uma nova partida reembaralhada é iniciada, garantindo probabilisticamente mais de 99% de sucesso em até 2 tentativas e eliminando totalmente a escassez de cartas para `JoinGame`.
+- Validações:
+  - Stress tests repetidos 100 vezes: `go test -count=100 -run '^TestKeepHandInlineFlowStaleColorAndMultigroup$' ./internal/telegram` e `go test -count=100 -run '^TestSwapInlineTargetDepartureInvalidatesColor$' ./internal/telegram` passaram com 100% de sucesso (zero falhas).
+  - Suíte completa normal (`go test -count=1 ./...`) e com race detector (`go test -count=1 -race ./...`) 100% aprovadas.
+  - `go vet ./...`, `go build ./...` e `git diff --check` aprovados.
+  - Zero alterações em código de produção, regras de jogo ou branch `main`.
+
+---
+
 # Correção do desempate — 2026-09-29
 
 - Autorização posterior explícita: “faça o commit e o push pra dev”. Exceção à suspensão registrada abaixo, restrita a esta entrega na dev. Push inclui o commit local 64bb97d e a correção; main/deploy/publicação de container continuam fora do escopo.
