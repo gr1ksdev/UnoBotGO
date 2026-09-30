@@ -351,3 +351,176 @@ VALUES(42, 1, 'updated', 1000, 1, 1, 'Player 1', $1),
 		t.Fatalf("re-running backfill altered ranking: before=%+v after=%+v err=%v", rank, rankAfter, err)
 	}
 }
+
+func TestUserMonthlyRankingsIntegration(t *testing.T) {
+	s := testStore(t)
+	ctx := t.Context()
+
+	if err := s.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Setup groups: 101 (updated, titled), 102 (updated, untitled fallback), 103 (legacy, titled)
+	if _, err := s.pool.Exec(ctx, `INSERT INTO group_configs(chat_id, default_game_mode, ranking_system, title)
+VALUES(101, 'classic', 'updated', 'UNO da Galera'),
+      (102, 'classic', 'updated', ''),
+      (103, 'classic', 'legacy', 'Jogatina BR'),
+      (104, 'classic', 'updated', 'Antigo Nome')`); err != nil {
+		t.Fatal(err)
+	}
+
+	sep15 := time.Date(2026, 9, 15, 14, 0, 0, 0, ranking.RankingLocation)
+
+	// Game 1 in Group 101 (Updated)
+	g1 := eligibleResult(t, groups.Updated, 3, 0, "completed")
+	g1.GameID = "g-user-1"
+	g1.ChatID = 101
+	g1.StartedAt = sep15.Add(-time.Hour)
+	g1.FinishedAt = sep15
+	g1.Players[0].UserID = 1
+	g1.Players[0].DisplayName = "User 1"
+	g1.Players[1].UserID = 2
+	g1.Players[1].DisplayName = "User 2"
+	g1.Players[2].UserID = 3
+	g1.Players[2].DisplayName = "User 3"
+	if _, err := s.RecordCompletedGame(ctx, g1); err != nil {
+		t.Fatal(err)
+	}
+
+	// Game 2 in Group 102 (Updated, untitled)
+	sep16 := time.Date(2026, 9, 16, 16, 0, 0, 0, ranking.RankingLocation)
+	g2 := eligibleResult(t, groups.Updated, 3, 0, "completed")
+	g2.GameID = "g-user-2"
+	g2.ChatID = 102
+	g2.StartedAt = sep16.Add(-time.Hour)
+	g2.FinishedAt = sep16
+	// User 2 wins, User 1 2nd
+	g2.Players[0].UserID, g2.Players[1].UserID = 2, 1
+	g2.Players[0].DisplayName, g2.Players[1].DisplayName = "User 2", "User 1"
+	g2.Players[2].UserID = 99
+	g2.Players[2].DisplayName = "Other"
+	if _, err := s.RecordCompletedGame(ctx, g2); err != nil {
+		t.Fatal(err)
+	}
+
+	// Game 3 in Group 103 (Legacy)
+	sep17 := time.Date(2026, 9, 17, 18, 0, 0, 0, ranking.RankingLocation)
+	g3 := eligibleResult(t, groups.Legacy, 3, 0, "completed")
+	g3.GameID = "g-user-3"
+	g3.ChatID = 103
+	g3.RankingSystem = groups.Legacy
+	g3.StartedAt = sep17.Add(-time.Hour)
+	g3.FinishedAt = sep17
+	g3.Players[0].UserID = 1
+	g3.Players[0].DisplayName = "User 1"
+	g3.Players[1].UserID = 2
+	g3.Players[1].DisplayName = "User 2"
+	g3.Players[2].UserID = 3
+	g3.Players[2].DisplayName = "User 3"
+	if _, err := s.RecordCompletedGame(ctx, g3); err != nil {
+		t.Fatal(err)
+	}
+
+	// Game 4 in Group 101 with Departure/Abandonment: User 4 leaves
+	g4 := eligibleResult(t, groups.Updated, 2, 1, "departure")
+	g4.GameID = "g-user-4"
+	g4.ChatID = 101
+	g4.StartedAt = sep17.Add(-30 * time.Minute)
+	g4.FinishedAt = sep17.Add(-10 * time.Minute)
+	g4.Players[0].UserID = 1
+	g4.Players[1].UserID = 2
+	g4.Players[2].UserID = 4 // leaver
+	if _, err := s.RecordCompletedGame(ctx, g4); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Query User 1 in September 2026
+	r1, err := s.ListUserMonthlyRankings(ctx, 1, sep15)
+	if err != nil {
+		t.Fatalf("ListUserMonthlyRankings failed: %v", err)
+	}
+	if r1.MonthName != "Setembro" || r1.UserID != 1 {
+		t.Fatalf("unexpected metadata: MonthName=%q UserID=%d", r1.MonthName, r1.UserID)
+	}
+	if r1.Updated == nil || len(r1.Updated.Entries) != 2 {
+		t.Fatalf("expected 2 updated entries, got: %+v", r1.Updated)
+	}
+	// Verify Updated ordering and content (Group 101 has 1000 from g1 + 1000 from g4 = 2000)
+	if r1.Updated.Entries[0].ChatID != 101 || r1.Updated.Entries[0].GroupName != "UNO da Galera" || r1.Updated.Entries[0].ScoreUnits != 2000 {
+		t.Fatalf("unexpected updated entry 0: %+v", r1.Updated.Entries[0])
+	}
+	if r1.Updated.Entries[1].ChatID != 102 || r1.Updated.Entries[1].GroupName != "Grupo 102" || r1.Updated.Entries[1].ScoreUnits != 500 {
+		t.Fatalf("unexpected updated entry 1 (fallback title): %+v", r1.Updated.Entries[1])
+	}
+	if r1.Updated.TotalScore != 2500 {
+		t.Fatalf("expected updated total 2500, got %d", r1.Updated.TotalScore)
+	}
+
+	// Verify Legacy content
+	if r1.Legacy == nil || len(r1.Legacy.Entries) != 1 {
+		t.Fatalf("expected 1 legacy entry, got: %+v", r1.Legacy)
+	}
+	if r1.Legacy.Entries[0].ChatID != 103 || r1.Legacy.Entries[0].GroupName != "Jogatina BR" || r1.Legacy.Entries[0].ScoreUnits != 100 {
+		t.Fatalf("unexpected legacy entry: %+v", r1.Legacy.Entries[0])
+	}
+	if r1.Legacy.TotalScore != 100 {
+		t.Fatalf("expected legacy total 100, got %d", r1.Legacy.TotalScore)
+	}
+
+	// 3. User 3 has score 0 in both systems and MUST appear
+	r3, err := s.ListUserMonthlyRankings(ctx, 3, sep15)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r3.Updated == nil || len(r3.Updated.Entries) != 1 || r3.Updated.Entries[0].ScoreUnits != 0 {
+		t.Fatalf("user 3 score 0 missing from updated: %+v", r3.Updated)
+	}
+	if r3.Legacy == nil || len(r3.Legacy.Entries) != 1 || r3.Legacy.Entries[0].ScoreUnits != 0 {
+		t.Fatalf("user 3 score 0 missing from legacy: %+v", r3.Legacy)
+	}
+
+	// 4. User 4 only had abandonment -> should have no monthly entries
+	r4, err := s.ListUserMonthlyRankings(ctx, 4, sep15)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r4.Updated != nil && len(r4.Updated.Entries) > 0 {
+		t.Fatalf("abandoned user 4 appeared in ranking: %+v", r4.Updated)
+	}
+
+	// 5. Month isolation: October 2026 should be empty for User 1 initially
+	octDate := time.Date(2026, 10, 5, 12, 0, 0, 0, ranking.RankingLocation)
+	rOct, err := s.ListUserMonthlyRankings(ctx, 1, octDate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rOct.MonthName != "Outubro" {
+		t.Fatalf("expected Outubro, got %q", rOct.MonthName)
+	}
+	if (rOct.Updated != nil && len(rOct.Updated.Entries) > 0) || (rOct.Legacy != nil && len(rOct.Legacy.Entries) > 0) {
+		t.Fatalf("expected empty ranking for October, got: %+v", rOct)
+	}
+
+	// 6. Test ObserveGroupTitle with IS DISTINCT FROM and non-empty
+	if err = s.ObserveGroupTitle(ctx, 104, "Novo Nome"); err != nil {
+		t.Fatal(err)
+	}
+	var title string
+	if err = s.pool.QueryRow(ctx, `SELECT title FROM group_configs WHERE chat_id=104`).Scan(&title); err != nil || title != "Novo Nome" {
+		t.Fatalf("expected title 'Novo Nome', got %q (err=%v)", title, err)
+	}
+
+	// Empty and whitespace titles must NOT overwrite existing title
+	if err = s.ObserveGroupTitle(ctx, 104, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.pool.QueryRow(ctx, `SELECT title FROM group_configs WHERE chat_id=104`).Scan(&title); err != nil || title != "Novo Nome" {
+		t.Fatalf("empty title overwrote existing title: %q", title)
+	}
+	if err = s.ObserveGroupTitle(ctx, 104, "   "); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.pool.QueryRow(ctx, `SELECT title FROM group_configs WHERE chat_id=104`).Scan(&title); err != nil || title != "Novo Nome" {
+		t.Fatalf("whitespace title overwrote existing title: %q", title)
+	}
+}

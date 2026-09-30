@@ -28,6 +28,9 @@ func (r *configRepo) SetRankingSystem(context.Context, int64, groups.RankingSyst
 func (r *configRepo) SetInstalledBy(context.Context, int64, int64) (groups.Config, error) {
 	panic("unexpected SetInstalledBy call")
 }
+func (r *configRepo) ObserveGroupTitle(context.Context, int64, string) error {
+	return nil
+}
 
 func TestNovoGroupDefaultAndOverrides(t *testing.T) {
 	for _, tt := range []struct {

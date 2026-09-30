@@ -82,6 +82,20 @@ func (m *mockGroupRepo) SetInstalledBy(ctx context.Context, chatID int64, instal
 	return c, nil
 }
 
+func (m *mockGroupRepo) ObserveGroupTitle(ctx context.Context, chatID int64, title string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.configs[chatID]
+	if !ok {
+		c = groups.Defaults(chatID)
+	}
+	if title != "" && c.Title != title {
+		c.Title = title
+	}
+	m.configs[chatID] = c
+	return nil
+}
+
 type mockUserRepo struct {
 	mu        sync.Mutex
 	users     map[string]groups.KnownUser
@@ -993,5 +1007,147 @@ func TestConfig_CallbackInNewlyCreatedGroup_ObservesUser(t *testing.T) {
 	}
 	if user.DisplayName != "AdminCb" {
 		t.Fatalf("unexpected user details: %+v", user)
+	}
+}
+
+// Tests dynamic updates of summaries in /config message when mode or ranking is changed via callback.
+func TestConfig_DynamicCallbackUpdates(t *testing.T) {
+	ctx := t.Context()
+	h := newTestHarness()
+	chatID := int64(-100223344)
+	adminID := int64(10)
+	h.api.ChatMembers[adminID] = &telego.ChatMemberOwner{Status: telego.MemberStatusCreator}
+
+	h.groupRepo.configs[chatID] = groups.Config{
+		ChatID:            chatID,
+		DefaultGameMode:   groups.Classic,
+		RankingSystem:     groups.Legacy,
+		InstalledByUserID: &adminID,
+	}
+
+	// 1. Initial /config command
+	h.cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+		From: &telego.User{ID: adminID, FirstName: "Admin"},
+		Text: "/config",
+	})
+
+	if len(h.api.SentMessages) == 0 {
+		t.Fatal("expected config message sent")
+	}
+	initialMsg := h.api.SentMessages[len(h.api.SentMessages)-1]
+
+	// Verify initial text (Classic + Legacy)
+	if !strings.Contains(initialMsg.Text, "<b>Modo padrão de partida:</b> Clássico") {
+		t.Fatalf("expected Classic mode header in: %s", initialMsg.Text)
+	}
+	if !strings.Contains(initialMsg.Text, "<blockquote><b>🎮 Clássico</b>\nRegras padrão do bot, sem as combinações extras do modo Caseiro.</blockquote>") {
+		t.Fatalf("expected Classic summary in: %s", initialMsg.Text)
+	}
+	if !strings.Contains(initialMsg.Text, "<blockquote><b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.</blockquote>") {
+		t.Fatalf("expected Legacy summary in: %s", initialMsg.Text)
+	}
+	if strings.Contains(initialMsg.Text, "🎮 Caseiro") {
+		t.Fatalf("unexpected Caseiro in initial message: %s", initialMsg.Text)
+	}
+	if strings.Contains(initialMsg.Text, "🏆 Atualizado") {
+		t.Fatalf("unexpected Updated in initial message: %s", initialMsg.Text)
+	}
+	if strings.Count(initialMsg.Text, "<blockquote>") != 2 {
+		t.Fatalf("expected 2 blockquotes, got %d", strings.Count(initialMsg.Text, "<blockquote>"))
+	}
+	if !strings.Contains(initialMsg.Text, "\n\n────────────\n\n") {
+		t.Fatalf("expected separator in: %s", initialMsg.Text)
+	}
+
+	// Verify config was not altered merely by opening /config
+	cfgInitial := h.groupRepo.configs[chatID]
+	if cfgInitial.DefaultGameMode != groups.Classic || cfgInitial.RankingSystem != groups.Legacy {
+		t.Fatalf("opening /config mutated state: %+v", cfgInitial)
+	}
+
+	// 2. Change mode to Caseiro via callback
+	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
+		ID:      "cb_mode_caseiro",
+		From:    telego.User{ID: adminID, FirstName: "Admin"},
+		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
+		Data:    fmt.Sprintf("cfg_mode_caseiro_%d", chatID),
+	})
+
+	if len(h.api.EditedMessages) == 0 {
+		t.Fatal("expected edited message after mode callback")
+	}
+	editedAfterMode := h.api.EditedMessages[len(h.api.EditedMessages)-1]
+
+	// Check ParseMode is HTML
+	if editedAfterMode.ParseMode != telego.ModeHTML {
+		t.Fatalf("expected ParseMode HTML, got %s", editedAfterMode.ParseMode)
+	}
+
+	// Main text and summary updated to Caseiro
+	if !strings.Contains(editedAfterMode.Text, "<b>Modo padrão de partida:</b> Caseiro") {
+		t.Fatalf("expected Caseiro mode header in: %s", editedAfterMode.Text)
+	}
+	if !strings.Contains(editedAfterMode.Text, "<blockquote><b>🎮 Caseiro</b>\nPermite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4.</blockquote>") {
+		t.Fatalf("expected Caseiro summary in: %s", editedAfterMode.Text)
+	}
+	// Old Classic summary must disappear
+	if strings.Contains(editedAfterMode.Text, "🎮 Clássico") {
+		t.Fatalf("old Classic summary did not disappear after mode change: %s", editedAfterMode.Text)
+	}
+	// Ranking still Legacy
+	if !strings.Contains(editedAfterMode.Text, "<blockquote><b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.</blockquote>") {
+		t.Fatalf("expected Legacy summary preserved in: %s", editedAfterMode.Text)
+	}
+	if strings.Contains(editedAfterMode.Text, "🏆 Atualizado") {
+		t.Fatalf("unexpected Updated summary in: %s", editedAfterMode.Text)
+	}
+	// Exactly 2 blockquotes and separator preserved
+	if strings.Count(editedAfterMode.Text, "<blockquote>") != 2 {
+		t.Fatalf("expected 2 blockquotes in edited message, got %d", strings.Count(editedAfterMode.Text, "<blockquote>"))
+	}
+	if !strings.Contains(editedAfterMode.Text, "\n\n────────────\n\n") {
+		t.Fatalf("expected separator in edited message: %s", editedAfterMode.Text)
+	}
+
+	// 3. Change ranking to Updated via callback
+	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
+		ID:      "cb_rank_updated",
+		From:    telego.User{ID: adminID, FirstName: "Admin"},
+		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
+		Data:    fmt.Sprintf("cfg_rank_updated_%d", chatID),
+	})
+
+	editedAfterRank := h.api.EditedMessages[len(h.api.EditedMessages)-1]
+
+	// Main text and summary updated to Updated
+	if !strings.Contains(editedAfterRank.Text, "<b>Sistema de ranking:</b> Atualizado") {
+		t.Fatalf("expected Updated rank header in: %s", editedAfterRank.Text)
+	}
+	if !strings.Contains(editedAfterRank.Text, "<blockquote><b>🏆 Atualizado</b>\nA pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe.</blockquote>") {
+		t.Fatalf("expected Updated summary in: %s", editedAfterRank.Text)
+	}
+	// Old Legacy summary must disappear
+	if strings.Contains(editedAfterRank.Text, "🏆 Legado") {
+		t.Fatalf("old Legacy summary did not disappear after rank change: %s", editedAfterRank.Text)
+	}
+	// Mode still Caseiro
+	if !strings.Contains(editedAfterRank.Text, "<blockquote><b>🎮 Caseiro</b>\nPermite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4.</blockquote>") {
+		t.Fatalf("expected Caseiro summary preserved in: %s", editedAfterRank.Text)
+	}
+	if strings.Contains(editedAfterRank.Text, "🎮 Clássico") {
+		t.Fatalf("unexpected Classic summary in: %s", editedAfterRank.Text)
+	}
+	// Exactly 2 blockquotes and separator preserved
+	if strings.Count(editedAfterRank.Text, "<blockquote>") != 2 {
+		t.Fatalf("expected 2 blockquotes in edited message, got %d", strings.Count(editedAfterRank.Text, "<blockquote>"))
+	}
+	if !strings.Contains(editedAfterRank.Text, "\n\n────────────\n\n") {
+		t.Fatalf("expected separator in edited message: %s", editedAfterRank.Text)
+	}
+
+	// Buttons preserved
+	if editedAfterRank.ReplyMarkup == nil || len(editedAfterRank.ReplyMarkup.InlineKeyboard) != 2 {
+		t.Fatalf("expected 2 rows of buttons, got %+v", editedAfterRank.ReplyMarkup)
 	}
 }

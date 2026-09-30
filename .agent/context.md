@@ -1,3 +1,28 @@
+# Ranking mensal privado (/ranking no privado) — 2026-09-29 (somente dev; em homologação)
+
+- O comando `/ranking` agora bifurca por contexto de chat:
+  - Chat PRIVADO: exibe a pontuação mensal do próprio usuário remetente (`msg.From.ID`) por grupo no mês calendário vigente (`America/Sao_Paulo`).
+  - GRUPO / SUPERGRUPO: mantém 100% inalterado o ranking competitivo do grupo (com medalhas e desempates por colocação/tempo).
+- Apresentação e separação de sistemas:
+  - Seções independentes para `Atualizado` e `Legado`, cada uma com seu próprio `Total · ...` calculado via soma inteira de `score_units` (`ranking.Units`).
+  - Nunca combina as pontuações dos dois sistemas em um total único. Seções vazias são omitidas.
+  - Para meses sem partidas pontuadas: `Você ainda não possui partidas pontuadas neste mês.`.
+- Título dos grupos e Migração 0007:
+  - Migration `0007_group_title.up.sql` adiciona coluna `title text NOT NULL DEFAULT ''` na tabela `group_configs` e índice `player_group_monthly_stats(user_id, month_start)`.
+  - Método `ObserveGroupTitle(ctx, chatID, title)` atualiza o título do grupo de forma não destrutiva (`WHERE EXCLUDED.title <> '' AND group_configs.title IS DISTINCT FROM EXCLUDED.title`), sem sobrescrever com vazio/nulo.
+  - Títulos observados automaticamente em comandos de grupo e no evento `HandleMyChatMember`.
+  - Fallback determinístico: se o grupo não possuir título gravado, exibe `Grupo <ChatID>` (ex.: `Grupo -1004477538462`).
+- Consulta única sem N+1:
+  - `ListUserMonthlyRankings` em `internal/storage/postgres/ranking.go` executa uma única query SQL unindo `player_group_monthly_stats` e `group_configs`, com ordenação determinística por sistema, `score_units DESC`, `last_finished_at DESC`, `nome do grupo ASC` e `chat_id ASC`.
+  - Score 0 elegível é exibido normalmente. Abandonos definitivos ficam fora do ranking.
+- Limite de mensagem e segurança Telegram:
+  - `RenderUserMonthlyRankings` respeita o limite de 4000 unidades UTF-16, truncando grupos ordenadamente com indicação `… e mais X grupos.` (ou `1 grupo.`) e mantendo o `Total` acumulado com o valor real de todos os grupos do sistema.
+  - Escape HTML rigoroso nos títulos de grupos.
+  - Sem botões inline, ranking global ou WebApp nesta etapa.
+- Regras operacionais: sem commits, sem push, sem alterações na branch `main`, sem deploy/migration em produção.
+
+---
+
 # Ranking mensal do grupo — 2026-09-29 (dev; em homologação)
 
 - O ranking ativo exibido pelo comando `/ranking` e pelas mensagens automáticas pós-partida passa a ser um RANKING MENSAL do mês corrente, em vez de cumulativo perpétuo.

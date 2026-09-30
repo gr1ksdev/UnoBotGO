@@ -239,11 +239,17 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		case "ajuda", "help":
 			h.reply(ctx, msg.Chat.ID, h.renderer.RenderHelp(h.botUsername), nil)
 		case "ranking":
-			h.reply(ctx, msg.Chat.ID, "🏆 Consulte o ranking em um grupo.", nil)
+			h.handlePrivateRanking(ctx, msg.Chat.ID, int64(actorID))
 		default:
 			h.reply(ctx, msg.Chat.ID, "⚠️ Este comando só pode ser utilizado em grupos. Adicione o bot a um grupo para jogar!\n\nUse /help para mais instruções.", nil)
 		}
 		return
+	}
+
+	if isGroup && msg.Chat.Title != "" {
+		if svc := h.getGroupsService(); svc != nil {
+			_ = svc.ObserveGroupTitle(ctx, int64(chatID), msg.Chat.Title)
+		}
 	}
 
 	// Observed names stay in RAM during gameplay and are flushed at closure.
@@ -759,6 +765,9 @@ func (h *CommandHandler) HandleMyChatMember(ctx context.Context, update *telego.
 	}
 
 	svc := h.getGroupsService()
+	if update.Chat.Title != "" && svc != nil {
+		_ = svc.ObserveGroupTitle(ctx, chatID, update.Chat.Title)
+	}
 	if update.From.ID > 0 && !update.From.IsBot {
 		if svc != nil {
 			if _, err := svc.RecordInstallation(ctx, chatID, update.From.ID); err != nil {

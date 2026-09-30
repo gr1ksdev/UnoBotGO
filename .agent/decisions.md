@@ -1,3 +1,56 @@
+# Decisão: melhoria visual e explicativa do comando /config via blockquotes contextuais
+
+## Data
+2026-09-30
+
+## Contexto
+A mensagem do comando `/config` exibia apenas o modo e sistema de ranking selecionados sem detalhar as regras ativas no momento, obrigando os usuários a deduzirem os efeitos de cada modo ou ranking.
+
+## Decisão tomada
+1. Formatação contextual: `RenderGroupConfig` foi enriquecido para incluir exatamente dois blocos de citação (`<blockquote>...</blockquote>` em HTML):
+   - Um bloco para o modo selecionado (`🎮 Clássico` ou `🎮 Caseiro`) com seu respectivo resumo.
+   - Um bloco para o sistema de ranking selecionado (`🏆 Legado` ou `🏆 Atualizado`) com seu respectivo resumo.
+2. Separador visual: inserido o separador `────────────` em linha própria estritamente entre os dois blockquotes.
+3. Centralização e reatividade: como `handleConfig` (comando inicial) e os callbacks de modo (`cfg_mode`) e ranking (`cfg_rank`) já consom exclusivamente `RenderGroupConfig`, a edição da mensagem via `EditMessageText` reflete instantaneamente a alteração, garantindo que o resumo antigo desapareça e o novo seja exibido sem qualquer discrepância.
+4. Preservação: botões inline, callbacks, permissões (admin/instalador), dados persistidos e regras de gameplay/ranking mantidos 100% inalterados.
+
+## Motivo
+Garantir clareza para os administradores do grupo no momento da configuração, eliminando ambiguidades sobre combinações de cartas ou cálculo de pontuação, mantendo a mensagem compacta e padronizada.
+
+## Impacto
+Interface mais intuitiva no Telegram com atualização dinâmica e sem acoplamento adicional no banco ou regras de negócio.
+
+---
+
+# Decisão: suporte a ranking mensal no privado (/ranking) e observação de título de grupos
+
+## Data
+2026-09-29
+
+## Contexto
+O comando `/ranking` precisava funcionar no privado do bot para apresentar ao usuário suas pontuações mensais por grupo, sem misturar os sistemas Atualizado e Legado, e exibindo o nome humano do grupo ao invés de ChatID cru.
+
+## Decisão tomada
+1. Bifurcação transparente: se a mensagem for privada (`!isGroup`), o comando `/ranking` chama `handlePrivateRanking(ctx, chatID, actorID)` usando estritamente o UserID do remetente (`msg.From.ID`).
+2. Isolamento de pontuações: sistemas `Atualizado` e `Legado` renderizados em seções separadas, cada um com seu próprio `Total · ...` calculado por soma de inteiros (`score_units`). Jamais são somados em um total geral.
+3. Persistência de título dos grupos e Migração 0007 (`0007_group_title.up.sql`):
+   - Adicionada coluna `title text NOT NULL DEFAULT ''` na tabela `group_configs` e índice `player_group_monthly_stats(user_id, month_start)`.
+   - Criado método `ObserveGroupTitle(ctx, chatID, title)` usando update condicional:
+     `WHERE EXCLUDED.title <> '' AND group_configs.title IS DISTINCT FROM EXCLUDED.title`
+     garantindo que strings vazias/nulas não sobrescrevam títulos já conhecidos e que updates só ocorram em caso de alteração real.
+   - Títulos observados automaticamente em mensagens de comando em grupos e no evento `HandleMyChatMember`.
+   - Fallback determinístico: se o grupo não possuir título no banco, exibe `Grupo <ChatID>`.
+4. Consulta SQL única: `ListUserMonthlyRankings` busca todas as linhas mensais elegíveis do usuário em uma única query com ordenação determinística (`s.score_units DESC`, `s.last_finished_at DESC`, `COALESCE(NULLIF(c.title, ''), 'Grupo ' || s.chat_id::text) ASC`, `s.chat_id ASC`).
+5. Proteção de limites: `RenderUserMonthlyRankings` respeita o limite de 4000 unidades UTF-16, com truncamento ordenado e aviso de linhas omitidas (`… e mais X grupos.`), preservando o `Total` acumulado com o valor real integral.
+
+## Motivo
+Eliminar N+1 queries, reaproveitar dados já armazenados em `player_group_monthly_stats`, assegurar privacidade do usuário (sem vazar dados de outros membros), manter consistência de tipos e formatação pt-BR sem floats e sem chamadas remotas de API do Telegram por consulta de ranking.
+
+## Impacto
+O bot agora atende `/ranking` tanto em grupo (ranking competitivo do grupo) quanto no privado (resumo mensal pessoal). A arquitetura existente de gameplay e persistência permanece 100% preservada.
+
+---
+
 # Decisão: transformação do ranking acumulado em ranking mensal particionado
 
 ## Data

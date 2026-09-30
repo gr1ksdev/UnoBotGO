@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/malbs/UnoGoBot/internal/game"
+	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
 
@@ -357,5 +358,132 @@ func TestGameButtonsRespectLifecycle(t *testing.T) {
 		if makeGameButtons(v) != nil {
 			t.Fatal("closed view offered keyboard")
 		}
+	}
+}
+
+func TestRenderer_RenderGroupConfig(t *testing.T) {
+	r := NewRenderer(nil)
+
+	tests := []struct {
+		name              string
+		cfg               groups.Config
+		wantModeHeader    string
+		wantRankHeader    string
+		wantModeBlock     string
+		wantRankBlock     string
+		unwantModeSummary string
+		unwantRankSummary string
+	}{
+		{
+			name: "Classic + Legacy",
+			cfg: groups.Config{
+				DefaultGameMode: groups.Classic,
+				RankingSystem:   groups.Legacy,
+			},
+			wantModeHeader:    "<b>Modo padrão de partida:</b> Clássico",
+			wantRankHeader:    "<b>Sistema de ranking:</b> Legado",
+			wantModeBlock:     "<blockquote><b>🎮 Clássico</b>\nRegras padrão do bot, sem as combinações extras do modo Caseiro.</blockquote>",
+			wantRankBlock:     "<blockquote><b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.</blockquote>",
+			unwantModeSummary: "🎮 Caseiro",
+			unwantRankSummary: "🏆 Atualizado",
+		},
+		{
+			name: "Classic + Updated",
+			cfg: groups.Config{
+				DefaultGameMode: groups.Classic,
+				RankingSystem:   groups.Updated,
+			},
+			wantModeHeader:    "<b>Modo padrão de partida:</b> Clássico",
+			wantRankHeader:    "<b>Sistema de ranking:</b> Atualizado",
+			wantModeBlock:     "<blockquote><b>🎮 Clássico</b>\nRegras padrão do bot, sem as combinações extras do modo Caseiro.</blockquote>",
+			wantRankBlock:     "<blockquote><b>🏆 Atualizado</b>\nA pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe.</blockquote>",
+			unwantModeSummary: "🎮 Caseiro",
+			unwantRankSummary: "🏆 Legado",
+		},
+		{
+			name: "Caseiro + Legacy",
+			cfg: groups.Config{
+				DefaultGameMode: groups.Caseiro,
+				RankingSystem:   groups.Legacy,
+			},
+			wantModeHeader:    "<b>Modo padrão de partida:</b> Caseiro",
+			wantRankHeader:    "<b>Sistema de ranking:</b> Legado",
+			wantModeBlock:     "<blockquote><b>🎮 Caseiro</b>\nPermite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4.</blockquote>",
+			wantRankBlock:     "<blockquote><b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.</blockquote>",
+			unwantModeSummary: "🎮 Clássico",
+			unwantRankSummary: "🏆 Atualizado",
+		},
+		{
+			name: "Caseiro + Updated",
+			cfg: groups.Config{
+				DefaultGameMode: groups.Caseiro,
+				RankingSystem:   groups.Updated,
+			},
+			wantModeHeader:    "<b>Modo padrão de partida:</b> Caseiro",
+			wantRankHeader:    "<b>Sistema de ranking:</b> Atualizado",
+			wantModeBlock:     "<blockquote><b>🎮 Caseiro</b>\nPermite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4.</blockquote>",
+			wantRankBlock:     "<blockquote><b>🏆 Atualizado</b>\nA pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe.</blockquote>",
+			unwantModeSummary: "🎮 Clássico",
+			unwantRankSummary: "🏆 Legado",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := r.RenderGroupConfig(tc.cfg)
+
+			if !strings.Contains(got, "⚙️ <b>Configuração do Grupo</b>") {
+				t.Fatalf("missing title in: %s", got)
+			}
+			if !strings.Contains(got, tc.wantModeHeader) {
+				t.Fatalf("missing mode header %q in: %s", tc.wantModeHeader, got)
+			}
+			if !strings.Contains(got, tc.wantRankHeader) {
+				t.Fatalf("missing rank header %q in: %s", tc.wantRankHeader, got)
+			}
+			if !strings.Contains(got, tc.wantModeBlock) {
+				t.Fatalf("missing mode blockquote %q in: %s", tc.wantModeBlock, got)
+			}
+			if !strings.Contains(got, tc.wantRankBlock) {
+				t.Fatalf("missing rank blockquote %q in: %s", tc.wantRankBlock, got)
+			}
+			if strings.Contains(got, tc.unwantModeSummary) {
+				t.Fatalf("unexpected mode summary %q in: %s", tc.unwantModeSummary, got)
+			}
+			if strings.Contains(got, tc.unwantRankSummary) {
+				t.Fatalf("unexpected rank summary %q in: %s", tc.unwantRankSummary, got)
+			}
+
+			// Exactly 2 blockquotes
+			if count := strings.Count(got, "<blockquote>"); count != 2 {
+				t.Fatalf("expected 2 <blockquote> tags, got %d in: %s", count, got)
+			}
+			if count := strings.Count(got, "</blockquote>"); count != 2 {
+				t.Fatalf("expected 2 </blockquote> tags, got %d in: %s", count, got)
+			}
+
+			// Separator on its own line between the blockquotes
+			const separator = "\n\n────────────\n\n"
+			if !strings.Contains(got, separator) {
+				t.Fatalf("missing separator %q in: %s", separator, got)
+			}
+
+			sepIdx := strings.Index(got, "────────────")
+			firstBlockEnd := strings.Index(got, "</blockquote>")
+			secondBlockStart := strings.LastIndex(got, "<blockquote>")
+			if firstBlockEnd == -1 || secondBlockStart == -1 || sepIdx == -1 {
+				t.Fatalf("malformed structure in: %s", got)
+			}
+			if !(firstBlockEnd < sepIdx && sepIdx < secondBlockStart) {
+				t.Fatalf("separator is not strictly between blockquotes: end1=%d sep=%d start2=%d",
+					firstBlockEnd, sepIdx, secondBlockStart)
+			}
+
+			// Footer text
+			expectedFooter := "<i>Selecione abaixo para alterar.\nAs mudanças afetarão apenas as próximas partidas criadas.</i>"
+			if !strings.HasSuffix(got, expectedFooter) {
+				t.Fatalf("unexpected footer, want suffix %q, got: %s", expectedFooter, got)
+			}
+		})
 	}
 }

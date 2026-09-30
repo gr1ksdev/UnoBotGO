@@ -26,6 +26,7 @@ type Config struct {
 	RankingSystem        RankingSystem
 	InstalledByUserID    *int64
 	Revision             int64
+	Title                string
 	CreatedAt, UpdatedAt time.Time
 }
 
@@ -46,6 +47,7 @@ type Repository interface {
 	SetDefaultGameMode(context.Context, int64, Mode) (Config, error)
 	SetRankingSystem(context.Context, int64, RankingSystem) (Config, error)
 	SetInstalledBy(context.Context, int64, int64) (Config, error)
+	ObserveGroupTitle(context.Context, int64, string) error
 }
 
 var (
@@ -123,4 +125,11 @@ func (s Service) RecordInstallation(ctx context.Context, chatID, installerID int
 		return Config{}, ErrInvalid
 	}
 	return s.Repository.SetInstalledBy(ctx, chatID, installerID)
+}
+
+func (s Service) ObserveGroupTitle(ctx context.Context, chatID int64, title string) error {
+	if chatID == 0 || title == "" || s.Repository == nil {
+		return nil
+	}
+	return s.Repository.ObserveGroupTitle(ctx, chatID, title)
 }

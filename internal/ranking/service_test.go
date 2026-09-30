@@ -11,6 +11,7 @@ import (
 
 type readStub struct {
 	chatID int64
+	userID int64
 	at     time.Time
 	err    error
 }
@@ -19,6 +20,12 @@ func (r *readStub) ListGroupRanking(_ context.Context, id int64, at time.Time) (
 	r.chatID = id
 	r.at = at
 	return GroupRanking{System: groups.Updated, Total: 1, Entries: []Entry{{UserID: 4, Score: 857}}}, r.err
+}
+
+func (r *readStub) ListUserMonthlyRankings(_ context.Context, userID int64, at time.Time) (UserMonthlyRankings, error) {
+	r.userID = userID
+	r.at = at
+	return UserMonthlyRankings{UserID: userID, MonthName: "Outubro"}, r.err
 }
 
 func TestRankingServiceScopesReadAndPropagatesFailure(t *testing.T) {
@@ -37,6 +44,26 @@ func TestRankingServiceScopesReadAndPropagatesFailure(t *testing.T) {
 	}
 	var unconfigured *Service
 	if _, err = unconfigured.ListGroupRanking(t.Context(), -42); err == nil {
+		t.Fatal("missing repository accepted")
+	}
+
+	// User monthly rankings
+	repo.err = nil
+	userGot, err := s.ListUserMonthlyRankings(t.Context(), 123)
+	if err != nil || repo.userID != 123 || userGot.MonthName != "Outubro" {
+		t.Fatal(userGot, err)
+	}
+	repo.err = errors.New("read failed")
+	if _, err = s.ListUserMonthlyRankings(t.Context(), 123); !errors.Is(err, repo.err) {
+		t.Fatal(err)
+	}
+	if _, err = s.ListUserMonthlyRankings(t.Context(), 0); !errors.Is(err, ErrInvalid) {
+		t.Fatal(err)
+	}
+	if _, err = s.ListUserMonthlyRankings(t.Context(), -1); !errors.Is(err, ErrInvalid) {
+		t.Fatal(err)
+	}
+	if _, err = unconfigured.ListUserMonthlyRankings(t.Context(), 123); err == nil {
 		t.Fatal("missing repository accepted")
 	}
 }

@@ -1,3 +1,50 @@
+# Melhoria visual e explicativa do comando /config — 2026-09-30 (somente dev; em homologação)
+
+- Pedido do usuário aprovado no plano: `melhoria-ux-config_2026-09-29_23-57.md`.
+- Formatação de `/config` enriquecida em `RenderGroupConfig` (`internal/telegram/renderer.go`):
+  - Inclui exatamente dois blocos de citação (`<blockquote>...</blockquote>` em HTML).
+  - Blockquote 1 (modo ativo):
+    - Clássico: `<b>🎮 Clássico</b>\nRegras padrão do bot, sem as combinações extras do modo Caseiro.`
+    - Caseiro: `<b>🎮 Caseiro</b>\nPermite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4.`
+  - Separador em linha própria estritamente entre os dois blockquotes: `────────────`.
+  - Blockquote 2 (sistema de ranking ativo):
+    - Legado: `<b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.`
+    - Atualizado: `<b>🏆 Atualizado</b>\nA pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe.`
+  - Rodapé em duas linhas: `Selecione abaixo para alterar.\nAs mudanças afetarão apenas as próximas partidas criadas.`.
+- Reatividade dinâmica: tanto a abertura inicial (`handleConfig`) quanto os callbacks de modo (`cfg_mode`), ranking (`cfg_rank`) e reabertura (`cfg_open`) já utilizam `RenderGroupConfig`, fazendo com que as edições de mensagem reflitam instantaneamente a nova seleção e removam os resumos anteriores.
+- Permissões, callbacks, regras de gameplay/ranking e migrations preservados sem alterações.
+- Regras de isolamento: zero commit, zero push, main intocada, sem deploy/migration em produção.
+
+---
+
+# Ranking mensal privado (/ranking no privado) — 2026-09-29 (somente dev; em homologação)
+
+- Pedido do usuário aprovado no plano: `ranking-privado_2026-09-29_22-50.md`.
+- Bifurcação de `/ranking`:
+  - No PRIVADO: consulta as pontuações mensais do próprio usuário remetente (`msg.From.ID`) por grupo e exibe seções separadas para `Atualizado` e `Legado`. Nunca aceita UserID por texto/parâmetro.
+  - Em GRUPOS: comportamento 100% preservado (ranking competitivo do grupo com medalhas e desempates).
+- Separação estrita dos sistemas:
+  - Seções independentes para `Atualizado` (com centésimos `pt-BR`) e `Legado` (com pontuação inteira `pt/pts`), cada uma com seu próprio `Total · ...` calculado via soma inteira de `score_units`.
+  - Nunca soma os dois sistemas em um total único.
+  - Seções vazias não são exibidas.
+  - Usuário sem nenhuma participação elegível no mês recebe mensagem amigável: `Você ainda não possui partidas pontuadas neste mês.`.
+- Título dos Grupos e Migração 0007:
+  - Nova migration `internal/storage/postgres/migrations/0007_group_title.up.sql`: adiciona coluna `title text NOT NULL DEFAULT ''` na tabela `group_configs` e índice `player_group_monthly_stats(user_id, month_start)`.
+  - Método `ObserveGroupTitle(ctx, chatID, title)` atualiza o título do grupo de forma não destrutiva e condicional (`WHERE EXCLUDED.title <> '' AND group_configs.title IS DISTINCT FROM EXCLUDED.title`), sem sobrescrever com vazio/nulo.
+  - Títulos são observados automaticamente em comandos de grupo e no evento `HandleMyChatMember`.
+  - Fallback determinístico: se o grupo não possuir título gravado, exibe `Grupo <ChatID>` (ex.: `Grupo -1004477538462`).
+- Consulta única sem N+1:
+  - `ListUserMonthlyRankings` em `internal/storage/postgres/ranking.go` executa uma única query buscando todas as linhas de `player_group_monthly_stats` unidas com `group_configs` para o mês corrente (`America/Sao_Paulo`).
+  - Ordenação determinística: por sistema, `score_units DESC`, `last_finished_at DESC`, `nome do grupo ASC`, `chat_id ASC`.
+  - Jogadores com score 0 elegível aparecem normalmente. Abandonos definitivos continuam fora do ranking.
+- Limite de mensagem e segurança Telegram:
+  - `RenderUserMonthlyRankings` respeita o limite de 4000 unidades UTF-16, truncando grupos ordenadamente com indicação `… e mais X grupos.` (ou `1 grupo.`) e mantendo o `Total` acumulado com o valor real de todos os grupos do sistema.
+  - Escape HTML rigoroso nos títulos de grupos.
+  - Sem botões inline, ranking global ou WebApp nesta etapa.
+- Regras de isolamento: zero commit, zero push, main intocada, sem deploy/migration em produção.
+
+---
+
 # Ranking mensal do grupo — 2026-09-29 (somente dev; em homologação)
 
 - Pedido do usuário aprovado no plano: `ranking-mensal_2026-09-29_21-35.md`.

@@ -420,7 +420,7 @@ func (r *Renderer) RenderHelp(botUsername string) string {
 	sb.WriteString("<b>/destrancar</b> — Permite novas entradas.\n")
 	sb.WriteString("<b>/iniciar</b> — Inicia a partida quando houver pelo menos dois jogadores.\n")
 	sb.WriteString("<b>/estado</b> — Mostra o lobby ou o estado atual da partida.\n")
-	sb.WriteString("<b>/ranking</b> — Mostra o ranking acumulado deste grupo.\n")
+	sb.WriteString("<b>/ranking</b> — Mostra o ranking mensal do grupo (ou seus rankings mensais se usado no privado).\n")
 	sb.WriteString("<b>/sair</b> — Sai da partida em andamento.\n")
 	sb.WriteString("<b>/cancelar</b> — Cancela a partida. O comando /kill é um alias.\n")
 	sb.WriteString("<b>/reset</b> — Recupera o grupo e limpa sua partida e histórico.")
@@ -441,6 +441,28 @@ func (r *Renderer) RenderHelp(botUsername string) string {
 	return sb.String()
 }
 
+func groupModeSummary(mode groups.Mode) (string, string) {
+	switch mode {
+	case groups.Caseiro:
+		return "🎮 Caseiro", "Permite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4."
+	case groups.Classic:
+		fallthrough
+	default:
+		return "🎮 Clássico", "Regras padrão do bot, sem as combinações extras do modo Caseiro."
+	}
+}
+
+func groupRankingSummary(system groups.RankingSystem) (string, string) {
+	switch system {
+	case groups.Updated:
+		return "🏆 Atualizado", "A pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe."
+	case groups.Legacy:
+		fallthrough
+	default:
+		return "🏆 Legado", "Todos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto."
+	}
+}
+
 // RenderGroupConfig formats the current group configuration for the /config command.
 func (r *Renderer) RenderGroupConfig(config groups.Config) string {
 	modeLabel := "Clássico"
@@ -452,11 +474,19 @@ func (r *Renderer) RenderGroupConfig(config groups.Config) string {
 		rankLabel = "Atualizado"
 	}
 
+	modeTitle, modeDesc := groupModeSummary(config.DefaultGameMode)
+	rankTitle, rankDesc := groupRankingSummary(config.RankingSystem)
+
 	return fmt.Sprintf("⚙️ <b>Configuração do Grupo</b>\n\n"+
 		"<b>Modo padrão de partida:</b> %s\n"+
 		"<b>Sistema de ranking:</b> %s\n\n"+
-		"<i>Selecione abaixo para alterar. As mudanças afetarão as próximas partidas criadas.</i>",
-		modeLabel, rankLabel)
+		"<blockquote><b>%s</b>\n%s</blockquote>\n\n"+
+		"────────────\n\n"+
+		"<blockquote><b>%s</b>\n%s</blockquote>\n\n"+
+		"<i>Selecione abaixo para alterar.\nAs mudanças afetarão apenas as próximas partidas criadas.</i>",
+		modeLabel, rankLabel,
+		modeTitle, modeDesc,
+		rankTitle, rankDesc)
 }
 
 // RenderGroupWelcome formats the introductory message when the bot joins a group.

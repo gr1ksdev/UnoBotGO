@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf16"
 
@@ -87,4 +88,118 @@ func (h *CommandHandler) handleRanking(ctx context.Context, chatID int64) {
 		return
 	}
 	h.reply(sendCtx, chatID, RenderGroupRanking(group), nil)
+}
+
+// RenderUserMonthlyRankings formats the user's monthly points per group for private chat.
+func RenderUserMonthlyRankings(rankings ranking.UserMonthlyRankings) string {
+	title := "🏆 Seus rankings"
+	if rankings.MonthName != "" {
+		title += " · " + rankings.MonthName
+	}
+	title += "\n\n"
+
+	hasUpdated := rankings.Updated != nil && len(rankings.Updated.Entries) > 0
+	hasLegacy := rankings.Legacy != nil && len(rankings.Legacy.Entries) > 0
+
+	if !hasUpdated && !hasLegacy {
+		return title + "Você ainda não possui partidas pontuadas neste mês."
+	}
+
+	text := title
+
+	renderSection := func(sec *ranking.UserMonthlyRankingSection, secHeader string, isFirst bool) {
+		if sec == nil || len(sec.Entries) == 0 {
+			return
+		}
+		prefix := ""
+		if !isFirst {
+			prefix = "\n\n"
+		}
+		header := prefix + secHeader + "\n"
+		totalLine := "\n\nTotal · " + ranking.FormatScore(sec.System, sec.TotalScore)
+
+		lines := make([]string, len(sec.Entries))
+		for i, entry := range sec.Entries {
+			lines[i] = fmt.Sprintf("• %s · %s", rankingGroupName(entry.GroupName, entry.ChatID), ranking.FormatScore(sec.System, entry.ScoreUnits))
+		}
+
+		bestK := -1
+		for k := len(lines); k >= 0; k-- {
+			var body string
+			if k > 0 {
+				body = strings.Join(lines[:k], "\n")
+			}
+			omitted := len(lines) - k
+			var suffix string
+			if omitted > 0 {
+				if k > 0 {
+					suffix = privateRankingRemaining(omitted)
+				} else {
+					suffix = strings.TrimPrefix(privateRankingRemaining(omitted), "\n")
+				}
+			}
+			candidate := text + header + body + suffix + totalLine
+			if messageUnits(candidate) <= rankingMessageLimit {
+				bestK = k
+				break
+			}
+		}
+
+		if bestK >= 0 {
+			var body string
+			if bestK > 0 {
+				body = strings.Join(lines[:bestK], "\n")
+			}
+			omitted := len(lines) - bestK
+			var suffix string
+			if omitted > 0 {
+				if bestK > 0 {
+					suffix = privateRankingRemaining(omitted)
+				} else {
+					suffix = strings.TrimPrefix(privateRankingRemaining(omitted), "\n")
+				}
+			}
+			text += header + body + suffix + totalLine
+		}
+	}
+
+	first := true
+	if hasUpdated {
+		renderSection(rankings.Updated, "⚡ Atualizado", first)
+		first = false
+	}
+	if hasLegacy {
+		renderSection(rankings.Legacy, "🕹️ Legado", first)
+	}
+
+	return text
+}
+
+func rankingGroupName(name string, id int64) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = fmt.Sprintf("Grupo %d", id)
+	}
+	return html.EscapeString(name)
+}
+
+func privateRankingRemaining(n int) string {
+	if n == 1 {
+		return "\n• … e mais 1 grupo."
+	}
+	return fmt.Sprintf("\n• … e mais %d grupos.", n)
+}
+
+func (h *CommandHandler) handlePrivateRanking(ctx context.Context, chatID int64, userID int64) {
+	readCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	rankings, err := h.rankingService.ListUserMonthlyRankings(readCtx, userID)
+	cancel()
+	sendCtx, cancelSend := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelSend()
+	if err != nil {
+		h.logger.WarnContext(ctx, "failed to read private monthly ranking", "chat_id", chatID, "user_id", userID, "error", err)
+		h.reply(sendCtx, chatID, "⚠️ Não foi possível consultar seu ranking. Tente /ranking novamente.", nil)
+		return
+	}
+	h.reply(sendCtx, chatID, RenderUserMonthlyRankings(rankings), nil)
 }

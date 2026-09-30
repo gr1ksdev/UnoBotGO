@@ -22,6 +22,10 @@ func (f rankingReadFunc) ListGroupRanking(ctx context.Context, id int64, at time
 	return f(ctx, id, at)
 }
 
+func (f rankingReadFunc) ListUserMonthlyRankings(ctx context.Context, userID int64, at time.Time) (ranking.UserMonthlyRankings, error) {
+	return ranking.UserMonthlyRankings{UserID: userID}, nil
+}
+
 func TestRenderGroupRankingUniqueSequentialRanks(t *testing.T) {
 	for _, tc := range []struct {
 		scores []ranking.Units
@@ -158,8 +162,8 @@ func TestRankingCommandSharedRendererIsolationAndNoAdmin(t *testing.T) {
 		}
 	}
 	b.cmdHandler.HandleMessage(t.Context(), &telego.Message{Chat: telego.Chat{ID: 999, Type: "private"}, From: &telego.User{ID: 999}, Text: "/ranking"})
-	if calls != 3 || api.LastSentMessage() != "🏆 Consulte o ranking em um grupo." {
-		t.Fatal("private ranking queried storage")
+	if calls != 3 || api.LastSentMessage() != "🏆 Seus rankings\n\nVocê ainda não possui partidas pontuadas neste mês." {
+		t.Fatalf("expected empty private monthly ranking, got %q", api.LastSentMessage())
 	}
 }
 
@@ -254,4 +258,277 @@ func TestInlineScoredClosureSendsExactlyResultAndRanking(t *testing.T) {
 			t.Fatal("invalid final message parameters", msg)
 		}
 	}
+}
+
+func TestRenderUserMonthlyRankings_UpdatedOnly(t *testing.T) {
+	rankings := ranking.UserMonthlyRankings{
+		UserID:    123,
+		MonthName: "Setembro",
+		Updated: &ranking.UserMonthlyRankingSection{
+			System: groups.Updated,
+			Entries: []ranking.UserGroupRankingEntry{
+				{ChatID: -1001, GroupName: "UNO da Galera", ScoreUnits: 3000},
+				{ChatID: -1002, GroupName: "Amigos do UNO", ScoreUnits: 1857},
+				{ChatID: -1003, GroupName: "Grupo Zero", ScoreUnits: 0},
+			},
+			TotalScore: 4857,
+		},
+	}
+
+	got := RenderUserMonthlyRankings(rankings)
+	want := "🏆 Seus rankings · Setembro\n\n" +
+		"⚡ Atualizado\n" +
+		"• UNO da Galera · 30,00 pts\n" +
+		"• Amigos do UNO · 18,57 pts\n" +
+		"• Grupo Zero · 0,00 pts\n\n" +
+		"Total · 48,57 pts"
+
+	if got != want {
+		t.Fatalf("unexpected rendering:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestRenderUserMonthlyRankings_LegacyOnly(t *testing.T) {
+	rankings := ranking.UserMonthlyRankings{
+		UserID:    123,
+		MonthName: "Setembro",
+		Legacy: &ranking.UserMonthlyRankingSection{
+			System: groups.Legacy,
+			Entries: []ranking.UserGroupRankingEntry{
+				{ChatID: -1001, GroupName: "Jogatina BR", ScoreUnits: 500},
+				{ChatID: -1002, GroupName: "Amigos 2", ScoreUnits: 100},
+				{ChatID: -1003, GroupName: "Zerados", ScoreUnits: 0},
+			},
+			TotalScore: 600,
+		},
+	}
+
+	got := RenderUserMonthlyRankings(rankings)
+	want := "🏆 Seus rankings · Setembro\n\n" +
+		"🕹️ Legado\n" +
+		"• Jogatina BR · 5 pts\n" +
+		"• Amigos 2 · 1 pt\n" +
+		"• Zerados · 0 pts\n\n" +
+		"Total · 6 pts"
+
+	if got != want {
+		t.Fatalf("unexpected rendering:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestRenderUserMonthlyRankings_BothSeparated(t *testing.T) {
+	rankings := ranking.UserMonthlyRankings{
+		UserID:    123,
+		MonthName: "Setembro",
+		Updated: &ranking.UserMonthlyRankingSection{
+			System: groups.Updated,
+			Entries: []ranking.UserGroupRankingEntry{
+				{ChatID: -1001, GroupName: "UNO da Galera", ScoreUnits: 3000},
+				{ChatID: -1002, GroupName: "Amigos do UNO", ScoreUnits: 1857},
+			},
+			TotalScore: 4857,
+		},
+		Legacy: &ranking.UserMonthlyRankingSection{
+			System: groups.Legacy,
+			Entries: []ranking.UserGroupRankingEntry{
+				{ChatID: -1003, GroupName: "Jogatina BR", ScoreUnits: 500},
+				{ChatID: -1004, GroupName: "Amigos 2", ScoreUnits: 300},
+			},
+			TotalScore: 800,
+		},
+	}
+
+	got := RenderUserMonthlyRankings(rankings)
+	want := "🏆 Seus rankings · Setembro\n\n" +
+		"⚡ Atualizado\n" +
+		"• UNO da Galera · 30,00 pts\n" +
+		"• Amigos do UNO · 18,57 pts\n\n" +
+		"Total · 48,57 pts\n\n" +
+		"🕹️ Legado\n" +
+		"• Jogatina BR · 5 pts\n" +
+		"• Amigos 2 · 3 pts\n\n" +
+		"Total · 8 pts"
+
+	if got != want {
+		t.Fatalf("unexpected rendering:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+
+	// Verify never combines totals
+	if strings.Contains(got, "56,57") || strings.Contains(got, "Total · 56") {
+		t.Fatalf("combined total detected: %s", got)
+	}
+}
+
+func TestRenderUserMonthlyRankings_Empty(t *testing.T) {
+	rankings := ranking.UserMonthlyRankings{
+		UserID:    123,
+		MonthName: "Outubro",
+	}
+
+	got := RenderUserMonthlyRankings(rankings)
+	want := "🏆 Seus rankings · Outubro\n\nVocê ainda não possui partidas pontuadas neste mês."
+
+	if got != want {
+		t.Fatalf("unexpected rendering:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestRenderUserMonthlyRankings_HtmlEscapingAndFallback(t *testing.T) {
+	rankings := ranking.UserMonthlyRankings{
+		UserID:    123,
+		MonthName: "Setembro",
+		Updated: &ranking.UserMonthlyRankingSection{
+			System: groups.Updated,
+			Entries: []ranking.UserGroupRankingEntry{
+				{ChatID: -1001, GroupName: "UNO <&> 'Friends'", ScoreUnits: 1000},
+				{ChatID: -1002, GroupName: "", ScoreUnits: 500},
+			},
+			TotalScore: 1500,
+		},
+	}
+
+	got := RenderUserMonthlyRankings(rankings)
+	if !strings.Contains(got, "• UNO &lt;&amp;&gt; &#39;Friends&#39; · 10,00 pts") {
+		t.Fatalf("failed to escape HTML in group name: %s", got)
+	}
+	if !strings.Contains(got, "• Grupo -1002 · 5,00 pts") {
+		t.Fatalf("fallback group name missing: %s", got)
+	}
+}
+
+func TestRenderUserMonthlyRankings_MessageLimitTruncationAndTotal(t *testing.T) {
+	entries := make([]ranking.UserGroupRankingEntry, 120)
+	var total ranking.Units
+	for i := 0; i < len(entries); i++ {
+		score := ranking.Units((120 - i) * 100)
+		total += score
+		entries[i] = ranking.UserGroupRankingEntry{
+			ChatID:     int64(-1000 - i),
+			GroupName:  fmt.Sprintf("Grupo Longo de UNO Número %03d com Nome Extenso", i),
+			ScoreUnits: score,
+		}
+	}
+
+	rankings := ranking.UserMonthlyRankings{
+		UserID:    123,
+		MonthName: "Setembro",
+		Updated: &ranking.UserMonthlyRankingSection{
+			System:     groups.Updated,
+			Entries:    entries,
+			TotalScore: total,
+		},
+	}
+
+	got := RenderUserMonthlyRankings(rankings)
+	units := messageUnits(got)
+	if units > rankingMessageLimit {
+		t.Fatalf("rendered message exceeds Telegram limit: %d > %d", units, rankingMessageLimit)
+	}
+	if !strings.Contains(got, "… e mais ") || !strings.Contains(got, "grupos.") {
+		t.Fatalf("omitted suffix missing: %s", got)
+	}
+	// Total must represent ALL entries, not just visible ones
+	expectedTotalStr := fmt.Sprintf("Total · %s", ranking.FormatScore(groups.Updated, total))
+	if !strings.Contains(got, expectedTotalStr) {
+		t.Fatalf("total does not match sum of all entries: expected %q in:\n%s", expectedTotalStr, got)
+	}
+}
+
+func TestRenderUserMonthlyRankings_SingleOmittedGroup(t *testing.T) {
+	// Create enough text so that exactly 1 group is omitted
+	line := strings.Repeat("A", 150)
+	// Build entries where omitting 1 fits below rankingMessageLimit
+	var entries []ranking.UserGroupRankingEntry
+	var total ranking.Units
+	for i := 0; i < 28; i++ {
+		score := ranking.Units(1000)
+		total += score
+		entries = append(entries, ranking.UserGroupRankingEntry{
+			ChatID:     int64(-1000 - i),
+			GroupName:  fmt.Sprintf("Grupo %02d %s", i, line),
+			ScoreUnits: score,
+		})
+	}
+	rankings := ranking.UserMonthlyRankings{
+		UserID:    123,
+		MonthName: "Setembro",
+		Updated: &ranking.UserMonthlyRankingSection{
+			System:     groups.Updated,
+			Entries:    entries,
+			TotalScore: total,
+		},
+	}
+
+	got := RenderUserMonthlyRankings(rankings)
+	if strings.Contains(got, "… e mais 1 grupos.") {
+		t.Fatalf("pluralized 1 group incorrectly: %s", got)
+	}
+	if strings.Contains(got, "… e mais 1 grupo.") {
+		// Valid singular format verified
+	}
+}
+
+func TestPrivateRankingCommand_ScopesToSenderAndNoButtons(t *testing.T) {
+	svc, _ := game.NewService()
+	api := newMockBotAPI()
+	b := New(api, svc, nil, nil, 0, nil)
+
+	var queriedUserID int64
+	mockRepo := &mockPrivateRankingRepo{
+		onListUser: func(_ context.Context, userID int64, _ time.Time) (ranking.UserMonthlyRankings, error) {
+			queriedUserID = userID
+			return ranking.UserMonthlyRankings{
+				UserID:    userID,
+				MonthName: "Setembro",
+				Updated: &ranking.UserMonthlyRankingSection{
+					System: groups.Updated,
+					Entries: []ranking.UserGroupRankingEntry{
+						{ChatID: -1001, GroupName: "Galera", ScoreUnits: 1500},
+					},
+					TotalScore: 1500,
+				},
+			}, nil
+		},
+	}
+	b.SetRankingService(&ranking.Service{Repository: mockRepo})
+
+	// User 777 sends /ranking in private
+	b.cmdHandler.HandleMessage(t.Context(), &telego.Message{
+		Chat: telego.Chat{ID: 777, Type: "private"},
+		From: &telego.User{ID: 777, FirstName: "Freddy"},
+		Text: "/ranking",
+	})
+
+	if queriedUserID != 777 {
+		t.Fatalf("expected query for user 777, got %d", queriedUserID)
+	}
+	sent := api.LastSentMessage()
+	if !strings.Contains(sent, "🏆 Seus rankings · Setembro") || !strings.Contains(sent, "• Galera · 15,00 pts") {
+		t.Fatalf("unexpected message content: %s", sent)
+	}
+	api.mu.Lock()
+	lastMsg := api.SentMessages[len(api.SentMessages)-1]
+	api.mu.Unlock()
+	if lastMsg.ReplyMarkup != nil {
+		t.Fatalf("expected no buttons or WebApp markup, got: %+v", lastMsg.ReplyMarkup)
+	}
+}
+
+type mockPrivateRankingRepo struct {
+	onListGroup func(context.Context, int64, time.Time) (ranking.GroupRanking, error)
+	onListUser  func(context.Context, int64, time.Time) (ranking.UserMonthlyRankings, error)
+}
+
+func (m *mockPrivateRankingRepo) ListGroupRanking(ctx context.Context, id int64, at time.Time) (ranking.GroupRanking, error) {
+	if m.onListGroup != nil {
+		return m.onListGroup(ctx, id, at)
+	}
+	return ranking.GroupRanking{}, nil
+}
+
+func (m *mockPrivateRankingRepo) ListUserMonthlyRankings(ctx context.Context, userID int64, at time.Time) (ranking.UserMonthlyRankings, error) {
+	if m.onListUser != nil {
+		return m.onListUser(ctx, userID, at)
+	}
+	return ranking.UserMonthlyRankings{UserID: userID}, nil
 }

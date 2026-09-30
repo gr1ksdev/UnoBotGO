@@ -2,8 +2,11 @@ package postgres
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
+	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/ranking"
 )
 
@@ -67,6 +70,85 @@ ORDER BY r.score_units DESC,r.last_placement ASC NULLS LAST,r.last_completed_gam
 	}
 	if rows.Err() != nil {
 		return ranking.GroupRanking{}, operationError(ctx, "read group ranking")
+	}
+	return result, nil
+}
+
+// ListUserMonthlyRankings returns the user's monthly ranking entries across groups
+// for the canonical month of 'at' in America/Sao_Paulo in a single query.
+func (s *Store) ListUserMonthlyRankings(ctx context.Context, userID int64, at time.Time) (ranking.UserMonthlyRankings, error) {
+	if at.IsZero() {
+		at = time.Now()
+	}
+	monthStart := ranking.MonthDateString(at)
+	rows, err := s.pool.Query(ctx, `
+SELECT
+  s.chat_id,
+  COALESCE(c.title, ''),
+  s.ranking_system,
+  s.score_units,
+  s.last_finished_at
+FROM player_group_monthly_stats s
+LEFT JOIN group_configs c ON c.chat_id=s.chat_id
+WHERE s.user_id=$1 AND s.month_start=$2::date
+ORDER BY
+  CASE WHEN s.ranking_system='updated' THEN 1 ELSE 2 END ASC,
+  s.score_units DESC,
+  s.last_finished_at DESC,
+  COALESCE(NULLIF(c.title, ''), 'Grupo ' || s.chat_id::text) ASC,
+  s.chat_id ASC`, userID, monthStart)
+	if err != nil {
+		return ranking.UserMonthlyRankings{}, operationError(ctx, "list user monthly rankings")
+	}
+	defer rows.Close()
+
+	result := ranking.UserMonthlyRankings{
+		UserID:     userID,
+		MonthName:  ranking.MonthName(at),
+		MonthStart: ranking.MonthStart(at),
+	}
+
+	for rows.Next() {
+		var chatID int64
+		var title string
+		var systemStr string
+		var scoreUnits int64
+		var lastFinishedAt time.Time
+
+		if err := rows.Scan(&chatID, &title, &systemStr, &scoreUnits, &lastFinishedAt); err != nil {
+			return ranking.UserMonthlyRankings{}, operationError(ctx, "read user monthly rankings")
+		}
+
+		groupName := strings.TrimSpace(title)
+		if groupName == "" {
+			groupName = fmt.Sprintf("Grupo %d", chatID)
+		}
+
+		system := groups.RankingSystem(systemStr)
+		entry := ranking.UserGroupRankingEntry{
+			ChatID:         chatID,
+			GroupName:      groupName,
+			RankingSystem:  system,
+			ScoreUnits:     ranking.Units(scoreUnits),
+			LastFinishedAt: lastFinishedAt,
+		}
+
+		if system == groups.Updated {
+			if result.Updated == nil {
+				result.Updated = &ranking.UserMonthlyRankingSection{System: groups.Updated}
+			}
+			result.Updated.Entries = append(result.Updated.Entries, entry)
+			result.Updated.TotalScore += entry.ScoreUnits
+		} else if system == groups.Legacy {
+			if result.Legacy == nil {
+				result.Legacy = &ranking.UserMonthlyRankingSection{System: groups.Legacy}
+			}
+			result.Legacy.Entries = append(result.Legacy.Entries, entry)
+			result.Legacy.TotalScore += entry.ScoreUnits
+		}
+	}
+	if rows.Err() != nil {
+		return ranking.UserMonthlyRankings{}, operationError(ctx, "read user monthly rankings")
 	}
 	return result, nil
 }

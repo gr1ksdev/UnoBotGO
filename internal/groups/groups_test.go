@@ -27,6 +27,11 @@ func (r *memoryRepo) SetInstalledBy(_ context.Context, _ int64, installerID int6
 	r.c.InstalledByUserID = &installerID
 	return r.c, nil
 }
+func (r *memoryRepo) ObserveGroupTitle(_ context.Context, _ int64, title string) error {
+	r.writes++
+	r.c.Title = title
+	return nil
+}
 
 func TestPermission(t *testing.T) {
 	installer := int64(7)
