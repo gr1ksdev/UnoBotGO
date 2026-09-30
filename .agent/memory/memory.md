@@ -1,3 +1,52 @@
+# Refinamento visual das cartas de UNO no hero de detalhe — 2026-09-30 (somente dev; pronto para homologação)
+
+- Pedido do usuário aprovado no plano: `refinamento-cartas-hero-detalhe_2026-09-30_14-15.md`.
+- Fonte de verdade visual: `mockup_de_rankings_uno_em_iphones.png`.
+- Ajustes executados em `web/src/pages/Rankings.tsx`, `web/src/styles.css` e `web/src/App.test.tsx`:
+  - 3 cartas físicas de UNO grandes em leque realista:
+    - Vermelha em primeiro plano (`z-index: 3`, rotação suave `3deg`, `bottom: 10px`, `right: -32px`).
+    - Amarela no meio (`z-index: 2`, rotação `18deg`, `bottom: 44px`, `right: -36px`), corpo e elipse branca visíveis.
+    - Verde atrás (`z-index: 1`, rotação `34deg`, `bottom: -22px`, `right: -28px`), corpo e elipse branca visíveis.
+  - Proporções físicas de baralho: `clamp(92px, 25vw, 106px)` x `clamp(144px, 39vw, 166px)`, borda branca nítida de 3.5px, border-radius de 12px, elipses centrais com brilho sutil e sombras projetadas em camadas (`-4px 6px 18px rgba(0, 0, 0, 0.42)`).
+  - Transbordamento lateral (clipping): `.group-hero` com `overflow: visible;` permitindo que as cartas passem pela borda do hero até a lateral direita do `.app-shell`, onde a borda física da tela as corta naturalmente com zero scroll horizontal. A parte inferior é naturalmente sobreposta pela curva do painel branco de ranking interno.
+  - Legenda atualizada de `"Total do grupo no mês de {month}"` para `"Total em {month}"`, com asserção correspondente atualizada em `web/src/App.test.tsx`.
+  - Hierarquia e legibilidade: Avatar e `.group-summary` garantidos com `z-index: 10`, mantendo textos de nome, ID, pontos e legenda sempre acima e 100% legíveis.
+- Verificações completas: lint, typecheck, 20 testes de frontend em vitest, build de produção em `web/dist`, 16 pacotes Go testados e `git diff --check` sem pendências.
+- Regras de isolamento: zero commit, zero push, main intocada, sem deploy/migration em produção.
+
+---
+
+# Terceira passada de fidelidade visual e densidade mobile (390x844px) — 2026-09-30 (somente dev; pronto para homologação)
+
+- Pedido do usuário aprovado no plano: `fidelidade-visual-mockup-rankings-passo-3_2026-09-30_13-38.md`.
+- Fonte de verdade visual: `mockup_de_rankings_uno_em_iphones.png` (viewport nativo 390x844px do iPhone).
+- Ajustes finos executados em `web/src/styles.css`, `web/src/pages/Rankings.tsx`:
+  - Tipografia: nomes ampliados para `16.5px` peso 750 marinho escuro (`#081534`), score para `18px` peso 800 tabular nums, títulos para `18px` peso 750, IDs em `13px` peso 500.
+  - Cards: altura mínima de `80px`, padding `12px 16px 12px 12px`, sombras e bordas ultra sutis (`border: 1px solid rgba(226, 232, 240, 0.7)`).
+  - Avatares: ampliados para `56px` x `56px` nos cards com borda branca 2px de alta definição.
+  - Fundo: clareado para `#f8fafd`, eliminando aspecto acinzentado e reforçando o contraste dos cards `#ffffff`.
+  - Header Global: gradiente profundo com iluminação rica (`#073b82` a `#2280ea`).
+  - Tela de Detalhes: hero em carmesim acetinado profundo (`#660a14` a `#90111e`), avatar de `104px`, nome com `23px` peso 800, score de `32px`, e cartas UNO decorativas amarela e verde fanned out com bordas brancas sólidas e elipses centrais cortadas pela lateral direita.
+- `web/dist` recompilado e pronto para execução com `go run -tags debugcards ./cmd/bot`.
+- Regras de isolamento: zero commit, zero push, main intocada, sem deploy/migration em produção.
+
+---
+
+# Segunda passada de fidelidade visual da Mini App de ranking — 2026-09-30 (somente dev; pronto para homologação)
+
+- Pedido do usuário aprovado no plano: `fidelidade-visual-mockup-rankings_2026-09-30_13-10.md`.
+- Fonte de verdade visual: `mockup_de_rankings_uno_em_iphones.png`.
+- Ajustes executados em `web/src/styles.css`, `web/src/components/Ranking.tsx` e `web/src/pages/Rankings.tsx`:
+  - Header Global: gradiente azul royal vibrante (`linear-gradient(180deg, #0947ba 0%, #0d54c7 40%, #156ddf 80%, #1a75ec 100%)`).
+  - Controles segmentados: contêineres cápsula `rounded-full` claros. Ativo `Atualizado`, `Legado` e `Grupos` em vermelho (`#ea2328`), ativo `Players` em azul elétrico (`#0262f6`), inativos em texto ardósia `#4b5770` sem fundo.
+  - Cards de ranking: proporções ampliadas (altura 76px, radius 22px), topo 1 em amarelo suave quente com medalha dourada e 1 branco, topo 2 em prata suave com medalha prateada e 2 branco, topo 3 em bronze/pêssego suave com medalha bronzeada e 3 branco. Posições 4+ limpas com número sem ponto final (16px negrito).
+  - Tipografia: nomes escuros em marinho (#081534), ID com 5 bullets (`ID •••••8462`), score tabular com `pts` semibold.
+  - Tela de detalhe: header e hero em carmesim rico (`linear-gradient(180deg, #700d18 0%, #9e1322 35%, #cf1e2c 70%, #9e1322 100%)`), avatar de 92px com borda branca de 4px, nome com 21px negrito, score grande 28px, cartas UNO amarela e verde estilizadas no canto inferior direito e título com ícone 👥 (`UsersIcon`).
+- Zero alterações de backend: regras de persistência, APIs, autenticação e dados intocados.
+- Regras de isolamento: zero commit, zero push, main intocada, sem deploy/migration em produção.
+
+---
+
 # Mini App de ranking global do UnoBotGO — 2026-09-30 (somente dev; pronto para homologação manual)
 
 - Pedido do usuário aprovado no plano: `miniapp-ranking-global_2026-09-30_11-20.md`.

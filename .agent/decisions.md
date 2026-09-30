@@ -1,3 +1,116 @@
+# Decisão: refinamento visual cirúrgico do leque de cartas UNO no hero de detalhe de grupo
+
+## Data
+2026-09-30
+
+## Contexto
+O usuário solicitou um refinamento visual muito específico na tela de detalhe do grupo ("Ranking do grupo"): as cartas decorativas do hero deveriam deixar de ser ícones contidos para se tornarem 3 cartas físicas grandes de baralho UNO dispostas em leque rotacionado (Vermelha em primeiro plano, Amarela no meio, Verde atrás), ultrapassando geometricamente a borda direita do hero e do aparelho, cortadas naturalmente pela borda física da viewport sem corte prematuro pelo card. Além disso, a legenda deveria ser simplificada para "Total em {month}".
+
+## Decisão tomada
+1. Leque de 3 cartas grandes com proporção realista de baralho:
+   - Dimensões fluídas: `clamp(92px, 25vw, 106px)` de largura por `clamp(144px, 39vw, 166px)` de altura.
+   - Borda branca sólida nítida de `3.5px`, cantos arredondados com `border-radius: 12px`, sombras projetadas profundas (`box-shadow: -4px 6px 18px rgba(0, 0, 0, 0.42)`).
+   - Elipse central (`card-oval`) inclinada em `-30deg` com borda branca e brilho sutil.
+2. Posicionamento e Rotação em Leque:
+   - Carta Vermelha: primeiro plano (`z-index: 3`), rotação de `3deg`, `bottom: 10px`, `right: -32px`.
+   - Carta Amarela: plano intermediário (`z-index: 2`), rotação de `18deg`, `bottom: 44px`, `right: -36px`.
+   - Carta Verde: plano de fundo (`z-index: 1`), rotação de `34deg`, `bottom: -22px`, `right: -28px`.
+   - Ponto de pivô/origem: `transform-origin: 30% 90%`.
+3. Clipping e Transbordamento:
+   - `.group-hero` ajustado com `overflow: visible;`, permitindo que as cartas passem para fora do card hero.
+   - `.app-shell` mantido com `overflow: hidden;`, garantindo corte natural das cartas no limite lateral do dispositivo/viewport móvel com zero scroll horizontal.
+   - A parte inferior das cartas projeta-se abaixo do hero e é naturalmente coberta pela curvatura do topo do `.ranking-panel`.
+4. Legenda e Hierarquia:
+   - Legenda simplificada para `"Total em {month}"` em `Rankings.tsx` e teste unitário atualizado em `App.test.tsx`.
+   - Avatar e `.group-summary` garantidos com `z-index: 10`, assegurando que textos fiquem sempre à frente e nunca sofram sobreposição indevida.
+5. Preservação Total de Escopo:
+   - Nenhuma alteração em backend, rotas, regras de negócio ou telas globais.
+
+## Motivo
+Fidelidade total ao conceito visual do mockup aprovado, proporcionando a ilusão óptica de cartas reais que continuam fisicamente para fora da tela do smartphone.
+
+## Impacto
+Acabamento visual de alto padrão com forte apelo temático de UNO na tela de grupo, mantendo conformidade rigorosa com todos os testes e builds.
+
+---
+
+# Decisão: terceira passada de fidelidade visual de UI/UX (proporção, densidade, tipografia e acabamento nativo 390px)
+
+## Data
+2026-09-30
+
+## Contexto
+A homologação da segunda passada indicou a necessidade de refinar proporção, densidade, presença tipográfica, acabamento do hero, cartas UNO decorativas e clareamento do fundo, tomando a viewport de 390x844px do iPhone como referência 1:1 com o mockup.
+
+## Decisão tomada
+1. Tipografia e Presença:
+   - Nomes com presença ampliada: `font-size: 16.5px`, `font-weight: 750` em marinho escuro `#081534`.
+   - Pontuação de cards ampliada para `font-size: 18px`, `font-weight: 800` com `pts` em `14px` peso 600.
+   - Títulos de header em `18px`, peso 750, perfeitamente centralizados.
+2. Dimensões e cards:
+   - Cards com altura mínima de `80px`, preenchimento vertical mais harmonioso (`12px 16px 12px 12px`), cantos com `border-radius: 22px`.
+   - Posição 4+ com número em `17.5px` peso 750 marinho escuro, perfeitamente centralizado.
+3. Avatares:
+   - Ampliados para `56px` x `56px` na listagem com anel branco de alta definição.
+   - Avatar do hero na tela de detalhe ampliado para `104px` x `104px` com borda sólida branca de `4px` e sombra refinada.
+4. Header e Hero da tela de detalhe:
+   - Gradiente carmesim acetinado profundo (`linear-gradient(180deg, #660a14 0%, #99121f 30%, #cb1d2a 70%, #90111e 100%)`).
+   - Nome do grupo em `23px` peso 800, pontuação grande em `32px` peso 850 com `pts` em `20px` bold.
+   - Cartas UNO decorativas estilizadas no canto inferior direito (`54px` x `86px`), sobrepostas e inclinadas, com borda branca sólida de `3px`, sombra e elipse central branca, parcialmente cortadas pela lateral direita do card como no mockup.
+5. Fundo clareado:
+   - Painel de conteúdo clareado para `#f8fafd`, eliminando a sensação acinzentada e elevando o contraste dos cards brancos `#ffffff`.
+6. Preservação:
+   - Nenhuma alteração em backend, queries, rotas, regras de negócio ou autenticação.
+
+## Motivo
+Alcançar fidelidade visual definitiva e acabamento indistinguível da referência nativa em 390px.
+
+## Impacto
+Sensação autêntica de aplicativo nativo mobile premium de alta qualidade no Telegram WebApp.
+
+---
+
+# Decisão: segunda passada de fidelidade visual de UI/UX do Mini App baseada estritamente no mockup oficial
+
+## Data
+2026-09-30
+
+## Contexto
+Após homologação funcional da Mini App de ranking, os componentes visuais necessitavam de refinamento minucioso para alcançar fidelidade máxima com o design aprovado no mockup (`mockup_de_rankings_uno_em_iphones.png`).
+
+## Decisão tomada
+1. Header Global com gradiente azul royal elétrico:
+   - Substituído o gradiente escuro anterior por `linear-gradient(180deg, #0947ba 0%, #0d54c7 40%, #156ddf 80%, #1a75ec 100%)`.
+2. Segmented controls em formato cápsula (`rounded-full`):
+   - Contêineres claros com formato pílula e botões internos `rounded-full` com tipografia semibold/bold (14.5px).
+   - Cores exatas do mockup:
+     - `Atualizado` e `Legado` ativos em vermelho vibrante (`#ea2328`).
+     - `Grupos` ativo em vermelho vibrante (`#ea2328`).
+     - `Players` ativo em azul elétrico (`#0262f6`).
+     - Abas inativas sobre fundo transparente com texto ardósia/marinho (`#4b5770`) de peso 600.
+3. Cards de ranking com proporções e contraste fiéis:
+   - Cards com altura confortável de 76px e border-radius de 22px sobre fundo de painel `#f0f3f8`.
+   - Top 1: fundo amarelo suave quente (`linear-gradient(90deg, #fff9d8 0%, #fef5cc 100%)`) com medalha de fita dourada e número 1 branco.
+   - Top 2: fundo neutro prata suave (`#f4f6fa`) com medalha de fita prateada e número 2 branco.
+   - Top 3: fundo pêssego/bronze suave (`#fff0e6`) com medalha de fita bronzeada e número 3 branco.
+   - Posições 4+: cards brancos com borda sutil, sombra suave e número de posição limpo (sem ponto final, centralizado em 16px negrito).
+   - Tipografia de nomes em marinho escuro (#081534), ID com 5 bullets (`ID •••••8462`) e pontuação tabular com `pts` semibold.
+4. Header e Hero da tela de detalhe:
+   - Gradiente carmesim rico (`linear-gradient(180deg, #700d18 0%, #9e1322 35%, #cf1e2c 70%, #9e1322 100%)`).
+   - Hero com avatar ampliado de 92px com borda branca de 4px, nome com 21px negrito, pontuação grande 28px e legenda do mês.
+   - Cartas UNO decorativas estilizadas no canto inferior direito (carta amarela e verde fanning com borda branca e elipse central).
+   - Título da seção interna atualizado com ícone de grupo 👥 (`UsersIcon`).
+5. Zero alterações de backend:
+   - Toda a lógica de API, queries, autenticação, paginação e regras de negócio permaneceu 100% intocada.
+
+## Motivo
+Garantir acabamento visual mobile-first premium indistinguível do mockup aprovado.
+
+## Impacto
+Experiência do usuário consistente, polida e moderna no Telegram WebApp em iOS e Android.
+
+---
+
 # Decisão: Mini App Telegram de ranking global mensal, API unificada e assets embutidos
 
 ## Data

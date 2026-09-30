@@ -163,7 +163,7 @@ describe('App and Full Routing Flows', () => {
     // Should render detail view
     await waitFor(() => {
       expect(screen.getByRole('heading', { level: 1, name: 'Ranking do grupo' })).toBeInTheDocument()
-      expect(screen.getByText(/Total do grupo no mês de Setembro/)).toBeInTheDocument()
+      expect(screen.getByText(/Total em Setembro/)).toBeInTheDocument()
     })
 
     // Click back button

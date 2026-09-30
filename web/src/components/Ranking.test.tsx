@@ -56,9 +56,9 @@ describe('Ranking Components', () => {
       expect(screen.getByLabelText('3º lugar')).toBeInTheDocument()
     })
 
-    it('renders ordinal number for position > 3', () => {
+    it('renders clean number for position > 3', () => {
       wrap(<RankBadge position={4} />)
-      expect(screen.getByText('4.')).toBeInTheDocument()
+      expect(screen.getByText('4')).toBeInTheDocument()
     })
   })
 
