@@ -22,16 +22,7 @@ func (s *Store) ListGroupRanking(ctx context.Context, chatID int64, at time.Time
 	}
 	monthStart := ranking.MonthDateString(at)
 	rows, err := s.pool.Query(ctx, `
-WITH latest AS (
- SELECT DISTINCT ON (p.user_id) p.user_id,p.position,g.finished_at
- FROM completed_games g
- JOIN completed_game_players p ON p.game_id=g.game_id
- WHERE g.chat_id=$1 AND g.scoring_status='scored'
- AND (date_trunc('month', (g.finished_at AT TIME ZONE 'America/Sao_Paulo')))::date = $2::date
- AND p.position IS NOT NULL
- AND ((p.final_status='went_out' AND p.went_out) OR (p.final_status='playing' AND NOT p.went_out))
- ORDER BY p.user_id,g.finished_at DESC,g.game_id DESC
-)
+WITH latest AS (`+eligibleMonthlyLatest+`)
 SELECT COALESCE(c.ranking_system,'legacy'),
  COALESCE(r.user_id,0), COALESCE(r.display_name,''), COALESCE(r.score_units,0),
  COALESCE(r.completed_games,0), COALESCE(r.wins,0), COALESCE(r.total,0), COALESCE(r.compatible,true)
@@ -43,10 +34,10 @@ LEFT JOIN LATERAL (
  count(*) OVER () AS total,
  bool_and(s.ranking_system=COALESCE(c.ranking_system,'legacy')) OVER () AS compatible
  FROM player_group_monthly_stats s LEFT JOIN latest ON latest.user_id=s.user_id
- WHERE s.chat_id=requested.chat_id AND s.month_start=$2::date
- ORDER BY s.score_units DESC,latest.position ASC NULLS LAST,latest.finished_at DESC NULLS LAST,s.user_id ASC LIMIT $3
+ WHERE s.chat_id=requested.chat_id AND s.month_start=$4::date
+ ORDER BY s.score_units DESC,latest.position ASC NULLS LAST,latest.finished_at DESC NULLS LAST,s.user_id ASC LIMIT $5
 ) r ON true
-ORDER BY r.score_units DESC,r.last_placement ASC NULLS LAST,r.last_completed_game_at DESC NULLS LAST,r.user_id ASC`, chatID, monthStart, ranking.MaxRankingEntries)
+ORDER BY r.score_units DESC,r.last_placement ASC NULLS LAST,r.last_completed_game_at DESC NULLS LAST,r.user_id ASC`, chatID, ranking.MonthStart(at), ranking.MonthStart(at).AddDate(0, 1, 0), monthStart, ranking.MaxRankingEntries)
 	if err != nil {
 		return ranking.GroupRanking{}, operationError(ctx, "list group ranking")
 	}

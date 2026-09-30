@@ -17,10 +17,17 @@ services:
       retries: 5
 
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.v2
+    ports:
+      - "8080:8080"
     environment:
       TOKEN: ${TOKEN}
       DATABASE_URL: postgres://unobot:unobot@db:5432/unobot?sslmode=disable
+      WEB_ADDR: :8080
+      MINIAPP_SECRET: ${MINIAPP_SECRET}
+      MINIAPP_LAUNCH_URL: ${MINIAPP_LAUNCH_URL}
     depends_on:
       db:
         condition: service_healthy

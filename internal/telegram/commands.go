@@ -17,6 +17,7 @@ import (
 
 type CommandHandler struct {
 	rankingService *ranking.Service
+	miniAppURL     string
 	knownUsers     groups.UserRepository
 	finalize       func(context.Context, game.Outcome) func()
 	groupConfigs   groups.Repository

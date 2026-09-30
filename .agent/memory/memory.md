@@ -1,3 +1,33 @@
+# Mini App de ranking global do UnoBotGO — 2026-09-30 (somente dev; pronto para homologação manual)
+
+- Pedido do usuário aprovado no plano: `miniapp-ranking-global_2026-09-30_11-20.md`.
+- Arquitetura implementada:
+  - Frontend SPA (React 19, TypeScript estrito, Vite, Tailwind v4, TanStack Query, React Router) em `web/`.
+  - Compilação via `make web-build` para `web/dist`, embutido diretamente no Go via `web/embed.go` (`//go:embed all:dist`).
+  - Executável único `bin/unobotgo` gerado por `make build`.
+  - Startup orquestrado em `internal/app/app.go`: ordem estrita config → PostgreSQL → advisory lock transacional (71870101) → Migrate → VerifySchema → release lock → listener HTTP unificado (API, estáticos, webhook) → bot dispatcher e workers. Falha de migração encerra imediatamente com fail-closed.
+- Segurança e integridade de dados:
+  - Autenticação via `Authorization: tma <initData>`, validada por HMAC-SHA256 oficial em tempo constante em `internal/httpapi/auth.go`.
+  - IDs de Telegram mascarados: interface exibe somente `ID ••••1234`.
+  - Referências técnicas, cursores de paginação keyset e URLs de avatar utilizam tokens criptografados e autenticados com AES-GCM (derivados de `MINIAPP_SECRET`).
+  - Precisão decimal: `score_units` transmitido como string no JSON e manipulado via `BigInt` no TypeScript, evitando perda de precisão em inteiros > 2^53.
+  - Período mensal corrente calculado no backend em `America/Sao_Paulo`. Requisições com mês divergente retornam 409 `ranking_period_changed`.
+- Cache de fotos de avatar:
+  - Cache LRU em memória em `internal/media/service.go` (máx 2000 entradas e 64 MiB), rate limit por ticker de 350ms e workers dedicados.
+  - Downloads protegidos em `internal/telegram/avatar.go` restritos à `api.telegram.org` HTTPS com redação total de tokens/URLs em logs e erros.
+- Interface visual e paridade de produto:
+  - Layout e estilos em `web/src/styles.css` aderentes ao mockup oficial (`mockup_de_rankings_uno_em_iphones-2.png`).
+  - Header global em gradiente azul; detalhe do grupo em gradiente vermelho com hero, avatar ampliado, pontuação total e cartas UNO decorativas.
+  - Medalhas top 3 com SVG customizado (ouro, prata, bronze), posições únicas e fundos destacados (place-1 ouro suave, place-3 bronze suave).
+  - Segmented controls de universos (Atualizado/Legado) e abas (Grupos/Players) com estados ativo vermelho/azul.
+  - Cards de grupos clicáveis (abrem `/groups/:groupRef`); cards de players não clicáveis.
+  - Navegação de volta e integração com BackButton nativo do Telegram.
+- Botão inline no Telegram:
+  - Respostas de `/ranking` em grupos e no privado agora incluem o botão inline `🌐 Ranking Global` apontando para `MINIAPP_LAUNCH_URL` via URL comum do Telegram (omitido quando a variável não estiver configurada).
+- Regras de isolamento: zero commit, zero push, main intocada, sem deploy/migration em produção.
+
+---
+
 # Melhoria visual e explicativa do comando /config — 2026-09-30 (somente dev; em homologação)
 
 - Pedido do usuário aprovado no plano: `melhoria-ux-config_2026-09-29_23-57.md`.

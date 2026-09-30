@@ -1,3 +1,23 @@
+# Mini App de ranking global — 2026-09-30 (somente dev; pronto para homologação)
+
+- Adicionado Mini App Telegram integrado ao binário Go único (`bin/unobotgo`), servindo API, SPA estático e webhook na mesma porta/origem (`WEB_ADDR`, padrão `:8080`).
+- Frontend moderno em `web/`: React 19, TypeScript estrito, Vite 7, Tailwind v4, TanStack Query 5 e React Router 7. Compila para `web/dist` e é embutido via `//go:embed all:dist` em `web/embed.go`.
+- Startup orquestrado em `internal/app`:
+  - PostgreSQL advisory lock transacional (`71870101`).
+  - Execução e verificação de migrações (`Migrate` + `VerifySchema`) antes de abrir listeners ou iniciar bot/workers.
+  - Fail-closed total: falhas de migration encerram com exit code não zero sem abrir qualquer serviço parcial.
+- Segurança e integridade:
+  - Autenticação por HMAC-SHA256 em tempo constante do `Authorization: tma <initData>`.
+  - Ocultação de raw IDs: interface exibe `ID ••••1234`. Referências de grupo, cursores keyset e URLs de avatar são seladas com AES-GCM (usando `MINIAPP_SECRET`).
+  - Precisão matemática: `score_units` como string decimal no JSON e `BigInt` no frontend, sem perda de precisão float.
+  - Mês corrente calculado no backend em `America/Sao_Paulo`. Requisições com mês divergente retornam 409 `ranking_period_changed`.
+- Cache de fotos de avatar:
+  - Cache LRU em memória (`internal/media/service.go`) até 2.000 fotos e 64 MiB com workers dedicados e rate limit via ticker de 350ms.
+  - Sanitização de logs sem vazamento de tokens ou URLs internas do Telegram.
+- Regras operacionais: sem commits, sem push, sem alterações na branch `main`, sem deploy/migration em produção.
+
+---
+
 # Ranking mensal privado (/ranking no privado) — 2026-09-29 (somente dev; em homologação)
 
 - O comando `/ranking` agora bifurca por contexto de chat:

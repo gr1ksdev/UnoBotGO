@@ -15,15 +15,20 @@ Bot de UNO em Go para o Telegram utilizando modo inline com stickers para visual
 - **Como executar o V2**:
   ```bash
   cp .env.example .env
-  # Configure TOKEN e DATABASE_URL no .env
-  go run ./cmd/migrate
-  go run ./cmd/bot
+  # Configure TOKEN, DATABASE_URL e MINIAPP_SECRET no .env
+  make build
+  make run
+  ```
+  Ou em modo desenvolvimento com Mini App Vite sincronizado:
+  ```bash
+  make dev
   ```
   Ou via Docker:
   ```bash
   docker build -f Dockerfile.v2 -t unobotgo:v2 .
-  docker run --rm --env-file .env unobotgo:v2
+  docker run --rm -p 8080:8080 --env-file .env unobotgo:v2
   ```
+  As migrações do PostgreSQL são verificadas e aplicadas automaticamente na inicialização com advisory lock transacional fail-closed.
 
 
   A imagem oficial da `main` é publicada em

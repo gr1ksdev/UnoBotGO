@@ -16,7 +16,7 @@ import (
 //go:embed migrations/*.up.sql
 var migrationFiles embed.FS
 
-var ErrSchema = errors.New("postgres: schema missing or incompatible; run go run ./cmd/migrate")
+var ErrSchema = errors.New("postgres: schema missing or incompatible; check migration ledger and checksums")
 
 type migration struct{ name, sql, checksum string }
 
@@ -39,8 +39,8 @@ func migrations() ([]migration, error) {
 }
 
 // Migrate applies all pending migrations atomically, serializing competing
-// migrators with a transaction-scoped advisory lock. There is no automatic DDL
-// in bot startup and no destructive down migration.
+// migrators with a transaction-scoped advisory lock, also used by startup.
+// There is no destructive down migration.
 func (s *Store) Migrate(ctx context.Context) error {
 	list, err := migrations()
 	if err != nil {

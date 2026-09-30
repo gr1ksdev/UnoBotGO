@@ -1,3 +1,33 @@
+# Decisão: Mini App Telegram de ranking global mensal, API unificada e assets embutidos
+
+## Data
+2026-09-30
+
+## Contexto
+O UnoBotGO necessitava de uma experiência visual rica para exibição do ranking global mensal (universos Atualizado e Legado), com listas de grupos e jogadores, detalhe do grupo, fotos e anonimização de identificadores, mantendo um único executável em produção sem dependência de runtime Node.js.
+
+## Decisão tomada
+1. Arquitetura unificada e runtime standalone:
+   - Frontend em React 19, TypeScript, Vite, Tailwind v4 e TanStack Query compilado em `web/dist` e embutido no binário Go (`bin/unobotgo`) via `//go:embed`.
+   - Node.js utilizado unicamente na etapa de build/desenvolvimento; imagem Docker final distroless nonroot sem Node ou arquivos fontes.
+   - Entrypoint único gerenciado por `internal/app`: orquestra configuração, migrações automáticas sob advisory lock PostgreSQL com fail-closed estrito, servidor HTTP unificado e inicialização do dispatcher/bot do Telegram.
+2. Segurança e privacidade:
+   - Autenticação obrigatória de rotas de dados e mídia via cabeçalho `Authorization: tma <initData>`, validado por HMAC-SHA256 em tempo constante.
+   - IDs numéricos do Telegram protegidos: interface exibe `ID ••••1234`; referências de grupos, cursores de paginação e URLs de mídia utilizam tokens criptografados e autenticados com AES-GCM (derivados de `MINIAPP_SECRET`).
+3. Integridade e precisão matemática:
+   - `score_units` transmitido como string decimal no JSON e processado via `BigInt` no TypeScript, prevenindo perda de precisão acima de 2^53.
+   - Mês corrente calculado exclusivamente no backend com fuso horário `America/Sao_Paulo`. Cursores com mês defasado retornam 409 `ranking_period_changed`.
+4. Proxy e cache de avatares:
+   - Pacote `internal/media` implementa cache LRU em memória (até 2.000 fotos e 64 MiB), rate limiter por ticker e workers dedicados. Downloads do Telegram são restritos à API oficial com sanitização total de credenciais e logs.
+
+## Motivo
+Eliminar sobrecarga no chat do Telegram mantendo alta fidelidade visual ao mockup oficial, garantindo segurança de credenciais, ausência de vazamento de dados de grupos/jogadores e simplicidade operacional de deploy com um único binário.
+
+## Impacto
+O ranking global fica acessível no Telegram tanto por botão inline nos rankings quanto diretamente via Mini App. A integridade estatística, regras de engine e migrações anteriores permanecem 100% preservadas.
+
+---
+
 # Decisão: melhoria visual e explicativa do comando /config via blockquotes contextuais
 
 ## Data

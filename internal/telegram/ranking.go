@@ -10,6 +10,7 @@ import (
 	"unicode/utf16"
 
 	"github.com/malbs/UnoGoBot/internal/ranking"
+	"github.com/mymmrac/telego"
 )
 
 const rankingMessageLimit = 4000 // UTF-16 units after HTML entity parsing; below 4096.
@@ -76,6 +77,14 @@ func (b *Bot) SetRankingService(service *ranking.Service) {
 	b.cmdHandler.rankingService = service
 }
 
+func (b *Bot) SetMiniAppURL(url string) { b.cmdHandler.miniAppURL = url }
+func (h *CommandHandler) rankingMarkup() *telego.InlineKeyboardMarkup {
+	if h.miniAppURL == "" {
+		return nil
+	}
+	return &telego.InlineKeyboardMarkup{InlineKeyboard: [][]telego.InlineKeyboardButton{{{Text: "🌐 Ranking Global", URL: h.miniAppURL}}}}
+}
+
 func (h *CommandHandler) handleRanking(ctx context.Context, chatID int64) {
 	readCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	group, err := h.rankingService.ListGroupRanking(readCtx, chatID)
@@ -87,7 +96,7 @@ func (h *CommandHandler) handleRanking(ctx context.Context, chatID int64) {
 		h.reply(sendCtx, chatID, "⚠️ Não foi possível consultar o ranking do grupo. Tente /ranking novamente.", nil)
 		return
 	}
-	h.reply(sendCtx, chatID, RenderGroupRanking(group), nil)
+	h.reply(sendCtx, chatID, RenderGroupRanking(group), h.rankingMarkup())
 }
 
 // RenderUserMonthlyRankings formats the user's monthly points per group for private chat.
@@ -201,5 +210,5 @@ func (h *CommandHandler) handlePrivateRanking(ctx context.Context, chatID int64,
 		h.reply(sendCtx, chatID, "⚠️ Não foi possível consultar seu ranking. Tente /ranking novamente.", nil)
 		return
 	}
-	h.reply(sendCtx, chatID, RenderUserMonthlyRankings(rankings), nil)
+	h.reply(sendCtx, chatID, RenderUserMonthlyRankings(rankings), h.rankingMarkup())
 }

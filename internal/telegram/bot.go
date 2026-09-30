@@ -46,6 +46,8 @@ type Bot struct {
 	turnTimeout      time.Duration
 	transport        TransportConfig
 	dedupe           *updateDeduper
+	externalHTTP     bool
+	onReady          func()
 }
 
 func (b *Bot) SetGroupConfigs(repository groups.Repository) {
@@ -99,6 +101,7 @@ func New(api BotAPI, service *game.Service, tokens *TokenStore, renderer *Render
 }
 
 func (b *Bot) Run(ctx context.Context) error {
+	defer b.dispatcher.Stop(10 * time.Second)
 	me, err := b.api.GetMe(ctx)
 	if err != nil {
 		return fmt.Errorf("verify bot getMe: %w", err)
@@ -119,6 +122,9 @@ func (b *Bot) Run(ctx context.Context) error {
 	cfg := b.transport.normalized()
 	b.transport = cfg
 	if cfg.Mode == TransportWebhook {
+		if b.externalHTTP {
+			return b.runSharedWebhook(ctx, cfg)
+		}
 		return b.runWebhook(ctx, cfg)
 	}
 	return b.runPolling(ctx)
@@ -177,6 +183,9 @@ func (b *Bot) runPolling(ctx context.Context) error {
 		return fmt.Errorf("start long polling: %w", err)
 	}
 	b.logger.Info("started long polling updates", "username", b.username)
+	if b.onReady != nil {
+		b.onReady()
+	}
 	b.startScheduler(ctx)
 	for {
 		select {

@@ -16,6 +16,16 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm --prefix web ci
+      - run: npm --prefix web run lint
+      - run: npm --prefix web run typecheck
+      - run: npm --prefix web run test
+      - run: npm --prefix web run build
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -24,6 +34,9 @@ jobs:
       - run: go test -race ./...
       - run: go vet ./...
       - run: go build ./...
+      - run: go test -tags debugcards ./...
+      - run: go vet -tags debugcards ./...
+      - run: go build -tags debugcards ./...
       - run: git diff --check
   postgres:
     runs-on: ubuntu-latest
