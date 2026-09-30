@@ -114,6 +114,19 @@ func (s *Store) RecordCompletedGame(ctx context.Context, result ranking.Result) 
 		if tag.RowsAffected() != 1 {
 			return ranking.Commit{}, ranking.ErrNeedsProductDecision
 		}
+		monthStart := ranking.MonthDateString(r.FinishedAt)
+		tagMonthly, err := tx.Exec(ctx, `INSERT INTO player_group_monthly_stats(chat_id,user_id,month_start,ranking_system,score_units,completed_games,wins,display_name,last_finished_at)
+ VALUES($1,$2,$3,$4,$5,1,$6,$7,$8) ON CONFLICT(chat_id,user_id,month_start) DO UPDATE SET
+ score_units=player_group_monthly_stats.score_units+EXCLUDED.score_units,completed_games=player_group_monthly_stats.completed_games+1,wins=player_group_monthly_stats.wins+EXCLUDED.wins,
+ display_name=CASE WHEN EXCLUDED.last_finished_at>=player_group_monthly_stats.last_finished_at THEN EXCLUDED.display_name ELSE player_group_monthly_stats.display_name END,
+ last_finished_at=GREATEST(player_group_monthly_stats.last_finished_at,EXCLUDED.last_finished_at),updated_at=now()
+ WHERE player_group_monthly_stats.ranking_system=EXCLUDED.ranking_system`, r.ChatID, p.UserID, monthStart, r.RankingSystem, int64(p.Score), wins, p.DisplayName, r.FinishedAt)
+		if err != nil {
+			return ranking.Commit{}, operationError(ctx, "update monthly ranking")
+		}
+		if tagMonthly.RowsAffected() != 1 {
+			return ranking.Commit{}, ranking.ErrNeedsProductDecision
+		}
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return ranking.Commit{}, operationError(ctx, "commit result")

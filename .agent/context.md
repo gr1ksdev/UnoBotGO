@@ -1,3 +1,17 @@
+# Ranking mensal do grupo — 2026-09-29 (dev; em homologação)
+
+- O ranking ativo exibido pelo comando `/ranking` e pelas mensagens automáticas pós-partida passa a ser um RANKING MENSAL do mês corrente, em vez de cumulativo perpétuo.
+- Timezone canônico: `America/Sao_Paulo` (com `_ "time/tzdata"` para compatibilidade estática em qualquer runtime/container). A virada do mês é estritamente às 00:00:00 do dia 01 do mês em Brasília. Uma partida concluída pertence integralmente ao mês do seu `finished_at`.
+- Sem resets físicos, cron jobs ou comandos de purga: o histórico anterior permanece íntegro no banco de dados.
+- Tabela `player_group_monthly_stats` criada pela migration `0006_monthly_ranking.up.sql` com chave composta `(chat_id, user_id, month_start date)` e índice para ranking `(chat_id, month_start, score_units DESC, user_id)`.
+- Backfill na migration 0006 realiza agregação 100% exata e idempotente de `completed_games` e `completed_game_players` (jogos scored e jogadores elegíveis).
+- `RecordCompletedGame` mantém atomicidade: atualiza `player_group_stats` e `player_group_monthly_stats` na mesma transação. Idempotência por `GameID` retorna `AlreadyPersisted: true` sem duplicar pontuação mensal.
+- `ListGroupRanking` agora aceita `at time.Time`, busca o bucket do mês em `player_group_monthly_stats` e restringe a CTE de desempate (`latest`) exclusivamente às partidas do mês em análise. Resultados de meses anteriores não influenciam o desempate do mês corrente.
+- `RenderGroupRanking` exibe o cabeçalho `🏆 Ranking do grupo · <NomeDoMês>` (ex.: `Setembro`, `Outubro`) e, quando o mês não tiver partidas, a mensagem `Ainda não há partidas pontuadas neste mês.`.
+- Regras operacionais: sem commits, sem push, sem alterações na branch `main`, sem deploy/migration em produção.
+
+---
+
 # Desempate atualizado — 2026-09-29 (dev; homologação pendente)
 
 - Autorização posterior do usuário: “faça o commit e o push pra dev”. Libera commit desta correção e push exclusivo da dev, incluindo 64bb97d já local. Não autoriza main, deploy ou publicação de container; não implica confirmação de homologação.

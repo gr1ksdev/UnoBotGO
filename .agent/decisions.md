@@ -1,3 +1,27 @@
+# Decisão: transformação do ranking acumulado em ranking mensal particionado
+
+## Data
+2026-09-29
+
+## Contexto
+O produto evoluiu para transformar o ranking visível do grupo em ranking mensal, iniciando automaticamente um ranking novo a cada virada de mês, sem resets manuais ou deleções físicas, preservando o histórico completo.
+
+## Decisão tomada
+1. Adotar `player_group_monthly_stats` particionado por `(chat_id, user_id, month_start date)` com índice otimizado para ranking `(chat_id, month_start, score_units DESC, user_id)`.
+2. Fuso horário canônico de transição estritamente `America/Sao_Paulo` (carregado via `_ "time/tzdata"`). A virada do mês ocorre às 00:00:00 do dia 01 em Brasília.
+3. Partida encerrada pertence integralmente ao mês do seu `finished_at`.
+4. Persistência atômica: `RecordCompletedGame` atualiza `player_group_stats` (all-time) e `player_group_monthly_stats` (mês) na mesma transação.
+5. Migration `0006_monthly_ranking.up.sql` cria a tabela e executa backfill idempotente a partir de `completed_games` e `completed_game_players`.
+6. Desempate do mês: a CTE `latest` filtra exclusivamente as partidas daquele mês (`date_trunc('month', (finished_at AT TIME ZONE 'America/Sao_Paulo'))::date = $2`), impedindo que jogos de meses passados influenciem o desempate corrente.
+
+## Motivo
+Garante determinação unívoca de períodos, preservação integral do histórico para futuros rankings globais ou relatórios, integridade transacional sem duplicação de pontos e determinismo absoluto independente do timezone da máquina hospedeira.
+
+## Impacto
+O ranking agora exibe o mês atual no título (`🏆 Ranking do grupo · <NomeDoMês>`). A virada de mês é 100% lógica no banco de dados.
+
+---
+
 # Decisão: posições únicas e desempate pela última participação elegível
 
 ## Data

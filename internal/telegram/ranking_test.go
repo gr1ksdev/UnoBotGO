@@ -16,10 +16,10 @@ import (
 	"github.com/mymmrac/telego"
 )
 
-type rankingReadFunc func(context.Context, int64) (ranking.GroupRanking, error)
+type rankingReadFunc func(context.Context, int64, time.Time) (ranking.GroupRanking, error)
 
-func (f rankingReadFunc) ListGroupRanking(ctx context.Context, id int64) (ranking.GroupRanking, error) {
-	return f(ctx, id)
+func (f rankingReadFunc) ListGroupRanking(ctx context.Context, id int64, at time.Time) (ranking.GroupRanking, error) {
+	return f(ctx, id, at)
 }
 
 func TestRenderGroupRankingUniqueSequentialRanks(t *testing.T) {
@@ -74,9 +74,9 @@ func TestRenderGroupRankingFormatsAndUnicode(t *testing.T) {
 
 func TestRankingPreservesObservedDotName(t *testing.T) {
 	name := observedName(telego.User{ID: 123, FirstName: "."})
-	group := ranking.GroupRanking{System: groups.Updated, Total: 1, Entries: []ranking.Entry{{UserID: 123, DisplayName: name, Score: 3000}}}
-	if name != "." || RenderGroupRanking(group) != "🏆 Ranking do grupo\n\n🥇 . · 30,00 pts" {
-		t.Fatal("observed name was changed")
+	group := ranking.GroupRanking{System: groups.Updated, MonthName: "Setembro", Total: 1, Entries: []ranking.Entry{{UserID: 123, DisplayName: name, Score: 3000}}}
+	if name != "." || RenderGroupRanking(group) != "🏆 Ranking do grupo · Setembro\n\n🥇 . · 30,00 pts" {
+		t.Fatal("observed name was changed: ", RenderGroupRanking(group))
 	}
 }
 
@@ -129,26 +129,26 @@ func TestRankingCommandSharedRendererIsolationAndNoAdmin(t *testing.T) {
 	api.ChatMemberErr = errors.New("membership API must not be needed")
 	b := New(api, svc, nil, nil, 0, nil)
 	calls := 0
-	b.SetRankingService(&ranking.Service{Repository: rankingReadFunc(func(_ context.Context, id int64) (ranking.GroupRanking, error) {
+	b.SetRankingService(&ranking.Service{Repository: rankingReadFunc(func(_ context.Context, id int64, _ time.Time) (ranking.GroupRanking, error) {
 		calls++
 		if id == -1 {
-			return ranking.GroupRanking{System: groups.Updated, Total: 1, Entries: []ranking.Entry{{UserID: 1, DisplayName: "Ana histórica", Score: 1500}}}, nil
+			return ranking.GroupRanking{System: groups.Updated, MonthName: "Outubro", Total: 1, Entries: []ranking.Entry{{UserID: 1, DisplayName: "Ana histórica", Score: 1500}}}, nil
 		}
 		if id == -3 {
 			return ranking.GroupRanking{}, errors.New("offline")
 		}
-		return ranking.GroupRanking{System: groups.Legacy}, nil
+		return ranking.GroupRanking{System: groups.Legacy, MonthName: "Outubro"}, nil
 	})})
 	for _, id := range []int64{-1, -2, -3} {
 		b.cmdHandler.HandleMessage(t.Context(), &telego.Message{Chat: telego.Chat{ID: id, Type: "supergroup"}, From: &telego.User{ID: 999, FirstName: "Membro"}, Text: "/ranking"})
 		text := api.LastSentMessage()
 		switch id {
 		case -1:
-			if text != "🏆 Ranking do grupo\n\n🥇 Ana histórica · 15,00 pts" {
+			if text != "🏆 Ranking do grupo · Outubro\n\n🥇 Ana histórica · 15,00 pts" {
 				t.Fatal(text)
 			}
 		case -2:
-			if text != "🏆 Ranking do grupo\n\nAinda não há partidas pontuadas neste grupo." {
+			if text != "🏆 Ranking do grupo · Outubro\n\nAinda não há partidas pontuadas neste mês." {
 				t.Fatal(text)
 			}
 		case -3:
@@ -170,7 +170,7 @@ func TestPostCommitRankingReadsUpdatedHistoryAndMatchesCommand(t *testing.T) {
 	repo := &resultRepo{commit: ranking.Commit{Scored: true}, entered: make(chan struct{}), release: make(chan struct{})}
 	b.SetResultRepository(repo)
 	reads := 0
-	b.SetRankingService(&ranking.Service{Repository: rankingReadFunc(func(_ context.Context, id int64) (ranking.GroupRanking, error) {
+	b.SetRankingService(&ranking.Service{Repository: rankingReadFunc(func(_ context.Context, id int64, _ time.Time) (ranking.GroupRanking, error) {
 		select {
 		case <-repo.release:
 		default:
@@ -180,7 +180,7 @@ func TestPostCommitRankingReadsUpdatedHistoryAndMatchesCommand(t *testing.T) {
 			t.Error("wrong group", id)
 		}
 		reads++
-		return ranking.GroupRanking{System: groups.Updated, Total: 3, Entries: []ranking.Entry{{UserID: 99, DisplayName: "Ana histórica", Score: 2000}, {UserID: 1, DisplayName: "Freddy", Score: 1500}, {UserID: 2, DisplayName: "Mezi", Score: 1500}}}, nil
+		return ranking.GroupRanking{System: groups.Updated, MonthName: "Setembro", Total: 3, Entries: []ranking.Entry{{UserID: 99, DisplayName: "Ana histórica", Score: 2000}, {UserID: 1, DisplayName: "Freddy", Score: 1500}, {UserID: 2, DisplayName: "Mezi", Score: 1500}}}, nil
 	})})
 	view, action := readyToFinish(t, svc, 42, uno.BotRules(), false)
 	out, err := svc.Apply(t.Context(), game.Actor{PlayerID: view.CurrentTurn, ChatID: 42}, view.GameID, action)
@@ -228,11 +228,11 @@ func TestInlineScoredClosureSendsExactlyResultAndRanking(t *testing.T) {
 	defer b.dispatcher.Stop(time.Second)
 	repo := &resultRepo{commit: ranking.Commit{Scored: true}}
 	b.SetResultRepository(repo)
-	b.SetRankingService(&ranking.Service{Repository: rankingReadFunc(func(_ context.Context, id int64) (ranking.GroupRanking, error) {
+	b.SetRankingService(&ranking.Service{Repository: rankingReadFunc(func(_ context.Context, id int64, _ time.Time) (ranking.GroupRanking, error) {
 		if repo.calls != 1 || id != -42 || len(api.SentMessages) != 1 {
 			t.Error("ranking must follow commit and result message")
 		}
-		return ranking.GroupRanking{System: groups.Legacy, Total: 1, Entries: []ranking.Entry{{UserID: 99, DisplayName: "Histórico", Score: 500}}}, nil
+		return ranking.GroupRanking{System: groups.Legacy, MonthName: "Setembro", Total: 1, Entries: []ranking.Entry{{UserID: 99, DisplayName: "Histórico", Score: 500}}}, nil
 	})})
 	token, err := b.tokens.CreateActionToken(view.CurrentTurn, view.GameID, view.ChatID, action, time.Minute)
 	if err != nil {
@@ -246,7 +246,7 @@ func TestInlineScoredClosureSendsExactlyResultAndRanking(t *testing.T) {
 	if !strings.HasPrefix(api.SentMessages[0].Text, "🏁 Partida encerrada\n\n🥇") || !strings.Contains(api.SentMessages[0].Text, "+1 pt") {
 		t.Fatal(api.SentMessages[0].Text)
 	}
-	if api.SentMessages[1].Text != "🏆 Ranking do grupo\n\n🥇 Histórico · 5 pts" {
+	if api.SentMessages[1].Text != "🏆 Ranking do grupo · Setembro\n\n🥇 Histórico · 5 pts" {
 		t.Fatal(api.SentMessages[1].Text)
 	}
 	for _, msg := range api.SentMessages {

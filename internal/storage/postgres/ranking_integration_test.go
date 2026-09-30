@@ -93,19 +93,20 @@ func TestListGroupRankingAccumulationIsolationAndHistory(t *testing.T) {
 func TestListGroupRankingBoundAndIncompatibleSystem(t *testing.T) {
 	s := prepareRanking(t, groups.Updated)
 	ctx := t.Context()
-	if _, err := s.pool.Exec(ctx, `INSERT INTO player_group_stats(chat_id,user_id,ranking_system,score_units,completed_games,wins,display_name,last_finished_at)
- SELECT 42,n,'updated',n,1,0,'Pessoa '||n,now() FROM generate_series(1,1000) n`); err != nil {
+	monthStart := ranking.MonthDateString(time.Now())
+	if _, err := s.pool.Exec(ctx, `INSERT INTO player_group_monthly_stats(chat_id,user_id,month_start,ranking_system,score_units,completed_games,wins,display_name,last_finished_at)
+ SELECT 42,n,$1::date,'updated',n,1,0,'Pessoa '||n,now() FROM generate_series(1,1000) n`, monthStart); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.ListGroupRanking(ctx, 42)
+	got, err := s.ListGroupRanking(ctx, 42, time.Time{})
 	if err != nil || got.Total != 1000 || len(got.Entries) != ranking.MaxRankingEntries || got.Entries[0].Score != 1000 || got.Entries[len(got.Entries)-1].Score != 489 {
 		t.Fatal(got, err)
 	}
 	// Even incompatible rows beyond the returned prefix must fail closed.
-	if _, err := s.pool.Exec(ctx, `UPDATE player_group_stats SET ranking_system='legacy' WHERE chat_id=42 AND user_id=1`); err != nil {
+	if _, err := s.pool.Exec(ctx, `UPDATE player_group_monthly_stats SET ranking_system='legacy' WHERE chat_id=42 AND user_id=1`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ListGroupRanking(ctx, 42); !errors.Is(err, ranking.ErrNeedsProductDecision) {
+	if _, err := s.ListGroupRanking(ctx, 42, time.Time{}); !errors.Is(err, ranking.ErrNeedsProductDecision) {
 		t.Fatal("mixed systems accepted", err)
 	}
 }
@@ -124,7 +125,7 @@ func TestListGroupRankingAfterCommitFailure(t *testing.T) {
 	if _, err := s.RecordCompletedGame(ctx, r); err == nil {
 		t.Fatal("commit should fail")
 	}
-	got, err := s.ListGroupRanking(ctx, 42)
+	got, err := s.ListGroupRanking(ctx, 42, time.Time{})
 	if err != nil || got.Total != 0 {
 		t.Fatal("uncommitted stats visible", got, err)
 	}
@@ -134,7 +135,7 @@ func TestListGroupRankingAfterCommitFailure(t *testing.T) {
 	if _, err := s.RecordCompletedGame(ctx, r); err != nil {
 		t.Fatal(err)
 	}
-	got, err = s.ListGroupRanking(ctx, 42)
+	got, err = s.ListGroupRanking(ctx, 42, time.Time{})
 	if err != nil || got.Total != 3 || got.Entries[0].Score != 1000 {
 		t.Fatal(got, err)
 	}

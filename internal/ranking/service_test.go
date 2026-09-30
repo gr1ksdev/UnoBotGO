@@ -4,17 +4,20 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/malbs/UnoGoBot/internal/groups"
 )
 
 type readStub struct {
 	chatID int64
+	at     time.Time
 	err    error
 }
 
-func (r *readStub) ListGroupRanking(_ context.Context, id int64) (GroupRanking, error) {
+func (r *readStub) ListGroupRanking(_ context.Context, id int64, at time.Time) (GroupRanking, error) {
 	r.chatID = id
+	r.at = at
 	return GroupRanking{System: groups.Updated, Total: 1, Entries: []Entry{{UserID: 4, Score: 857}}}, r.err
 }
 

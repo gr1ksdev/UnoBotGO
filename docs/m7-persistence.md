@@ -98,43 +98,46 @@ A política de elegibilidade definitiva foi aprovada e integrada (`completed-pla
   (`AlreadyPersisted`), as duas notificações não são reenviadas. Falhas de DB retêm o resultado na
   memória do serviço para retry síncrono via `RetryPendingResults`.
 
-### Leitura acumulada e /ranking (dev, 2026-09-29)
+### Leitura mensal e /ranking (dev, 2026-09-29)
 
 `Telegram → ranking.Service.ListGroupRanking → ranking.ReadRepository →
-postgres.Store.ListGroupRanking` consulta exclusivamente `player_group_stats` pelo
-ChatID solicitado. A interface de escrita `ranking.Repository` e a transação de
-resultados permanecem inalteradas. Não há recomputação do histórico, cache de ranking,
-migration nova ou conversão entre sistemas.
+postgres.Store.ListGroupRanking` consulta a tabela `player_group_monthly_stats` pelo
+ChatID e pelo início do mês corrente (`month_start date`), determinado estritamente
+no fuso horário canônico de negócios `America/Sao_Paulo` (carregado via `_ "time/tzdata"`).
+A interface de escrita `ranking.Repository` e a transação síncrona de resultados persistem
+atomicamente tanto em `player_group_stats` (histórico acumulado geral) quanto em
+`player_group_monthly_stats` (bucket mensal particionado). Não há deleção física, cron
+job ou reset manual: a virada é lógica e baseada em bucket temporal no dia 1 às 00:00:00 SP.
 
-Uma única instrução SQL retorna configuração, total e até 512 entradas, ordenadas
+Uma única instrução SQL retorna configuração, total e até 512 entradas do mês, ordenadas
 por `score_units DESC, last_placement ASC, last_completed_game_at DESC, user_id ASC`.
 Uma CTE com `DISTINCT ON (user_id)` faz JOIN de `completed_games` e
-`completed_game_players`, filtrando ChatID, status `scored` e participação elegível
-(posição válida e status/went_out coerentes com `ranking.Player.Eligible`). Ordena
-por `finished_at DESC, game_id DESC` para selecionar a última partida de cada jogador;
-GameID apenas estabiliza a seleção se duas partidas dele têm o mesmo timestamp.
+`completed_game_players`, filtrando ChatID, status `scored`, o mês corrente
+`date_trunc('month', (g.finished_at AT TIME ZONE 'America/Sao_Paulo'))::date = $2`
+e participação elegível (posição válida e status/went_out coerentes com `ranking.Player.Eligible`).
+Ordena por `finished_at DESC, game_id DESC` para selecionar a última partida daquele jogador
+*dentro daquele mês*; GameID apenas estabiliza a seleção se duas partidas tiverem o mesmo timestamp.
 `last_placement` vem de `position`; `last_completed_game_at` vem de `finished_at`.
-Abandono, N<2 e resultados sem política pontuada não substituem essa referência.
+Abandono, N<2 e resultados sem política pontuada não substituem essa referência, e partidas
+de meses anteriores não influenciam o critério de desempate do mês vigente.
 
-O JOIN do histórico selecionado com stats ocorre antes do LIMIT. Nenhum campo foi
-duplicado em stats e nenhuma migration foi necessária. O índice de stats por ChatID
-e as chaves de GameID já existem; a seleção da última participação examina o histórico
-pontuado do grupo e a nova ordenação exige sort. Não há N+1 nem soma de scores a partir
-do histórico: score continua exclusivamente em stats. Somente até 512 registros são
-transferidos à aplicação. Histórico muito volumoso pode justificar futuramente um
-índice adicional após medição; não foi criado schema por conveniência nesta correção.
+O JOIN do histórico do mês selecionado com `player_group_monthly_stats` ocorre antes do LIMIT.
+A migration `0006_monthly_ranking.up.sql` cria `player_group_monthly_stats` com chave primária
+`(chat_id, user_id, month_start)` e índice de ranking `(chat_id, month_start, score_units DESC, user_id)`,
+executando também um backfill 100% exato e idempotente das partidas concluídas anteriores.
+Somente até 512 registros são transferidos à aplicação.
 Referência ausente usa NULLS LAST, sem inventar colocação ou timestamp.
 O snapshot único evita divergência entre total, sistema e linhas. Incompatibilidade
 de sistema em qualquer registro (mesmo fora do prefixo) recusa a leitura.
-Stats de jogadores com score zero continuam válidas; grupo ausente/vazio não é erro.
+Stats de jogadores com score zero no mês continuam válidas; grupo ausente/mês vazio não é erro
+e exibe mensagem amigável: `Ainda não há partidas pontuadas neste mês.`.
 
 `RenderGroupRanking` é usado tanto no pós-commit quanto no comando público `/ranking`.
+O cabeçalho traz o nome do mês: `🏆 Ranking do grupo · <NomeDoMês>` (ex.: `Setembro`, `Outubro`).
 Nomes vêm de `display_name`, escapados em HTML, sem chamadas `GetChatMember`.
-Posições são únicas (`1,2,3,4...`): o renderer usa índice + 1 na ordem recebida.
-UserID só resolve igualdade absoluta de score, última colocação e timestamp,
-sem representar mérito adicional. O resultado individual mantém a colocação da engine,
-mesmo quando os ganhos Legacy são iguais. Medalhas somente para posições 1–3;
-posições seguintes usam `4.`, `5.` etc.
+Posições são únicas (`1, 2, 3, 4...`): o renderer usa índice + 1 na ordem recebida.
+UserID só resolve igualdade absoluta de score, última colocação e timestamp dentro do mês,
+sem representar mérito adicional. Medalhas somente para posições 1–3; posições seguintes usam `4.`, `5.` etc.
 
 O renderer admite até 4000 unidades UTF-16 após interpretar entidades HTML (margem
 abaixo de 4096), reservando espaço para `… e mais N jogadores.`. Preserva linhas e

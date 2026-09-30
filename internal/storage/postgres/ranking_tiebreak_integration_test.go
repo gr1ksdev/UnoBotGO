@@ -14,7 +14,7 @@ import (
 
 func rankingIDs(t *testing.T, s *Store, selected map[int64]bool) []int64 {
 	t.Helper()
-	got, err := s.ListGroupRanking(t.Context(), 42)
+	got, err := s.ListGroupRanking(t.Context(), 42, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,14 +98,14 @@ func TestUpdatedRankingChangesAfterPersonalGames(t *testing.T) {
 		}
 		last = r
 	}
-	got, err := s.ListGroupRanking(ctx, 42)
+	got, err := s.ListGroupRanking(ctx, 42, time.Time{})
 	if err != nil || !reflect.DeepEqual(rankingIDs(t, s, nil), []int64{2, 1, 3}) || got.Entries[0].Score != 3000 || got.Entries[1].Score != 3000 || got.Entries[2].Score != 0 {
 		t.Fatal(got, err)
 	}
 	if commit, err := s.RecordCompletedGame(ctx, last); err != nil || !commit.AlreadyPersisted {
 		t.Fatal(commit, err)
 	}
-	if after, err := s.ListGroupRanking(ctx, 42); err != nil || !reflect.DeepEqual(got, after) {
+	if after, err := s.ListGroupRanking(ctx, 42, time.Time{}); err != nil || !reflect.DeepEqual(got, after) {
 		t.Fatal("duplicate changed ranking", after, err)
 	}
 	// Different personal games: Mezi wins first, then Freddy. Both now have
@@ -133,7 +133,7 @@ func TestUpdatedRankingChangesAfterPersonalGames(t *testing.T) {
 	r.Players[0].UserID = 90
 	r.Players[1].UserID = 91
 	r.Players[2].UserID = 1
-	before, err := s.ListGroupRanking(ctx, 42)
+	before, err := s.ListGroupRanking(ctx, 42, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestUpdatedRankingChangesAfterPersonalGames(t *testing.T) {
 	if _, err := s.RecordCompletedGame(ctx, r); err == nil {
 		t.Fatal("commit should fail")
 	}
-	after, err := s.ListGroupRanking(ctx, 42)
+	after, err := s.ListGroupRanking(ctx, 42, time.Time{})
 	if err != nil || !reflect.DeepEqual(after.Entries[:2], before.Entries[:2]) {
 		t.Fatal("failed commit changed tie-break", after, err)
 	}
@@ -178,7 +178,7 @@ func TestUnscoredGamesDoNotReplaceLastEligiblePlacement(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	want, err := s.ListGroupRanking(ctx, 42)
+	want, err := s.ListGroupRanking(ctx, 42, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestUnscoredGamesDoNotReplaceLastEligiblePlacement(t *testing.T) {
 		if _, err := s.RecordCompletedGame(ctx, r); err != nil {
 			t.Fatal(err)
 		}
-		got, err := s.ListGroupRanking(ctx, 42)
+		got, err := s.ListGroupRanking(ctx, 42, time.Time{})
 		if err != nil || !reflect.DeepEqual(got, want) {
 			t.Fatal("unscored game changed ranking", got, err)
 		}

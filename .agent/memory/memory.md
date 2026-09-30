@@ -1,3 +1,19 @@
+# Ranking mensal do grupo — 2026-09-29 (somente dev; em homologação)
+
+- Pedido do usuário aprovado no plano: `ranking-mensal_2026-09-29_21-35.md`.
+- Transformação do ranking acumulado em RANKING MENSAL do mês calendário vigente.
+- Timezone canônico: `America/Sao_Paulo` (incorporado via `_ "time/tzdata"` para disponibilidade universal). A virada ocorre estritamente às 00:00:00 do dia 01 de cada mês em Brasília. Uma partida concluída pertence integralmente ao mês do seu `finished_at`.
+- Sem resets físicos, sem jobs cron ou deleção de tabelas: o histórico anterior permanece 100% preservado no PostgreSQL.
+- Nova migration `internal/storage/postgres/migrations/0006_monthly_ranking.up.sql`:
+  - Cria tabela `player_group_monthly_stats` com chave primária `(chat_id, user_id, month_start)` e índice `(chat_id, month_start, score_units DESC, user_id)`.
+  - Executa backfill idempotente agregando partidas pontuadas anteriores de `completed_games` e `completed_game_players`.
+- Persistência atômica: `RecordCompletedGame` atualiza `player_group_stats` (acumulado all-time) e `player_group_monthly_stats` (mês corrente) na mesma transação atômica. Idempotência por `GameID` retorna `AlreadyPersisted: true` sem duplicar pontuação.
+- Consulta e Desempate: `ListGroupRanking` agora aceita `at time.Time`, consulta `player_group_monthly_stats` e restringe a CTE de desempate (`latest`) exclusivamente às partidas pontuadas daquele mês. Partidas de meses anteriores não influenciam o critério de desempate do mês vigente.
+- Renderização Telegram: `RenderGroupRanking` exibe o cabeçalho `🏆 Ranking do grupo · <NomeDoMês>` (ex.: `Setembro`, `Outubro`) e, quando o mês não tiver partidas, a mensagem amigável `Ainda não há partidas pontuadas neste mês.`.
+- Regras de isolamento: zero commit, zero push, main intocada, sem deploy/migration em produção.
+
+---
+
 # Correção de intermitência em testes de Trocar Mãos (Swap Hands) — 2026-09-29 (somente dev)
 
 - Pedido do usuário aprovado no plano: `corrigir-intermitencia-swap-hands_2026-09-29_13-26.md`.

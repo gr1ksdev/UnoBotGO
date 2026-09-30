@@ -31,9 +31,13 @@ func messageUnits(text string) int {
 // RenderGroupRanking is shared by /ranking and post-commit notifications.
 // The repository resolves ties; visual positions are always unique and sequential.
 func RenderGroupRanking(group ranking.GroupRanking) string {
-	const title = "🏆 Ranking do grupo\n\n"
+	title := "🏆 Ranking do grupo"
+	if group.MonthName != "" {
+		title += " · " + group.MonthName
+	}
+	title += "\n\n"
 	if group.Total == 0 {
-		return title + "Ainda não há partidas pontuadas neste grupo."
+		return title + "Ainda não há partidas pontuadas neste mês."
 	}
 	text := title
 	shown := 0

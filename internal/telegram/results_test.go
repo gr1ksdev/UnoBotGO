@@ -191,7 +191,7 @@ func TestFinalizeOutcome_NotificationOrder(t *testing.T) {
 	b.SetResultRepository(repo)
 
 	// Player 1 leaves -> game ends
-	b.SetRankingService(&ranking.Service{Repository: rankingReadFunc(func(context.Context, int64) (ranking.GroupRanking, error) {
+	b.SetRankingService(&ranking.Service{Repository: rankingReadFunc(func(context.Context, int64, time.Time) (ranking.GroupRanking, error) {
 		return ranking.GroupRanking{System: groups.Legacy}, nil
 	})})
 	b.cmdHandler.handleSair(ctx, 1, 42)
