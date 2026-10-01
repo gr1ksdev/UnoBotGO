@@ -14,7 +14,9 @@ O Mini App React/TypeScript/Tailwind é compilado em `web/dist` e embutido diret
 make build
 ```
 
-O comando gera o executável standalone `bin/unobotgo`.
+O comando gera o executável standalone `bin/unobotgo`, incluindo frontend e migrations SQL versionadas.
+
+Ao iniciar `./bin/unobotgo` (ou `make run`), o processo conecta PostgreSQL e aplica as pendências antes de HTTP, Telegram e workers. O ledger e os checksums são verificados, com advisory lock entre instâncias e timeout interno de 2 minutos. Migrations já aplicadas não devem ser editadas; falhas impedem startup. Não há etapa manual ou segundo binário de migration.
 
 ## Desenvolvimento
 

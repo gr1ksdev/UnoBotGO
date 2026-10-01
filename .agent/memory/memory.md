@@ -823,3 +823,12 @@
 - Secret webhook HMAC-SHA256 com contexto unobotgo/telegram/webhook-secret/v1 e Base64 URL sem padding; setWebhook recebe token derivado e header segue validado em tempo constante. Drop false; URL pública permanece necessária.
 - Link https://t.me/<bot>/ranking gerado no getMe único; BotFather continua responsável por URL HTTPS/short name ranking.
 - Frontend preservado integralmente contra snapshot inicial. Testes focados/config/Telegram e go test ./... passaram. Race default falhou por CGO=0, make check recusou TEST_DATABASE_URL ausente; demais verificações interrompidas e canceladas pelo usuário antes de commit/push autorizado na dev.
+
+## Migrations: consolidação fail-closed — 2026-10-01
+- Plano consolidar-migrations-startup_2026-10-01_13-51 aprovado. Base49400ba, dev, sem commit/push/main/deploy; working tree estava limpo exceto plano.
+- Auto-run já existia; reutilizado Store.Migrate/VerifySchema. Removido CLI, corrigidas instruções manuais. SQL0001..0007 não alterados.
+- Ledger validado integralmente antes de pendências (checksum, versões desconhecidas e prefixo ordenado). Erros/logs indicam migration/estágio, preservam errors.Is/As e suprimem dados sensíveis dos detalhes do driver. Sem alterações em operationError de persistência.
+- Lock transacional71870101 e transação única do lote preservados. Initialize aplica config.MigrationTimeout2m e callback funcional recebe contexto original da aplicação.
+- PostgreSQL efêmero exclusivo porta15433: vazio, reaplicação, parcial, rollback SQL/lote, sequência não transacional provando ausência de execução antes da validação, cancelamento SQL, timeout do lock com recuperação, dois pools executando exatamente uma vez, startup real Store + HTTP mock e falhas sem callback.
+- go test ./..., go test -race ./..., go vet ./..., go build ./..., make check, make build, integração race e git diff --check aprovados. Frontend45testes, lint/typecheck/build preservados. Sem refs operacionais ao CLI, salvo registros históricos .agent; nenhum frontend/config/SQL/domain alterado.
+- npm ci informou2vulnerabilidades moderadas já existentes e aviso de ESLint; dependências/lockfile preservados. Nenhuma validação bloqueada, nenhum serviço Telegram real iniciado ou banco aplicativo alterado.

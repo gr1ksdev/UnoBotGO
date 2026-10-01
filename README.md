@@ -186,15 +186,14 @@ Políticas internas fixas: logs `info`, histórico 100, tokens inline com TTL `2
 
 ### PostgreSQL e Ranking V2
 
-O runtime V2 exige PostgreSQL configurado via `DATABASE_URL` e schema versionado atualizado. Antes de iniciar o bot:
+O runtime V2 exige PostgreSQL configurado via `DATABASE_URL`. Com o `.env` configurado, basta iniciar o processo principal:
 
 ```sh
-export DATABASE_URL='postgres://unobot:senha@localhost:5432/unobot?sslmode=disable'
-go run ./cmd/migrate
 go run ./cmd/bot
+# Em produção: ./bin/unobotgo
 ```
 
-O comando de migrations (`cmd/migrate`) não exige `TOKEN`. O bot valida a conexão e as migrations com prazo de 10 segundos antes de conectar ao Telegram; falhas encerram o processo com código de erro sem expor credenciais nos logs.
+As migrations SQL versionadas são embutidas no binário e verificadas/aplicadas automaticamente antes de HTTP, Telegram e workers. A conexão tem prazo de 10 segundos; migrations e verificação têm timeout interno total de 2 minutos. Um advisory lock transacional serializa instâncias, e todo o lote pendente e seu ledger são confirmados em uma única transação. Migrations aplicadas não devem ser editadas: checksum divergente, versão desconhecida, timeout ou erro SQL impedem o startup, sem corrigir o ledger ou executar downgrade. Bancos vazios/parciais são atualizados; bancos já atualizados apenas são verificados. Não há comando manual ou segundo binário obrigatório.
 
 **Configuração e Ranking:**
 - Cada grupo possui configuração própria criada sob demanda com os padrões **Clássico** e **Legado**.

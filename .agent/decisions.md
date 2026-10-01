@@ -1206,3 +1206,20 @@ A URL pública é indispensável ao setWebhook e não decorre do bind interno. A
 
 ## Impacto
 Sem alteração de schema, ranking, auth initData, AES/refs ou frontend nesta refatoração. Testes focados e go test ./... passaram; race, vet/build completos e make check ficaram pendentes após interrupções e pedido de encerrar checks. make check recusou ausência de TEST_DATABASE_URL; race padrão recusou CGO desabilitado. Publicação somente dev por autorização posterior; sem deploy/main.
+
+# Decisão: consolidar runner existente no startup
+
+## Data
+2026-10-01
+
+## Contexto
+Auto-run já fazia parte de app.Run; CLI e instruções manuais eram redundantes. Usuário aprovou endurecimento de diagnóstico, ledger e cobertura preservando semântica atual.
+
+## Decisão tomada
+Reutilizar Store.Migrate/VerifySchema em internal/storage/postgres, SQL embed intacto e advisory xact lock71870101. Preservar transação única para todas pendentes/ledger. Validar integralmente ledger antes de executar SQL; rejeitar versão desconhecida/checksum divergente/gap sem reparo automático. Helpers de fs.FS são internos para testes, produção usa sempre embed. Remover CLI; timeout2m concentrado em Initialize, callback recebe contexto lifecycle original.
+
+## Motivo
+Evitar segundo runner/framework, mudança de schema e execução parcial antes de detectar incompatibilidade. Logs e erros com causa encadeada facilitam diagnóstico sem expor DSN, parâmetros ou detalhes de linhas.
+
+## Impacto
+A aplicação permanece fail-closed antes de HTTP/Telegram/workers, reutilizando pool único. Testes PostgreSQL reais adicionados para boundary de startup e gates CI/Makefile ampliados. Nenhum SQL publicado, domínio, frontend ou configuração externa alterado; sem commit/push/deploy.

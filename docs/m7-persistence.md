@@ -35,8 +35,7 @@ Sem push, promoção ou alteração na main.
 - `internal/storage/postgres`: pgxpool, SQL e transações.
 - `internal/rankingimport`: parser/reconciliação sem storage ou aplicação de pontos.
 - `internal/telegram/results.go`: integração síncrona somente no fechamento.
-- `cmd/migrate`: migrations explícitas sem TOKEN.
-- `cmd/bot`: verifica PostgreSQL/schema antes do transporte Telegram.
+- `cmd/bot` / `internal/app`: conecta PostgreSQL e executa migrations/verificação antes de HTTP, Telegram e workers.
 - `.github/workflows/dev-ci.yml`: PostgreSQL isolado para testes reais.
 
 GameFinished produz resultado independente de mãos/pilhas. A engine é descartada
@@ -62,10 +61,10 @@ Migrations embutidas versionadas em `internal/storage/postgres/migrations`:
 | `0003_known_users.up.sql` | `known_group_users`: identidade chat/user, nomes mutáveis, username nullable, last_seen monotônico |
 | `0004_imports.up.sql` | `ranking_imports`: fonte/hash único por chat e auditoria; `ranking_import_entries`: IDs próprios, linhas, nomes e status, sem chave pelo nome |
 | `0005_insufficient_eligible_players.up.sql` | `completed_games`: adiciona o status `insufficient_eligible_players` para partidas concluídas onde N < 2 elegíveis |
+| `0006_monthly_ranking.up.sql` | `player_group_monthly_stats`: ranking mensal e backfill do ledger de partidas |
+| `0007_group_title.up.sql` | Título do grupo e índice de consulta mensal por usuário |
 
-`schema_migrations` registra versão/checksum. Migrations são aplicadas em transação,
-serializadas com advisory lock; alterações/versões desconhecidas são rejeitadas.
-Não há down migration destrutiva. O runtime não executa DDL automaticamente.
+`schema_migrations` registra versão, checksum SHA-256 e `applied_at`. O runtime aplica automaticamente somente os SQLs versionados embutidos, sem inferência de schema. Todas as pendências e registros do ledger compartilham uma única transação, serializada por `pg_advisory_xact_lock(71870101)`. O ledger completo é validado antes de qualquer SQL pendente; versões desconhecidas, ordem inconsistente e checksums alterados são rejeitados. Não há reparo automático de ledger ou down migration.
 
 Resultado e ranking, quando houver policy explícita, usam a mesma transação.
 GameID+hash confirmam retries idênticos; conteúdo divergente é recusado. Lock da
@@ -195,24 +194,21 @@ por timestamp. Nomes/username podem mudar; UserID é definitivo.
 
 Novas variáveis:
 
-- `DATABASE_URL`: obrigatória em cmd/bot/cmd/migrate.
+- `DATABASE_URL`: obrigatória no runtime V2; conexão compartilhada entre migrator e aplicação.
 - `TEST_DATABASE_URL`: somente testes de integração, em uma base exclusiva de testes.
 
 ```sh
-export DATABASE_URL='postgres://unobot:senha@localhost:5432/unobot?sslmode=disable'
-go run ./cmd/migrate
-# TOKEN configurado no ambiente ou .env
+# Configure o .env conforme .env.example
 go run ./cmd/bot
+# Em produção: ./bin/unobotgo
 ```
 
-Bot tem prazo de 10s para conexão/verificação antes de Telegram. DB offline/schema
-incompatível encerra com erro claro e código não zero, sem registrar URL/senha.
+Startup tem prazo de 10s para conexão e 2m (política interna) para migrations/verificação antes de qualquer serviço funcional. DB offline, timeout, migration inválida ou schema incompatível encerram com erro e código não zero, sem HTTP/readiness/bot/workers parciais. Erros identificam estágio/migration e preservam a causa, sem registrar URL/senha ou detalhes de linhas.
 Fechamento tem prazo de operação 10s e cleanup com prazo próprio 3s. Nenhuma
 jogada/compra/turno/stack/challenge/join/leave precisa consultar PostgreSQL durante
 a partida; apenas a transição terminal chama persistência. Polling segue recomendado.
 
-Docker V2 multiarch continua usando banco externo; preparar migrations pelo comando
-acima antes de iniciar a imagem. Não foram adicionados Redis/Kubernetes/Makefile.
+Docker V2 multiarch inicia apenas `/unobotgo`; migrations estão embutidas e são aplicadas pelo mesmo startup, sem wrapper, serviço ou binário adicional. Não foram adicionados Redis/Kubernetes.
 Migrations usadas pela versão nova exigem runtime compatível; rollback operacional
 não deve apagar dados nem executar down migrations sem autorização/backup.
 

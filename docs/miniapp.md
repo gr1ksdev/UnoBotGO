@@ -8,7 +8,7 @@ O Mini App de Ranking Global oferece uma interface visual responsiva e interativ
 
 - **Executável Único**: O frontend compilado em `web/dist` é embutido no binário Go (`bin/unobotgo`) via `go:embed`. Não há runtime Node.js em produção.
 - **Origem Única**: Servidor HTTP nativo em Go expõe tanto as rotas da API (`/api/v1/...`), quanto os arquivos estáticos e o webhook do bot.
-- **Startup e Migrações**: No boot, o coordenador `internal/app` adquire advisory lock transacional no PostgreSQL, verifica e aplica migrações pendentes. Se houver falha, encerra imediatamente (fail-closed) sem abrir portas de rede ou iniciar o dispatcher do Telegram.
+- **Startup e Migrações**: No boot, o coordenador `internal/app` adquire advisory lock transacional no PostgreSQL, verifica e aplica migrações pendentes. O timeout interno é de 2 minutos; todo o ledger/checksum é validado antes das pendências, e SQL + ledger compartilham uma transação única. Se houver falha, encerra imediatamente (fail-closed) sem abrir portas de rede ou iniciar Telegram/workers. Não é necessário um comando de migration separado.
 
 ## 2. Segurança e Autenticação
 

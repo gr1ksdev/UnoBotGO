@@ -60,7 +60,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - run: go test -race -tags integration ./internal/storage/postgres/...
+      - run: go test -race -tags integration ./internal/storage/postgres/... ./internal/app/...
   docker-build:
     needs: [validate, postgres]
     runs-on: ubuntu-latest

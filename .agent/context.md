@@ -470,3 +470,11 @@
 
 ## Integração dev após autorização de push — 2026-10-01
 Trabalhos paralelos conciliados por merge de origin/dev: fullscreen do Mini App e remoção do período no hero preservados. Derivação webhook canônica permanece unobotgo/v2/telegram-webhook-secret/v1; referências históricas ao outro contexto registram a implementação paralela substituída. Método Config.WebhookSecret delega à função DeriveWebhookSecret validada. Políticas drop=false centralizadas e testes de ambas as versões mantidos. make check completo e race aprovados na integração (45 testes frontend).
+
+# Consolidação de migrations no startup — 2026-10-01
+- CLI separado removido. Runtime V2 continua cmd/bot -> app.Run -> Store.Open/Ping -> Initialize(Migrate/VerifySchema) -> HTTP/Telegram/workers, com o mesmo pool. SQL versionado embutido e os sete arquivos existentes intactos.
+- Initialize centraliza deadline interno total2m e não repassa contexto de migration cancelado aos componentes funcionais. Nenhuma nova env.
+- Store.Migrate mantém transação única do lote +ledger e pg_advisory_xact_lock(71870101). Valida TODO ledger/checksum/ordem prefixo antes de SQL pendente; não corrige ledger nem aplica downgrade.
+- MigrationError identifica estágio/nome, preserva causa via unwrap e expõe PostgreSQL SQLSTATE/Message sem Detail/Hint/Where ou DSN. Logs checking/applying/complete/up-to-date/failure e database connected usam slog.
+- Unitários e integração real cobrem ordem/versões, idempotência/parcial, ledger, erro SQL/rollback, timeout no lock, cancelamento durante SQL, concorrência entre pools e boundary startup com Store real. Makefile/CI incluem integração internal/app.
+- Referências anteriores ao CLI em .agent são registros históricos; documentação ativa orienta somente ./bin/unobotgo/make run.

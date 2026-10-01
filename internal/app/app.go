@@ -29,14 +29,25 @@ type Migrator interface {
 
 // Initialize is the fail-closed startup boundary, independently testable.
 func Initialize(ctx context.Context, m Migrator, start func(context.Context) error) error {
-	if err := m.Migrate(ctx); err != nil {
-		return err
+	migration, cancel := context.WithTimeout(ctx, config.MigrationTimeout)
+	defer cancel()
+	if err := migration.Err(); err != nil {
+		return fmt.Errorf("startup migrations: before migration: %w", err)
 	}
-	if err := m.VerifySchema(ctx); err != nil {
-		return err
+	if err := m.Migrate(migration); err != nil {
+		return fmt.Errorf("startup migrations: migrate: %w", err)
 	}
+	if err := m.VerifySchema(migration); err != nil {
+		return fmt.Errorf("startup migrations: verify schema: %w", err)
+	}
+	if err := migration.Err(); err != nil {
+		return fmt.Errorf("startup migrations: completion: %w", err)
+	}
+	cancel()
+	// Functional components inherit the application lifecycle, not the migration deadline.
 	return start(ctx)
 }
+
 func Run(ctx context.Context, cfg *config.Config, dev bool, logger *slog.Logger) error {
 	if !dev && !web.Built() {
 		return errors.New("frontend missing: run make build")
@@ -68,11 +79,10 @@ func Run(ctx context.Context, cfg *config.Config, dev bool, logger *slog.Logger)
 		return err
 	}
 	defer store.Close()
-	migration, cancel := context.WithTimeout(ctx, config.MigrationTimeout)
-	err = Initialize(migration, store, func(context.Context) error { return nil })
-	cancel()
+	logger.InfoContext(ctx, "database connected")
+	err = Initialize(ctx, store, func(context.Context) error { return nil })
 	if err != nil {
-		return fmt.Errorf("startup migrations: %w", err)
+		return err
 	}
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
