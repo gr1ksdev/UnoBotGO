@@ -452,3 +452,10 @@
 
 ### Material da navegação
 `useLiquidGlass.ts` gera mapa da lente nas bordas da pílula. `BottomNavigation.tsx` aplica filtro ao backdrop e mantém seleção derivada da URL. Sem dependências novas, backend ou API.
+
+
+# Configuração V2 simplificada — 2026-10-01
+
+- Loader único internal/config/config.go com seis configurações normais; WEBHOOK_URL adicional só em webhook.
+- Políticas fixas em defaults.go; secret webhook derivado com contexto exclusivo em webhook_secret.go. Config Web e opções antigas não são mais lidas.
+- Direct Mini App ranking usa username do getMe startup; configuração HTTPS permanece no BotFather.

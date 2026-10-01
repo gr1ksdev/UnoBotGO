@@ -37,11 +37,11 @@ func Initialize(ctx context.Context, m Migrator, start func(context.Context) err
 	}
 	return start(ctx)
 }
-func Run(ctx context.Context, cfg *config.Config, w config.Web, dev bool, logger *slog.Logger) error {
+func Run(ctx context.Context, cfg *config.Config, dev bool, logger *slog.Logger) error {
 	if !dev && !web.Built() {
 		return errors.New("frontend missing: run make build")
 	}
-	refs, err := httpapi.NewReferences(w.Secret)
+	refs, err := httpapi.NewReferences(cfg.MiniAppSecret)
 	if err != nil {
 		return err
 	}
@@ -63,7 +63,7 @@ func Run(ctx context.Context, cfg *config.Config, w config.Web, dev bool, logger
 		return err
 	}
 	defer store.Close()
-	migration, cancel := context.WithTimeout(ctx, w.MigrationTimeout)
+	migration, cancel := context.WithTimeout(ctx, config.MigrationTimeout)
 	err = Initialize(migration, store, func(context.Context) error { return nil })
 	cancel()
 	if err != nil {
@@ -71,7 +71,7 @@ func Run(ctx context.Context, cfg *config.Config, w config.Web, dev bool, logger
 	}
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
-	svc, err := game.NewService(game.WithHistoryLimit(cfg.HistoryLimit))
+	svc, err := game.NewService(game.WithHistoryLimit(config.HistoryLimit))
 	if err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func Run(ctx context.Context, cfg *config.Config, w config.Web, dev bool, logger
 		return err
 	}
 	photos := media.New(ctx, telegram.AvatarSource{Bot: client})
-	api := &httpapi.API{Rankings: &ranking.GlobalService{Repository: store}, References: refs, Media: photos, Token: cfg.Token, MaxAge: w.InitDataMaxAge}
+	api := &httpapi.API{Rankings: &ranking.GlobalService{Repository: store}, References: refs, Media: photos, Token: cfg.Token, MaxAge: config.InitDataMaxAge}
 	mux := http.NewServeMux()
 	mux.Handle("/api/", api.Handler())
 	mux.Handle("/", httpapi.Static(web.Files()))
@@ -104,27 +104,23 @@ func Run(ctx context.Context, cfg *config.Config, w config.Web, dev bool, logger
 		}))
 	}
 	server := &http.Server{Handler: httpapi.Security(mux), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
-	listener, err := net.Listen("tcp", w.Addr)
+	listener, err := net.Listen("tcp", cfg.WebAddr)
 	if err != nil {
 		return errors.New("cannot start HTTP listener")
 	}
 	httpDone := make(chan error, 1)
 	go func() { httpDone <- server.Serve(listener) }()
 	// Constructing the bot starts its dispatcher, only after HTTP and migrations.
-	bot := telegram.New(client, svc, telegram.NewTokenStore(cfg.InlineTokenLimit, cfg.InlineTokenUserLim, time.Now, nil), telegram.NewRenderer(nil), cfg.InlineTokenTTL, logger)
+	bot := telegram.New(client, svc, telegram.NewTokenStore(config.InlineTokenLimit, config.InlineTokenUserLimit, time.Now, nil), telegram.NewRenderer(nil), config.InlineTokenTTL, logger)
 	bot.SetGroupConfigs(store)
 	bot.SetKnownUsers(store)
 	bot.SetResultRepository(store)
 	bot.SetRankingService(&ranking.Service{Repository: store})
-	bot.SetMiniAppURL(w.LaunchURL)
 	bot.SetTurnTimeout(cfg.TurnTimeout)
-	bot.SetTransport(telegram.TransportConfig{Mode: telegram.TransportMode(cfg.TelegramMode), WebhookURL: cfg.WebhookURL, WebhookSecret: cfg.WebhookSecret, DropPendingUpdates: cfg.WebhookDropPending})
+	bot.SetTransport(telegram.TransportConfig{Mode: telegram.TransportMode(cfg.TelegramMode), WebhookURL: cfg.WebhookURL, WebhookSecret: cfg.WebhookSecret(), DropPendingUpdates: config.WebhookDropPendingUpdates})
 	bot.UseSharedHTTP(func() { ready.Store(true) })
 	if hookPath != "" {
 		hook.Store(bot.WebhookHandler())
-	}
-	if w.LaunchURL == "" {
-		logger.Warn("MINIAPP_LAUNCH_URL absent; ranking launch button omitted")
 	}
 	botDone := make(chan error, 1)
 	go func() { botDone <- bot.Run(ctx) }()

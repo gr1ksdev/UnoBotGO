@@ -16,7 +16,7 @@ O Mini App de Ranking Global oferece uma interface visual responsiva e interativ
 - O frontend envia os dados de inicialização recebidos do Telegram no cabeçalho `Authorization: tma <initData>`.
 - O backend decodifica os pares de chave-valor em formato URL-encoded, verifica chaves duplicadas, deriva a chave HMAC via `WebAppData` com o `TOKEN` do bot e calcula o hash conforme a especificação oficial do Telegram.
 - Comparações de hash em tempo constante (`subtle.ConstantTimeCompare`).
-- Validação temporal estrita: `auth_date` com expiração configurável (`TELEGRAM_INITDATA_MAX_AGE`, padrão: 1h) e tolerância a desvios de relógio futuro de até 30s.
+- Validação temporal estrita: `auth_date` com expiração fixa de 1h e tolerância a desvios de relógio futuro de até 30s.
 
 ### Referências Opacas e Máscaras de IDs
 - O backend **nunca** expõe IDs numéricos reais do Telegram na API JSON ou nas URLs de fotos.
@@ -47,3 +47,8 @@ O Mini App de Ranking Global oferece uma interface visual responsiva e interativ
 - Downloads realizados em background por workers dedicados com taxa limitada (ticker de 350ms).
 - Validação de MIME raster permitida (`image/jpeg`, `image/png`, `image/webp`) e limite de 2 MiB por foto.
 - Redação estrita de tokens e URLs do Telegram em logs e mensagens de erro.
+
+
+## Configuração do Direct Mini App
+
+No BotFather configure o Direct Mini App de short name `ranking` e a URL HTTPS externa que serve o frontend. O backend monta `https://t.me/<username-do-bot>/ranking` usando o `getMe` já realizado no startup, sem variável de launch URL e sem consultas adicionais por botão. `MINIAPP_SECRET` continua exigindo Base64 de exatamente 32 bytes; `WEB_ADDR` é apenas o endereço interno do servidor compartilhado.

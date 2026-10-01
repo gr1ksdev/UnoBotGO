@@ -77,7 +77,12 @@ func (b *Bot) SetRankingService(service *ranking.Service) {
 	b.cmdHandler.rankingService = service
 }
 
-func (b *Bot) SetMiniAppURL(url string) { b.cmdHandler.miniAppURL = url }
+// miniAppLaunchURL uses the bot identity already loaded by getMe at startup.
+// The public HTTPS frontend URL is configured separately in BotFather.
+func miniAppLaunchURL(username string) string {
+	username = strings.TrimPrefix(strings.TrimSpace(username), "@")
+	return "https://t.me/" + username + "/ranking"
+}
 func (h *CommandHandler) rankingMarkup() *telego.InlineKeyboardMarkup {
 	if h.miniAppURL == "" {
 		return nil

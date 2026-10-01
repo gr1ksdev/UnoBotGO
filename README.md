@@ -163,7 +163,7 @@ duas arquiteturas após as validações.
 
 ### Transporte Telegram
 
-Long polling é o padrão e o modo recomendado. Webhook permanece experimental, sem homologação real aprovada; consulte o [estado do projeto](docs/project-status.md#transportes-e-evidência-real). Para webhook, use `TELEGRAM_MODE=webhook`, `WEBHOOK_URL`, `WEBHOOK_SECRET` e `WEBHOOK_LISTEN_ADDR=:8080`; publique o endpoint HTTPS por um proxy externo. `WEBHOOK_DROP_PENDING_UPDATES=false` preserva updates pendentes.
+Long polling é o padrão e o modo recomendado. Webhook permanece experimental, sem homologação real aprovada; consulte o [estado do projeto](docs/project-status.md#transportes-e-evidência-real). Para webhook, use `TELEGRAM_MODE=webhook` e `WEBHOOK_URL=https://bot.exemplo.com/telegram`; publique esse endpoint HTTPS por um proxy externo encaminhando para `WEB_ADDR` (padrão `:8080`). A URL pública é necessária para o registro automático no Telegram. O segredo de protocolo é derivado internamente de `MINIAPP_SECRET` com HMAC-SHA256 e contexto exclusivo, validado no header do Telegram. Updates pendentes são sempre preservados.
 
 ### PostgreSQL e Ranking V2
 
@@ -191,3 +191,14 @@ TEST_DATABASE_URL='postgres://postgres:senha@localhost:5432/unobot_test?sslmode=
 ```
 
 Documentação de persistência e homologação: [M7](docs/m7-persistence.md).
+
+
+### Configuração V2
+
+O `.env.example` contém seis opções normais: `TOKEN`, `TELEGRAM_MODE`, `DATABASE_URL`, `TURN_TIMEOUT`, `WEB_ADDR` e `MINIAPP_SECRET`. Token, banco e segredo são obrigatórios. O segredo deve ser Base64 de exatamente 32 bytes (`openssl rand -base64 32`). Os padrões são polling, timeout de turno de 2m e endereço HTTP :8080.
+
+Histórico (100), tokens inline (TTL 2m, limites global 20.000 e por usuário 512), log info, expiração de initData (1h) e timeout de migrations no startup (2m) são políticas internas fixas. Opções antigas dessas políticas deixam de ser lidas e podem ser removidas do `.env` pessoal.
+
+O botão `🌐 Ranking Global` usa automaticamente `https://t.me/<username-do-bot>/ranking`, gerado pela identidade retornada pelo `getMe` do startup. Configure o Direct Mini App com short name **ranking** e sua URL HTTPS no BotFather; essa URL não é configuração do backend.
+
+Ao rotacionar `MINIAPP_SECRET`, o segredo derivado do webhook também muda. O startup reaplica `setWebhook` com o novo segredo; mantenha somente uma instância ativa por bot. A criptografia existente de referências/cursores não foi alterada.

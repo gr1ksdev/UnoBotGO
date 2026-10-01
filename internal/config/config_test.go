@@ -1,232 +1,186 @@
 package config
 
 import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"log/slog"
+	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestLoadConfig_Defaults(t *testing.T) {
-	env := map[string]string{
-		"DATABASE_URL": "postgres://localhost/unobot_test",
-		"TOKEN":        "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
-	}
-	lookup := func(k string) (string, bool) {
-		v, ok := env[k]
-		return v, ok
-	}
-
-	cfg, err := LoadFromLookup(lookup)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if cfg.Token != env["TOKEN"] {
-		t.Errorf("expected token %q, got %q", env["TOKEN"], cfg.Token)
-	}
-	if cfg.LogLevel != slog.LevelInfo {
-		t.Errorf("expected log level info, got %v", cfg.LogLevel)
-	}
-	if cfg.HistoryLimit != 100 {
-		t.Errorf("expected history limit 100, got %d", cfg.HistoryLimit)
-	}
-	if cfg.InlineTokenTTL != 2*time.Minute {
-		t.Errorf("expected TTL 2m, got %v", cfg.InlineTokenTTL)
-	}
-	if cfg.InlineTokenLimit != 20000 {
-		t.Errorf("expected token limit 20000, got %d", cfg.InlineTokenLimit)
-	}
-	if cfg.InlineTokenUserLim != 512 {
-		t.Errorf("expected user limit 512, got %d", cfg.InlineTokenUserLim)
-	}
+func minimalEnv() map[string]string {
+	return map[string]string{"TOKEN": "123456789:abcdefghij", "DATABASE_URL": "postgres://localhost/unobot_test", "MINIAPP_SECRET": base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32))}
 }
-
-func TestLoadConfig_CustomValues(t *testing.T) {
-	env := map[string]string{
-		"DATABASE_URL":            "postgres://localhost/unobot_test",
-		"TOKEN":                   "987654321:XYZ_secret_token_12345",
-		"LOG_LEVEL":               "debug",
-		"HISTORY_LIMIT":           "50",
-		"INLINE_TOKEN_TTL":        "5m",
-		"INLINE_TOKEN_LIMIT":      "5000",
-		"INLINE_TOKEN_USER_LIMIT": "128",
-	}
-	lookup := func(k string) (string, bool) {
-		v, ok := env[k]
-		return v, ok
-	}
-
-	cfg, err := LoadFromLookup(lookup)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if cfg.LogLevel != slog.LevelDebug {
-		t.Errorf("expected debug log level, got %v", cfg.LogLevel)
-	}
-	if cfg.HistoryLimit != 50 {
-		t.Errorf("expected history limit 50, got %d", cfg.HistoryLimit)
-	}
-	if cfg.InlineTokenTTL != 5*time.Minute {
-		t.Errorf("expected TTL 5m, got %v", cfg.InlineTokenTTL)
-	}
-	if cfg.InlineTokenLimit != 5000 {
-		t.Errorf("expected token limit 5000, got %d", cfg.InlineTokenLimit)
-	}
-	if cfg.InlineTokenUserLim != 128 {
-		t.Errorf("expected user limit 128, got %d", cfg.InlineTokenUserLim)
-	}
+func loadEnv(env map[string]string) (*Config, error) {
+	return LoadFromLookup(func(k string) (string, bool) { v, ok := env[k]; return v, ok })
 }
-
-func TestLoadConfig_ValidationErrors(t *testing.T) {
-	tests := []struct {
-		name        string
-		env         map[string]string
-		expectedErr error
-	}{
-		{
-			name:        "missing token",
-			env:         map[string]string{},
-			expectedErr: ErrMissingToken,
-		},
-		{
-			name: "empty token",
-			env: map[string]string{
-				"DATABASE_URL": "postgres://localhost/unobot_test",
-				"TOKEN":        "   ",
-			},
-			expectedErr: ErrMissingToken,
-		},
-		{
-			name: "invalid token format",
-			env: map[string]string{
-				"DATABASE_URL": "postgres://localhost/unobot_test",
-				"TOKEN":        "not-a-valid-telegram-token",
-			},
-			expectedErr: ErrInvalidToken,
-		},
-		{
-			name: "invalid log level",
-			env: map[string]string{
-				"DATABASE_URL": "postgres://localhost/unobot_test",
-				"TOKEN":        "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
-				"LOG_LEVEL":    "unknown",
-			},
-			expectedErr: ErrInvalidLogLevel,
-		},
-		{
-			name: "negative history limit",
-			env: map[string]string{
-				"DATABASE_URL":  "postgres://localhost/unobot_test",
-				"TOKEN":         "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
-				"HISTORY_LIMIT": "-1",
-			},
-			expectedErr: ErrInvalidHistoryLimit,
-		},
-		{
-			name: "invalid history limit string",
-			env: map[string]string{
-				"DATABASE_URL":  "postgres://localhost/unobot_test",
-				"TOKEN":         "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
-				"HISTORY_LIMIT": "abc",
-			},
-			expectedErr: ErrInvalidHistoryLimit,
-		},
-		{
-			name: "negative TTL",
-			env: map[string]string{
-				"DATABASE_URL":     "postgres://localhost/unobot_test",
-				"TOKEN":            "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
-				"INLINE_TOKEN_TTL": "-10s",
-			},
-			expectedErr: ErrInvalidTokenTTL,
-		},
-		{
-			name: "zero TTL",
-			env: map[string]string{
-				"DATABASE_URL":     "postgres://localhost/unobot_test",
-				"TOKEN":            "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
-				"INLINE_TOKEN_TTL": "0s",
-			},
-			expectedErr: ErrInvalidTokenTTL,
-		},
-		{
-			name: "invalid token limit",
-			env: map[string]string{
-				"DATABASE_URL":       "postgres://localhost/unobot_test",
-				"TOKEN":              "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
-				"INLINE_TOKEN_LIMIT": "0",
-			},
-			expectedErr: ErrInvalidTokenLimit,
-		},
-		{
-			name: "invalid user limit",
-			env: map[string]string{
-				"DATABASE_URL":            "postgres://localhost/unobot_test",
-				"TOKEN":                   "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345",
-				"INLINE_TOKEN_USER_LIMIT": "-5",
-			},
-			expectedErr: ErrInvalidUserTokenLim,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			lookup := func(k string) (string, bool) {
-				v, ok := tt.env[k]
-				return v, ok
-			}
-			_, err := LoadFromLookup(lookup)
-			if err == nil {
-				t.Fatalf("expected error, got nil")
-			}
-			if !errors.Is(err, tt.expectedErr) {
-				t.Fatalf("expected error %v, got %v", tt.expectedErr, err)
-			}
-			// Verify token secret is never printed in error message
-			if tokenVal, ok := tt.env["TOKEN"]; ok && tokenVal != "" {
-				if strings.Contains(err.Error(), tokenVal) {
-					t.Errorf("error message leaked token secret: %s", err.Error())
-				}
-			}
-		})
-	}
-}
-
-func TestLoadWebhookConfig(t *testing.T) {
-	lookup := func(k string) (string, bool) {
-		m := map[string]string{"DATABASE_URL": "postgres://localhost/unobot_test",
-			"TOKEN": "123456789:abcdefghij", "TELEGRAM_MODE": "webhook", "WEBHOOK_URL": "https://bot.example/hook", "WEBHOOK_SECRET": "abc_DEF-123"}
-		v, ok := m[k]
-		return v, ok
-	}
-	cfg, err := LoadFromLookup(lookup)
+func TestMinimalConfigAndPolicies(t *testing.T) {
+	cfg, err := loadEnv(minimalEnv())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.TelegramMode != "webhook" || cfg.WebhookListenAddr != ":8080" || cfg.WebhookDropPending {
-		t.Fatalf("unexpected config: %+v", cfg)
+	if cfg.TelegramMode != "polling" || cfg.TurnTimeout != 2*time.Minute || cfg.WebAddr != ":8080" || cfg.WebhookURL != "" {
+		t.Fatal("incorrect defaults")
+	}
+	if LogLevel != slog.LevelInfo || HistoryLimit != 100 || InlineTokenTTL != 2*time.Minute || InlineTokenLimit != 20000 || InlineTokenUserLimit != 512 || InitDataMaxAge != time.Hour || MigrationTimeout != 2*time.Minute || WebhookDropPendingUpdates {
+		t.Fatal("application policies changed")
 	}
 }
-func TestLoadRejectsInvalidWebhookConfig(t *testing.T) {
-	base := map[string]string{"DATABASE_URL": "postgres://localhost/unobot_test",
-		"TOKEN": "123456789:abcdefghij", "TELEGRAM_MODE": "webhook", "WEBHOOK_URL": "http://bot.example/hook", "WEBHOOK_SECRET": "secret"}
-	_, err := LoadFromLookup(func(k string) (string, bool) { v, ok := base[k]; return v, ok })
-	if !errors.Is(err, ErrInvalidWebhookURL) {
-		t.Fatalf("err=%v", err)
+func TestConfigOverrides(t *testing.T) {
+	env := minimalEnv()
+	env["TURN_TIMEOUT"] = " 3m "
+	env["WEB_ADDR"] = "127.0.0.1:9090"
+	cfg, err := loadEnv(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TurnTimeout != 3*time.Minute || cfg.WebAddr != "127.0.0.1:9090" {
+		t.Fatal("overrides not applied")
 	}
 }
-
-func TestDatabaseURLRequired(t *testing.T) {
-	_, err := LoadFromLookup(func(k string) (string, bool) {
-		if k == "TOKEN" {
-			return "123456789:ABCdefGHIjklMNOpqrSTUvwxYZ_12345", true
+func TestMandatoryConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		want error
+	}{{"TOKEN", ErrMissingToken}, {"DATABASE_URL", ErrMissingDatabaseURL}, {"MINIAPP_SECRET", ErrInvalidMiniAppSecret}} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := minimalEnv()
+			delete(env, tc.name)
+			_, err := loadEnv(env)
+			if !errors.Is(err, tc.want) {
+				t.Fatal(err)
+			}
+		})
+	}
+	env := minimalEnv()
+	env["TOKEN"] = "invalid-private-token"
+	_, err := loadEnv(env)
+	if !errors.Is(err, ErrInvalidToken) || strings.Contains(err.Error(), env["TOKEN"]) {
+		t.Fatal("invalid token validation leaked data")
+	}
+}
+func TestMiniAppSecret(t *testing.T) {
+	for _, size := range []int{0, 1, 31, 32, 33, 64} {
+		env := minimalEnv()
+		env["MINIAPP_SECRET"] = base64.StdEncoding.EncodeToString(make([]byte, size))
+		cfg, err := loadEnv(env)
+		if size == 32 {
+			if err != nil || len(cfg.MiniAppSecret) != 32 {
+				t.Fatalf("32 bytes rejected: %v", err)
+			}
+		} else if !errors.Is(err, ErrInvalidMiniAppSecret) {
+			t.Fatalf("size %d accepted", size)
 		}
-		return "", false
+	}
+	env := minimalEnv()
+	env["MINIAPP_SECRET"] = "not-base64!"
+	_, err := loadEnv(env)
+	if !errors.Is(err, ErrInvalidMiniAppSecret) || strings.Contains(err.Error(), env["MINIAPP_SECRET"]) {
+		t.Fatal("invalid secret validation")
+	}
+}
+func TestTelegramMode(t *testing.T) {
+	for _, mode := range []string{"polling", "webhook", " WEBHOOK ", "invalid"} {
+		env := minimalEnv()
+		env["TELEGRAM_MODE"] = mode
+		env["WEBHOOK_URL"] = "https://bot.example/telegram"
+		cfg, err := loadEnv(env)
+		if mode == "invalid" {
+			if !errors.Is(err, ErrInvalidTelegramMode) {
+				t.Fatal(err)
+			}
+		} else if err != nil || cfg.TelegramMode != strings.ToLower(strings.TrimSpace(mode)) {
+			t.Fatal("mode validation")
+		}
+	}
+}
+func TestTurnTimeout(t *testing.T) {
+	for _, value := range []string{"0s", "-1s", "no-duration"} {
+		env := minimalEnv()
+		env["TURN_TIMEOUT"] = value
+		_, err := loadEnv(env)
+		if !errors.Is(err, ErrInvalidTurnTimeout) {
+			t.Fatalf("accepted %q", value)
+		}
+	}
+}
+func TestWebhookURL(t *testing.T) {
+	env := minimalEnv()
+	env["TELEGRAM_MODE"] = "webhook"
+	if _, err := loadEnv(env); !errors.Is(err, ErrMissingWebhookURL) {
+		t.Fatal(err)
+	}
+	for _, value := range []string{"http://bot.example/telegram", "https://bot.example", "https://bot.example/", "https://bot.example/api/hooks", "https://bot.example/assets/hook", "https://bot.example/healthz", "https://bot.example/readyz", "https://user:password@bot.example/telegram", "https://bot.example/telegram?secret=secret", "https://bot.example/telegram#hook"} {
+		env["WEBHOOK_URL"] = value
+		_, err := loadEnv(env)
+		if !errors.Is(err, ErrInvalidWebhookURL) || strings.Contains(err.Error(), value) {
+			t.Fatalf("URL validation: %q", value)
+		}
+	}
+	env["WEBHOOK_URL"] = "https://bot.example/telegram"
+	if _, err := loadEnv(env); err != nil {
+		t.Fatal(err)
+	}
+	env["TELEGRAM_MODE"] = "polling"
+	env["WEBHOOK_URL"] = "invalid"
+	cfg, err := loadEnv(env)
+	if err != nil || cfg.WebhookURL != "" {
+		t.Fatal("polling should not read webhook URL")
+	}
+}
+func TestOnlyInstallationSettingsAreRead(t *testing.T) {
+	env := minimalEnv()
+	allowed := map[string]bool{"TOKEN": true, "DATABASE_URL": true, "MINIAPP_SECRET": true, "TURN_TIMEOUT": true, "TELEGRAM_MODE": true, "WEB_ADDR": true, "WEBHOOK_URL": true}
+	cfg, err := LoadFromLookup(func(k string) (string, bool) {
+		if !allowed[k] {
+			t.Fatalf("unexpected configuration lookup: %s", k)
+		}
+		v, ok := env[k]
+		return v, ok
 	})
-	if !errors.Is(err, ErrMissingDatabaseURL) {
-		t.Fatalf("expected missing database URL, got %v", err)
+	if err != nil || reflect.TypeOf(*cfg).NumField() != len(allowed) {
+		t.Fatal("config contains non-installation policies")
+	}
+}
+func TestWebhookSecretDerivation(t *testing.T) {
+	cfg, err := loadEnv(minimalEnv())
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret := cfg.WebhookSecret()
+	if !regexp.MustCompile(`^[A-Za-z0-9_-]{1,256}$`).MatchString(secret) {
+		t.Fatal("invalid Telegram secret_token format")
+	}
+	if secret != cfg.WebhookSecret() {
+		t.Fatal("derivation not deterministic")
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(secret)
+	if err != nil || len(decoded) != sha256.Size {
+		t.Fatal("invalid derived bytes")
+	}
+	if bytes.Equal(decoded, cfg.MiniAppSecret) {
+		t.Fatal("master key exposed")
+	}
+	mac := hmac.New(sha256.New, cfg.MiniAppSecret)
+	mac.Write([]byte("unobotgo/telegram/webhook-secret/v1"))
+	if !bytes.Equal(decoded, mac.Sum(nil)) {
+		t.Fatal("protocol context changed")
+	}
+	for _, other := range []string{"unobotgo/reference/v1", "unobotgo/key/v1", "unobotgo/telegram/webhook-secret/v2"} {
+		mac := hmac.New(sha256.New, cfg.MiniAppSecret)
+		mac.Write([]byte(other))
+		if bytes.Equal(decoded, mac.Sum(nil)) {
+			t.Fatal("missing domain separation")
+		}
+	}
+	cfg.MiniAppSecret[0] ^= 1
+	if cfg.WebhookSecret() == secret {
+		t.Fatal("key rotation did not rotate token")
 	}
 }

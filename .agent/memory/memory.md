@@ -99,7 +99,7 @@
   - Cards de grupos clicáveis (abrem `/groups/:groupRef`); cards de players não clicáveis.
   - Navegação de volta e integração com BackButton nativo do Telegram.
 - Botão inline no Telegram:
-  - Respostas de `/ranking` em grupos e no privado agora incluem o botão inline `🌐 Ranking Global` apontando para `MINIAPP_LAUNCH_URL` via URL comum do Telegram (omitido quando a variável não estiver configurada).
+  - Respostas de `/ranking` em grupos e no privado agora incluem o botão inline `🌐 Ranking Global` apontando para o Direct Link /ranking gerado pelo username do getMe via URL comum do Telegram (configuração atual desde 2026-10-01).
 - Regras de isolamento: zero commit, zero push, main intocada, sem deploy/migration em produção.
 
 ---
@@ -636,7 +636,7 @@
 - **Cores da mão:** Mostra emojis das cores disponíveis durante escolha de cor.
 
 - M6: Bot suporta `TELEGRAM_MODE=polling|webhook`; polling é default.
-- Webhook usa `WEBHOOK_URL`, `WEBHOOK_SECRET`, `WEBHOOK_LISTEN_ADDR` e `WEBHOOK_DROP_PENDING_UPDATES` (default false), com `/healthz` liveness e dedupe em memória por UpdateID.
+- Webhook usa `WEBHOOK_URL` condicional e servidor compartilhado `WEB_ADDR`; segredo derivado por contexto exclusivo e drop fixo false (configuração atual desde 2026-10-01), com `/healthz` liveness e dedupe em memória por UpdateID.
 
 
 # Revisão de status do projeto — 2026-09-26
@@ -796,3 +796,20 @@
 - ScrollingName compartilhado no hero e cards de grupos/players mede overflow com ResizeObserver e fonte carregada. Apenas nomes que não cabem animam para a esquerda com pausa e retorno.
 - Uma única cópia do nome, title completo e foco em textos longos. prefers-reduced-motion desativa animação e permite scroll manual.
 - Validação: lint/typecheck/37 testes/build/diff-check aprovados; browser confirmou deslocamento, nomes curtos estáticos, resize, navegação e ausência de overflow em 390/430px.
+# Fullscreen nativo do Mini App — 2026-10-01
+
+- `App` inicializa o Telegram WebApp e solicita fullscreen uma vez, apenas com suporte à API 8.0 e quando ainda não ativo. `expand()` mantém fallback para clientes incompatíveis/recusa.
+- O cabeçalho próprio permanece; fechar/menu flutuantes pertencem ao Telegram. Insets do dispositivo e do conteúdo são respeitados e atualizados nos eventos fullscreen.
+- Navegação não solicita fullscreen novamente; BackButton, autenticação, API e ranking preservados. Cor dos controles nativos acompanha azul global/vermelho detalhe.
+- Implementação somente dev, sem commit/push/deploy. Homologação real no celular pendente.
+# Detalhe do grupo — 2026-10-01
+
+- Removida a legenda redundante `Total em <Mês>` do hero a pedido do usuário. O mês permanece no título do ranking interno; pontuação e período da API preservados.
+
+
+# Configuração V2 — 2026-10-01
+
+- Config único: TOKEN, TELEGRAM_MODE, DATABASE_URL, TURN_TIMEOUT, WEB_ADDR, MINIAPP_SECRET e WEBHOOK_URL condicional. Config/Web separados e políticas externas removidos; defaults fixos centralizados.
+- Secret webhook HMAC-SHA256 com contexto unobotgo/telegram/webhook-secret/v1 e Base64 URL sem padding; setWebhook recebe token derivado e header segue validado em tempo constante. Drop false; URL pública permanece necessária.
+- Link https://t.me/<bot>/ranking gerado no getMe único; BotFather continua responsável por URL HTTPS/short name ranking.
+- Frontend preservado integralmente contra snapshot inicial. Testes focados/config/Telegram e go test ./... passaram. Race default falhou por CGO=0, make check recusou TEST_DATABASE_URL ausente; demais verificações interrompidas e canceladas pelo usuário antes de commit/push autorizado na dev.

@@ -26,7 +26,7 @@ export function RankingsPage() {
  const detail = !!groupRef
  const navigate = useNavigate()
  const back = useCallback(() => navigate(`/?system=${system}&tab=groups`), [navigate, system])
- useTelegram(detail ? back : undefined)
+ useTelegram(detail ? back : undefined, { headerColor: detail ? '#99121f' : '#073b82' })
  const query = useRanking(detail ? `groups/${encodeURIComponent(groupRef)}` : tab, system)
  const { fetchNextPage } = query
  const load = useCallback(() => { void fetchNextPage() }, [fetchNextPage])
@@ -42,7 +42,7 @@ export function RankingsPage() {
        {!detail && <span className="calendar-icon"><Calendar /></span>}
      </div>
      {!detail && <Segmented label="Sistema de ranking" className="system-switch" value={system} options={[{ value: 'updated', label: 'Atualizado' }, { value: 'legacy', label: 'Legado' }]} onChange={value => setParams({ system: value, tab })} />}
-     {detail && group && <section className="group-hero" aria-label="Resumo do grupo"><Avatar item={group} large /><div className="group-summary"><h2><ScrollingName name={group.name} /></h2><p className="hero-id">{group.masked_id}</p><Score item={group} system={system} /><p className="hero-caption">Total em {month}</p></div><HeroCards /></section>}
+     {detail && group && <section className="group-hero" aria-label="Resumo do grupo"><Avatar item={group} large /><div className="group-summary"><h2><ScrollingName name={group.name} /></h2><p className="hero-id">{group.masked_id}</p><Score item={group} system={system} /></div><HeroCards /></section>}
      {detail && !group && query.isPending && <div className="hero-placeholder" />}
    </header>
    <section className="ranking-panel" aria-label={detail ? 'Ranking interno do grupo' : 'Ranking global'}>

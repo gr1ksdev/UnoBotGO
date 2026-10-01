@@ -11,6 +11,7 @@ type mockBotAPI struct {
 	mu sync.Mutex
 
 	MeUser             *telego.User
+	GetMeCalls         int
 	MeErr              error
 	WebhookInfo        *telego.WebhookInfo
 	WebhookErr         error
@@ -56,6 +57,7 @@ func newMockBotAPI() *mockBotAPI {
 func (m *mockBotAPI) GetMe(ctx context.Context) (*telego.User, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.GetMeCalls++
 	return m.MeUser, m.MeErr
 }
 

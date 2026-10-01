@@ -328,8 +328,8 @@ Para prevenir ataques de repetição, falsificação de jogadas e cache indevido
 4. **Invalidação**:
    - Cancelamento, encerramento ou saída de jogador invalidam imediatamente todos os tokens pendentes daquela partida/usuário.
 5. **Limites e Evicção FIFO**:
-   - Limite global configurável (`INLINE_TOKEN_LIMIT`, padrão 20.000).
-   - Limite por usuário (`INLINE_TOKEN_USER_LIMIT`, padrão 512).
+   - Limite global fixo de 20.000.
+   - Limite por usuário fixo de 512.
    - Limpeza oportunista na inserção sem necessidade de timers em background.
 
 ---
@@ -425,8 +425,8 @@ Quando `cache_time` é 0, o encoder padrão omite o campo, fazendo o Telegram ad
 
 ## Transporte Webhook
 
-O transporte padrão é o long polling (`TELEGRAM_MODE=polling`). Para receber updates por webhook, configure `TELEGRAM_MODE=webhook`, uma `WEBHOOK_URL` pública HTTPS, `WEBHOOK_SECRET` e, se necessário, `WEBHOOK_LISTEN_ADDR` (padrão `:8080`). A terminação TLS fica no reverse proxy ou plataforma externa; o processo atende HTTP internamente. O segredo é validado no header `X-Telegram-Bot-Api-Secret-Token` e nunca é registrado.
+O transporte padrão é o long polling (`TELEGRAM_MODE=polling`). Para receber updates por webhook, configure `TELEGRAM_MODE=webhook`, uma `WEBHOOK_URL` pública HTTPS com caminho dedicado (por exemplo `https://bot.exemplo.com/telegram`). O servidor compartilhado usa `WEB_ADDR` (padrão `:8080`). A terminação TLS fica no reverse proxy ou plataforma externa; o processo atende HTTP internamente. O segredo é derivado de `MINIAPP_SECRET` via HMAC-SHA256 com contexto `unobotgo/telegram/webhook-secret/v1`, distinto dos contextos de refs/IDs, e codificado em Base64 URL sem padding (43 caracteres). Não é a chave mestre nem a chave AES. É validado em tempo constante no header `X-Telegram-Bot-Api-Secret-Token` e nunca é registrado.
 
-No modo webhook o bot aplica `setWebhook` em todo startup, inclusive quando a URL não mudou, para garantir que alterações do segredo sejam efetivadas. `WEBHOOK_DROP_PENDING_UPDATES` é `false` por padrão. Ao voltar para polling, um webhook existente é removido com `drop_pending_updates=false`, preservando updates pendentes. O shutdown normal não remove o webhook remoto.
+No modo webhook o bot aplica `setWebhook` em todo startup, inclusive quando a URL não mudou, para garantir que alterações do segredo sejam efetivadas. `drop_pending_updates` é sempre `false`. Ao voltar para polling, um webhook existente é removido com `drop_pending_updates=false`, preservando updates pendentes. O shutdown normal não remove o webhook remoto.
 
 `GET /healthz` retorna apenas `200 OK` para liveness. O endpoint de webhook aceita somente `POST` JSON no caminho configurado, com corpo limitado a 1 MiB. Updates repetidos são ignorados por uma deduplicação em memória; após reinício essa proteção é perdida.

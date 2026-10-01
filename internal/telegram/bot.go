@@ -112,6 +112,7 @@ func (b *Bot) Run(ctx context.Context) error {
 	b.username = me.Username
 	b.renderer.SetBotID(me.ID)
 	b.cmdHandler.botUsername = me.Username
+	b.cmdHandler.miniAppURL = miniAppLaunchURL(me.Username)
 	b.logger.Info("connected to telegram bot", "username", me.Username, "id", me.ID)
 	if !me.SupportsInlineQueries {
 		return ErrInlineModeDisabled
