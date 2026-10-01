@@ -24,10 +24,12 @@ services:
       - "8080:8080"
     environment:
       TOKEN: ${TOKEN}
+      TELEGRAM_MODE: ${TELEGRAM_MODE:-polling}
+      TURN_TIMEOUT: ${TURN_TIMEOUT:-2m}
+      WEBHOOK_URL: ${WEBHOOK_URL:-}
       DATABASE_URL: postgres://unobot:unobot@db:5432/unobot?sslmode=disable
       WEB_ADDR: :8080
       MINIAPP_SECRET: ${MINIAPP_SECRET}
-      MINIAPP_LAUNCH_URL: ${MINIAPP_LAUNCH_URL}
     depends_on:
       db:
         condition: service_healthy

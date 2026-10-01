@@ -796,3 +796,12 @@
 - ScrollingName compartilhado no hero e cards de grupos/players mede overflow com ResizeObserver e fonte carregada. Apenas nomes que não cabem animam para a esquerda com pausa e retorno.
 - Uma única cópia do nome, title completo e foco em textos longos. prefers-reduced-motion desativa animação e permite scroll manual.
 - Validação: lint/typecheck/37 testes/build/diff-check aprovados; browser confirmou deslocamento, nomes curtos estáticos, resize, navegação e ausência de overflow em 390/430px.
+
+## Simplificação de configuração V2 — 2026-10-01
+- Plano simplificar-config-env_2026-10-01_13-11 aprovado explicitamente. Só dev/working tree, sem commit/push/deploy/main.
+- Loader único externo com6variáveis normais e WEBHOOK_URL somente webhook. MINIAPP_SECRET aceita só Base64 padrão com32bytes. Políticas antes configuráveis agora constantes; variáveis antigas/alias não são lidos.
+- HMAC-SHA256 para secret_token usa domínio/protocolo/versionamento unobotgo/v2/telegram-webhook-secret/v1 e saída43caracteres Base64URL sem padding. Testes pinam contexto, formato, estabilidade, rotação, não reutilização da chave master e headers403/200.
+- getMe único fornece link ranking; botão preservado, username@ normalizado. Sem URL externa do Mini App na configuração.
+- Validações aprovadas: go test ./..., go test -race ./..., go vet ./..., go build ./..., build cmd/bot, make check completo (37testes frontend, debugcards e PostgreSQL isolado), compose config quiet e git diff --check.
+- make check inicialmente detectou falha preexistente de fixtures de desempate: partidas setembro2026 consultadas via time.Time{} (mês atual outubro). Reproduzida no HEAD d17162c exportado em /tmp; corrigido apenas ranking_tiebreak_integration_test.go para consultar mês fixo das fixtures, sem regras/SQL/schema. Segunda execução completa passou.
+- Banco de testes em container efêmero exclusivo na porta15433; nenhum dado do banco existente alterado. Node24 instalado temporariamente após SHA256 oficial; npm ci reportou2vulnerabilidades moderadas preexistentes, lockfile/dependências não alterados.

@@ -452,3 +452,11 @@
 
 ### Material da navegação
 `useLiquidGlass.ts` gera mapa da lente nas bordas da pílula. `BottomNavigation.tsx` aplica filtro ao backdrop e mantém seleção derivada da URL. Sem dependências novas, backend ou API.
+
+# Configuração V2 simplificada — 2026-10-01
+
+- Runtime carrega apenas `internal/config.Config`: TOKEN, TELEGRAM_MODE, DATABASE_URL, TURN_TIMEOUT, WEB_ADDR, MINIAPP_SECRET e WEBHOOK_URL condicional. `Web`/`LoadWeb` removidos; cmd/bot chama um loader único.
+- Políticas fixas em internal/config/defaults.go: logs info, histórico100, inline TTL2m/global20000/user512, initData1h e migration startup2m. Descarte de updates pendentes fixo false em todos os caminhos de transporte.
+- Webhook preserva setWebhook em cada startup, URL pública explícita HTTPS com caminho dedicado e comparação constante do header. Secret = Base64URL sem padding de HMAC-SHA256 com master decodificado32bytes e contexto unobotgo/v2/telegram-webhook-secret/v1. Rotação do master atualiza secret no próximo startup; master nunca enviado/logado.
+- Bot.Run gera Direct Mini App https://t.me/<username>/ranking com getMe já existente; shortname ranking constante. URL HTTPS externa pertence ao BotFather.
+- Variáveis antigas em registros anteriores de .agent são históricas, não instruções de instalação atuais. .env real preservado; ferramentas devseed/migrate e V1 continuam com suas configurações específicas fora do runtime V2.

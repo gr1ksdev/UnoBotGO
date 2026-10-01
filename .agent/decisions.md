@@ -1158,3 +1158,20 @@ A aplicação React não pode usar diretamente o material nativo SwiftUI/UIKit. 
 
 ## Impacto
 Somente frontend. Chromium validado com capturas comparativas: 3678 pixels alterados exclusivamente no retângulo da pílula. Safari/Telegram em dispositivo requerem homologação visual.
+
+# Decisão: configuração externa mínima e autenticação webhook derivada
+
+## Data
+2026-10-01
+
+## Contexto
+Usuário aprovou remoção de configurações internas e segredo manual do webhook, preservando segurança e transporte. Runtime usa somente cmd/bot; ferramentas de desenvolvimento não precisam da configuração completa do bot.
+
+## Decisão tomada
+Unificar Config/Web em Config com sete campos externos (seis normais e URL webhook condicional). Mover políticas fixas para defaults.go. Manter URL pública explícita, pois servidor local atrás de proxy não a conhece. Derivar segredo webhook por HMAC-SHA256, contexto exclusivo/versionado unobotgo/v2/telegram-webhook-secret/v1 e Base64URL sem padding; 43caracteres aceitos por Telegram. Montar link ranking usando identidade do único getMe existente.
+
+## Motivo
+Remover parsing/structs mortos sem aliases ou redução de segurança. Derivação separa protocolo do uso AES-GCM e evita transmitir chave master. URL de webhook é requisito distinto da URL Mini App configurada no BotFather.
+
+## Impacto
+Webhook reaplica secret derivado via setWebhook no startup e sempre preserva pending updates. Rotação do master altera secret webhook junto com refs/cursors, conforme comportamento de rotação anterior destes últimos. Nenhuma alteração de gameplay, auth initData, SQL, schema ou UI. Testes antigos de integração estabilizados apenas quanto ao mês consultado, após falha reproduzida no commit base.

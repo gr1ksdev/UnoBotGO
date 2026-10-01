@@ -24,13 +24,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	w, err := config.LoadWeb(os.LookupEnv)
-	if err != nil {
-		return err
-	}
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: config.LogLevel}))
 	slog.SetDefault(logger)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return app.Run(ctx, cfg, w, *dev, logger)
+	return app.Run(ctx, cfg, *dev, logger)
 }

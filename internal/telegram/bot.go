@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/malbs/UnoGoBot/internal/config"
 	"github.com/malbs/UnoGoBot/internal/game"
 	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/ranking"
@@ -86,7 +87,7 @@ func New(api BotAPI, service *game.Service, tokens *TokenStore, renderer *Render
 		logger = slog.Default()
 	}
 	if tokens == nil {
-		tokens = NewTokenStore(20000, 512, time.Now, nil)
+		tokens = NewTokenStore(config.InlineTokenLimit, config.InlineTokenUserLimit, time.Now, nil)
 	}
 	if renderer == nil {
 		renderer = NewRenderer(nil)
@@ -112,6 +113,7 @@ func (b *Bot) Run(ctx context.Context) error {
 	b.username = me.Username
 	b.renderer.SetBotID(me.ID)
 	b.cmdHandler.botUsername = me.Username
+	b.cmdHandler.miniAppURL = miniAppLaunchURL(me.Username)
 	b.logger.Info("connected to telegram bot", "username", me.Username, "id", me.ID)
 	if !me.SupportsInlineQueries {
 		return ErrInlineModeDisabled
@@ -239,7 +241,7 @@ func (b *Bot) runWebhook(ctx context.Context, cfg TransportConfig) error {
 		return nil
 	default:
 	}
-	if err := b.api.SetWebhook(ctx, &telego.SetWebhookParams{URL: cfg.WebhookURL, SecretToken: cfg.WebhookSecret, AllowedUpdates: allowedUpdates, DropPendingUpdates: cfg.DropPendingUpdates}); err != nil {
+	if err := b.api.SetWebhook(ctx, &telego.SetWebhookParams{URL: cfg.WebhookURL, SecretToken: cfg.WebhookSecret, AllowedUpdates: allowedUpdates, DropPendingUpdates: false}); err != nil {
 		_ = server.Shutdown(context.Background())
 		b.dispatcher.Stop(10 * time.Second)
 		return fmt.Errorf("set webhook: %w", err)

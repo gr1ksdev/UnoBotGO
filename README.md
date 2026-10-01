@@ -163,7 +163,26 @@ duas arquiteturas após as validações.
 
 ### Transporte Telegram
 
-Long polling é o padrão e o modo recomendado. Webhook permanece experimental, sem homologação real aprovada; consulte o [estado do projeto](docs/project-status.md#transportes-e-evidência-real). Para webhook, use `TELEGRAM_MODE=webhook`, `WEBHOOK_URL`, `WEBHOOK_SECRET` e `WEBHOOK_LISTEN_ADDR=:8080`; publique o endpoint HTTPS por um proxy externo. `WEBHOOK_DROP_PENDING_UPDATES=false` preserva updates pendentes.
+Long polling é o padrão e o modo recomendado. Webhook permanece experimental, sem homologação real aprovada; consulte o [estado do projeto](docs/project-status.md#transportes-e-evidência-real). Para webhook, use `TELEGRAM_MODE=webhook` e `WEBHOOK_URL=https://bot.exemplo.com/telegram`; publique esse endpoint HTTPS por um proxy externo encaminhando ao servidor compartilhado (`WEB_ADDR`, padrão `:8080`). A URL pública é necessária para `setWebhook` e não pode ser deduzida do endereço local. O segredo de autenticação é derivado internamente; updates pendentes são sempre preservados.
+
+### Configuração V2
+
+O [.env.example](.env.example) contém somente as configurações normais de instalação:
+
+| Variável | Finalidade / padrão |
+|---|---|
+| `TOKEN` | Token obrigatório do bot Telegram |
+| `TELEGRAM_MODE` | `polling` (padrão) ou `webhook` |
+| `DATABASE_URL` | Conexão PostgreSQL obrigatória |
+| `TURN_TIMEOUT` | Duration positiva; padrão `2m` |
+| `WEB_ADDR` | Endereço HTTP compartilhado; padrão `:8080` |
+| `MINIAPP_SECRET` | Exatamente 32 bytes em Base64; gere com `openssl rand -base64 32` |
+
+Somente webhook exige também `WEBHOOK_URL`, com HTTPS e caminho dedicado fora de `/api`, `/assets`, `/healthz` e `/readyz`. O segredo enviado ao Telegram é `Base64URL-sem-padding(HMAC-SHA256(MINIAPP_SECRET decodificado, "unobotgo/v2/telegram-webhook-secret/v1"))`. O contexto separa esse protocolo das referências AES-GCM; a chave original não é enviada. A rotação de `MINIAPP_SECRET` atualiza esse segredo no próximo startup, que reaplica `setWebhook`. Referências antigas também deixam de valer com a rotação, como antes.
+
+O botão **🌐 Ranking Global** usa automaticamente `https://t.me/<username-do-bot>/ranking`, montado a partir do `getMe` já realizado no startup. Configure o Direct Mini App com short name **ranking** e sua URL externa HTTPS no BotFather; essa URL não é configuração do backend.
+
+Políticas internas fixas: logs `info`, histórico 100, tokens inline com TTL `2m`, limite global 20.000 e por usuário 512, validade de initData `1h`, timeout das migrations de startup `2m` e descarte de updates pendentes desativado. Opções antigas não são mais lidas; não há aliases ou fallback de configuração.
 
 ### PostgreSQL e Ranking V2
 

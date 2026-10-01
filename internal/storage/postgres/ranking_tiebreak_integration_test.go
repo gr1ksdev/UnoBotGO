@@ -12,9 +12,14 @@ import (
 	"github.com/malbs/UnoGoBot/internal/ranking"
 )
 
+// Query the fixture's month explicitly; a zero time queries the wall-clock month.
+func tieBreakFixtureTime() time.Time {
+	return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+}
+
 func rankingIDs(t *testing.T, s *Store, selected map[int64]bool) []int64 {
 	t.Helper()
-	got, err := s.ListGroupRanking(t.Context(), 42, time.Time{})
+	got, err := s.ListGroupRanking(t.Context(), 42, tieBreakFixtureTime())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +51,7 @@ func TestGroupRankingLastEligibleTieBreakers(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := prepareRanking(t, groups.Legacy)
-			base := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+			base := tieBreakFixtureTime()
 			selected := map[int64]bool{}
 			for i, pos := range tc.positions {
 				id := int64(i + 1)
@@ -79,7 +84,7 @@ func TestGroupRankingLastEligibleTieBreakers(t *testing.T) {
 func TestUpdatedRankingChangesAfterPersonalGames(t *testing.T) {
 	s := prepareRanking(t, groups.Updated)
 	ctx := t.Context()
-	base := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	base := tieBreakFixtureTime()
 	var last ranking.Result
 	for i := 0; i < 4; i++ {
 		r := eligibleResult(t, groups.Updated, 3, 0, "completed")
@@ -98,14 +103,14 @@ func TestUpdatedRankingChangesAfterPersonalGames(t *testing.T) {
 		}
 		last = r
 	}
-	got, err := s.ListGroupRanking(ctx, 42, time.Time{})
+	got, err := s.ListGroupRanking(ctx, 42, tieBreakFixtureTime())
 	if err != nil || !reflect.DeepEqual(rankingIDs(t, s, nil), []int64{2, 1, 3}) || got.Entries[0].Score != 3000 || got.Entries[1].Score != 3000 || got.Entries[2].Score != 0 {
 		t.Fatal(got, err)
 	}
 	if commit, err := s.RecordCompletedGame(ctx, last); err != nil || !commit.AlreadyPersisted {
 		t.Fatal(commit, err)
 	}
-	if after, err := s.ListGroupRanking(ctx, 42, time.Time{}); err != nil || !reflect.DeepEqual(got, after) {
+	if after, err := s.ListGroupRanking(ctx, 42, tieBreakFixtureTime()); err != nil || !reflect.DeepEqual(got, after) {
 		t.Fatal("duplicate changed ranking", after, err)
 	}
 	// Different personal games: Mezi wins first, then Freddy. Both now have
@@ -133,7 +138,7 @@ func TestUpdatedRankingChangesAfterPersonalGames(t *testing.T) {
 	r.Players[0].UserID = 90
 	r.Players[1].UserID = 91
 	r.Players[2].UserID = 1
-	before, err := s.ListGroupRanking(ctx, 42, time.Time{})
+	before, err := s.ListGroupRanking(ctx, 42, tieBreakFixtureTime())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +162,7 @@ func TestUpdatedRankingChangesAfterPersonalGames(t *testing.T) {
 	if _, err := s.RecordCompletedGame(ctx, r); err == nil {
 		t.Fatal("commit should fail")
 	}
-	after, err := s.ListGroupRanking(ctx, 42, time.Time{})
+	after, err := s.ListGroupRanking(ctx, 42, tieBreakFixtureTime())
 	if err != nil || !reflect.DeepEqual(after.Entries[:2], before.Entries[:2]) {
 		t.Fatal("failed commit changed tie-break", after, err)
 	}
@@ -166,7 +171,7 @@ func TestUpdatedRankingChangesAfterPersonalGames(t *testing.T) {
 func TestUnscoredGamesDoNotReplaceLastEligiblePlacement(t *testing.T) {
 	s := prepareRanking(t, groups.Legacy)
 	ctx := t.Context()
-	base := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	base := tieBreakFixtureTime()
 	for i, id := range []int64{1, 2} {
 		r := eligibleResult(t, groups.Legacy, 2, 0, "completed")
 		r.GameID = fmt.Sprintf("scored-%d", id)
@@ -178,7 +183,7 @@ func TestUnscoredGamesDoNotReplaceLastEligiblePlacement(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	want, err := s.ListGroupRanking(ctx, 42, time.Time{})
+	want, err := s.ListGroupRanking(ctx, 42, tieBreakFixtureTime())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +205,7 @@ func TestUnscoredGamesDoNotReplaceLastEligiblePlacement(t *testing.T) {
 		if _, err := s.RecordCompletedGame(ctx, r); err != nil {
 			t.Fatal(err)
 		}
-		got, err := s.ListGroupRanking(ctx, 42, time.Time{})
+		got, err := s.ListGroupRanking(ctx, 42, tieBreakFixtureTime())
 		if err != nil || !reflect.DeepEqual(got, want) {
 			t.Fatal("unscored game changed ranking", got, err)
 		}

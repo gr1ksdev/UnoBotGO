@@ -77,7 +77,15 @@ func (b *Bot) SetRankingService(service *ranking.Service) {
 	b.cmdHandler.rankingService = service
 }
 
-func (b *Bot) SetMiniAppURL(url string) { b.cmdHandler.miniAppURL = url }
+const miniAppShortName = "ranking"
+
+func miniAppLaunchURL(username string) string {
+	username = strings.TrimPrefix(strings.TrimSpace(username), "@")
+	if username == "" {
+		return ""
+	}
+	return "https://t.me/" + username + "/" + miniAppShortName
+}
 func (h *CommandHandler) rankingMarkup() *telego.InlineKeyboardMarkup {
 	if h.miniAppURL == "" {
 		return nil
