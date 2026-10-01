@@ -31,7 +31,7 @@ type Config struct {
 }
 
 func Defaults(chatID int64) Config {
-	return Config{ChatID: chatID, DefaultGameMode: Classic, RankingSystem: Legacy, Revision: 1}
+	return Config{ChatID: chatID, DefaultGameMode: Classic, RankingSystem: Updated, Revision: 1}
 }
 
 // Snapshot is a value, frozen at creation; mode remains the lobby's own rules.

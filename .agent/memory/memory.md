@@ -832,3 +832,9 @@
 - PostgreSQL efêmero exclusivo porta15433: vazio, reaplicação, parcial, rollback SQL/lote, sequência não transacional provando ausência de execução antes da validação, cancelamento SQL, timeout do lock com recuperação, dois pools executando exatamente uma vez, startup real Store + HTTP mock e falhas sem callback.
 - go test ./..., go test -race ./..., go vet ./..., go build ./..., make check, make build, integração race e git diff --check aprovados. Frontend45testes, lint/typecheck/build preservados. Sem refs operacionais ao CLI, salvo registros históricos .agent; nenhum frontend/config/SQL/domain alterado.
 - npm ci informou2vulnerabilidades moderadas já existentes e aviso de ESLint; dependências/lockfile preservados. Nenhuma validação bloqueada, nenhum serviço Telegram real iniciado ou banco aplicativo alterado.
+
+
+# Alias e endereçamento — 2026-10-01
+
+- /join@bot e /entrar@bot usam o mesmo handler de entrada. Comandos de grupo sem @bot ou dirigidos a outro bot são ignorados antes de respostas de identidade/tópico/reset. Privado sem sufixo preservado; callbacks/inline seguem existentes.
+- groups.Defaults agora usa Updated; migration 0008 altera exclusivamente DEFAULT SQL. Nenhum grupo existente convertido e nenhuma migration aplicada em produção. Testes SQL de migração e caminhos de criação adicionados; execução depende de TEST_DATABASE_URL.

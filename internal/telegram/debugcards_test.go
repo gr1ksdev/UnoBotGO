@@ -35,7 +35,7 @@ func TestDebugCardParser(t *testing.T) {
 func TestDebugCommandDeliveryAndRejections(t *testing.T) {
 	svc, _ := game.NewService()
 	api := newMockBotAPI()
-	b := New(api, svc, nil, nil, time.Minute, nil)
+	b := newTestBot(api, svc, nil, nil, time.Minute, nil)
 	defer b.dispatcher.Stop(time.Second)
 	v, err := svc.Create(t.Context(), game.Actor{PlayerID: 11, ChatID: -100}, game.CreateRequest{Rules: uno.CaseiroRules()})
 	if err != nil {
@@ -51,7 +51,7 @@ func TestDebugCommandDeliveryAndRejections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	msg := &telego.Message{Chat: telego.Chat{ID: -100, Type: "supergroup"}, From: &telego.User{ID: 11}, Text: "/dar +4"}
+	msg := &telego.Message{Chat: telego.Chat{ID: -100, Type: "supergroup"}, From: &telego.User{ID: 11}, Text: "/dar@unobot +4"}
 	b.cmdHandler.HandleMessage(t.Context(), msg)
 	if len(api.SentMessages) != 0 {
 		t.Fatal("unauthorized caller discovered command")
@@ -71,7 +71,7 @@ func TestDebugCommandDeliveryAndRejections(t *testing.T) {
 		success := false
 		for _, color := range []string{"vermelho", "azul", "verde", "amarelo"} {
 			for n := 0; n <= 9; n++ {
-				msg.Text = "/dar " + color + " " + string(rune('0'+n))
+				msg.Text = "/dar@unobot " + color + " " + string(rune('0'+n))
 				b.cmdHandler.HandleMessage(t.Context(), msg)
 				if strings.Contains(api.LastSentMessage(), "recebeu") {
 					success = true

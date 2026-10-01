@@ -346,7 +346,7 @@ func (b *Bot) submitUpdate(ctx context.Context, update telego.Update) bool {
 }
 func (b *Bot) processUpdate(ctx context.Context, update telego.Update) bool {
 	if update.Message != nil {
-		if command, _, ok := parseBotCommand(update.Message.Text, b.username); ok && command == "reset" {
+		if command, _, ok := parseMessageCommand(update.Message, b.username); ok && command == "reset" {
 			chatID := game.ChatID(update.Message.Chat.ID)
 			return b.dispatcher.EnqueueRecovery(chatID, func(c context.Context) {
 				b.cmdHandler.HandleReset(c, update.Message, func() { b.dispatcher.ResetChat(chatID) })

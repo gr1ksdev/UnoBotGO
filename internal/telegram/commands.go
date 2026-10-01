@@ -208,7 +208,7 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		h.renderer.userCache.Put(uno.PlayerID(msg.From.ID), msg.From.FirstName, msg.From.Username)
 	}
 
-	cmdName, fields, ok := parseBotCommand(msg.Text, h.botUsername)
+	cmdName, fields, ok := parseMessageCommand(msg, h.botUsername)
 	if !ok {
 		return
 	}
@@ -275,7 +275,7 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		h.handleNovoObserved(ctx, actorID, chatID, msg.Chat.Title, mode, msg.From)
 	case "trancar", "destrancar":
 		h.handleRoomLock(ctx, actorID, chatID, cmdName == "trancar")
-	case "entrar":
+	case "entrar", "join":
 		h.handleEntrar(ctx, actorID, chatID)
 	case "start":
 		if len(fields) > 1 && fields[1] == "true" {
@@ -300,6 +300,24 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 	}
 }
 
+// Group commands must explicitly target this bot; private commands may omit it.
+func parseMessageCommand(msg *telego.Message, botUsername string) (string, []string, bool) {
+	if msg == nil {
+		return "", nil, false
+	}
+	if msg.Chat.Type == "group" || msg.Chat.Type == "supergroup" {
+		fields := strings.Fields(msg.Text)
+		if len(fields) == 0 || botUsername == "" {
+			return "", nil, false
+		}
+		command, username, addressed := strings.Cut(fields[0], "@")
+		if !strings.HasPrefix(command, "/") || !addressed || !strings.EqualFold(username, botUsername) {
+			return "", nil, false
+		}
+	}
+	return parseBotCommand(msg.Text, botUsername)
+}
+
 func parseBotCommand(text, botUsername string) (string, []string, bool) {
 	text = strings.TrimSpace(text)
 	if !strings.HasPrefix(text, "/") {
@@ -322,6 +340,10 @@ func (h *CommandHandler) HandleReset(ctx context.Context, msg *telego.Message, r
 	if msg == nil || msg.From == nil || msg.From.IsBot {
 		return
 	}
+	cmdName, _, ok := parseMessageCommand(msg, h.botUsername)
+	if !ok || cmdName != "reset" {
+		return
+	}
 	if msg.SenderChat != nil {
 		h.reply(ctx, msg.Chat.ID, "⚠️ O /reset deve ser executado por um administrador identificável, não como canal ou administrador anônimo.", nil)
 		return
@@ -332,10 +354,6 @@ func (h *CommandHandler) HandleReset(ctx context.Context, msg *telego.Message, r
 	}
 	if msg.IsTopicMessage {
 		h.reply(ctx, msg.Chat.ID, "⚠️ Tópicos de fórum ainda não são suportados. Execute /reset no chat geral do grupo.", nil)
-		return
-	}
-	cmdName, _, ok := parseBotCommand(msg.Text, h.botUsername)
-	if !ok || cmdName != "reset" {
 		return
 	}
 

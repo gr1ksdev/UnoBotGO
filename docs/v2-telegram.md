@@ -430,3 +430,9 @@ O transporte padrão é o long polling (`TELEGRAM_MODE=polling`). Para receber u
 No modo webhook o bot aplica `setWebhook` em todo startup, inclusive quando a URL não mudou, para garantir que alterações do segredo sejam efetivadas. `drop_pending_updates` é sempre `false` (política interna fixa). Ao voltar para polling, um webhook existente é removido com `drop_pending_updates=false`, preservando updates pendentes. O shutdown normal não remove o webhook remoto.
 
 `GET /healthz` retorna apenas `200 OK` para liveness. O endpoint de webhook aceita somente `POST` JSON no caminho configurado, com corpo limitado a 1 MiB. Updates repetidos são ignorados por uma deduplicação em memória; após reinício essa proteção é perdida.
+
+## Endereçamento de comandos em grupos
+
+Comandos em grupos e supergrupos exigem `@username` do bot, com comparação sem distinção de maiúsculas/minúsculas. `/join@SeuBot` é alias de `/entrar@SeuBot`, com as mesmas restrições de entrada. `/reset` também exige destinatário antes de entrar na recovery lane. Comandos sem sufixo ou dirigidos a outro bot são ignorados; callbacks e consultas inline mantêm seu fluxo. No privado, comandos sem sufixo continuam aceitos.
+
+Novas configurações de grupo usam Clássico e ranking Atualizado. A migration 0008 altera somente o DEFAULT SQL, sem converter grupos existentes nem alterar pontos.

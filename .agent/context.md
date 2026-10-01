@@ -478,3 +478,9 @@ Trabalhos paralelos conciliados por merge de origin/dev: fullscreen do Mini App 
 - MigrationError identifica estágio/nome, preserva causa via unwrap e expõe PostgreSQL SQLSTATE/Message sem Detail/Hint/Where ou DSN. Logs checking/applying/complete/up-to-date/failure e database connected usam slog.
 - Unitários e integração real cobrem ordem/versões, idempotência/parcial, ledger, erro SQL/rollback, timeout no lock, cancelamento durante SQL, concorrência entre pools e boundary startup com Store real. Makefile/CI incluem integração internal/app.
 - Referências anteriores ao CLI em .agent são registros históricos; documentação ativa orienta somente ./bin/unobotgo/make run.
+
+
+# Comandos e defaults de grupos — 2026-10-01
+
+- Grupos/supergrupos aceitam somente comandos endereçados ao username deste bot; privado aceita comandos sem sufixo. /join é alias de /entrar. Reset aplica o mesmo filtro antes da recovery lane.
+- Novos grupos: Classic + Updated. Migration 0008 altera somente DEFAULT; grupos persistidos preservam sistema, revisão e pontos.

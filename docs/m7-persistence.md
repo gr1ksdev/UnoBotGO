@@ -157,7 +157,7 @@ Continuam NEEDS PRODUCT DECISION:
 
 ## Configuração e permissões
 
-GetOrCreate cria Classic+Legacy sem setup. `/novo` consulta config uma vez;
+GetOrCreate cria Classic+Updated sem setup (default atualizado pela migration 0008). `/novo` consulta config uma vez;
 `/novo classico` e `/novo caseiro` sobrescrevem apenas a partida sem alterar `GroupConfig`.
 Ranking e revisão ficam congelados na criação da partida; regras efetivas do lobby determinam modo no início,
 preservando o seletor de modo existente.
@@ -270,5 +270,5 @@ Os seguintes fluxos e cenários foram homologados manualmente no Telegram real:
 - Comando `/config` operacional em grupos exibindo interface interativa com botões inline;
 - Seleção de modo de jogo padrão (`Clássico` / `Caseiro`) funcionando com persistência;
 - Seleção de sistema de ranking (`Legado` / `Atualizado`) funcionando com persistência;
-- Defaults `Classic` + `Legacy` operacionais sem necessidade de qualquer configuração prévia;
+- Defaults `Classic` + `Updated` operacionais sem necessidade de qualquer configuração prévia;
 - Tentativa de alternar o sistema de ranking em grupo com histórico de pontuações já acumulado no sistema anterior foi devidamente recusada com alerta pop-up (`ErrNeedsProductDecision`) e preservação da configuração original.

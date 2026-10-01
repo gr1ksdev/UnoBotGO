@@ -82,7 +82,7 @@ func TestMigrations(t *testing.T) {
 	if err := s.pool.QueryRow(ctx, `SELECT default_game_mode,ranking_system FROM group_configs WHERE chat_id=42`).Scan(&mode, &system); err != nil {
 		t.Fatal(err)
 	}
-	if mode != "classic" || system != "legacy" {
+	if mode != "classic" || system != "updated" {
 		t.Fatalf("unexpected defaults %s %s", mode, system)
 	}
 	if _, err := s.pool.Exec(ctx, `UPDATE schema_migrations SET checksum='tampered'`); err != nil {

@@ -46,7 +46,7 @@ A coluna Implementado considera a `dev`; Main indica a presença na base públic
 | Gameplay UX Polish | IMPLEMENTED + HOMOLOGATED | Ordem, lock, renderer e regressões | Telegram real | Não | Ordem a partir do atual e /trancar /destrancar |
 | Blefe em +4 sobre +2 | IMPLEMENTED + HOMOLOGATED | Counter legal não desafiável | Telegram real | Não | Caseiro: +4 sobre +2 não é blefe |
 | Reentrada e colocação | IMPLEMENTED + HOMOLOGATED | Late join após saída vs finalizados | Telegram real | Não | Reentrada de quem saiu; colocado bloqueado |
-| M7 Persistência e Snapshots | IMPLEMENTED + HOMOLOGATED | PostgreSQL real, race, migrations, snapshots | Telegram real | Não | Defaults Classic+Legacy; snapshot imutável por jogo |
+| M7 Persistência e Snapshots | IMPLEMENTED + HOMOLOGATED | PostgreSQL real, race, migrations, snapshots | Telegram real | Não | Defaults Classic+Updated para novos grupos; existentes preservados; snapshot imutável por jogo |
 | M7 Ranking Legacy e Updated | IMPLEMENTED + HOMOLOGATED | Cálculo determinístico, half-up, elegibilidade | Telegram real | Não | Concessão e anúncio pós-commit homologados N=2 e N=3 |
 | Ranking Mensal | IMPLEMENTED BUT NOT HOMOLOGATED | PostgreSQL, timezone America/Sao_Paulo, buckets | Pendente | Não | Particionamento por mês, virada automática às 00:00 SP |
 | M7 UX de Configuração (/config) | IMPLEMENTED + HOMOLOGATED | /config, botões inline, my_chat_member, 23 cenários | Telegram real | Não | Admin/installer, boas-vindas e bloqueio de conflito |

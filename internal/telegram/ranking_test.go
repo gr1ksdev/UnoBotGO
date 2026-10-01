@@ -131,7 +131,7 @@ func TestRankingCommandSharedRendererIsolationAndNoAdmin(t *testing.T) {
 	svc, _ := game.NewService()
 	api := newMockBotAPI()
 	api.ChatMemberErr = errors.New("membership API must not be needed")
-	b := New(api, svc, nil, nil, 0, nil)
+	b := newTestBot(api, svc, nil, nil, 0, nil)
 	calls := 0
 	b.SetRankingService(&ranking.Service{Repository: rankingReadFunc(func(_ context.Context, id int64, _ time.Time) (ranking.GroupRanking, error) {
 		calls++
@@ -144,7 +144,7 @@ func TestRankingCommandSharedRendererIsolationAndNoAdmin(t *testing.T) {
 		return ranking.GroupRanking{System: groups.Legacy, MonthName: "Outubro"}, nil
 	})})
 	for _, id := range []int64{-1, -2, -3} {
-		b.cmdHandler.HandleMessage(t.Context(), &telego.Message{Chat: telego.Chat{ID: id, Type: "supergroup"}, From: &telego.User{ID: 999, FirstName: "Membro"}, Text: "/ranking"})
+		b.cmdHandler.HandleMessage(t.Context(), &telego.Message{Chat: telego.Chat{ID: id, Type: "supergroup"}, From: &telego.User{ID: 999, FirstName: "Membro"}, Text: "/ranking@unobot"})
 		text := api.LastSentMessage()
 		switch id {
 		case -1:
@@ -161,7 +161,7 @@ func TestRankingCommandSharedRendererIsolationAndNoAdmin(t *testing.T) {
 			}
 		}
 	}
-	b.cmdHandler.HandleMessage(t.Context(), &telego.Message{Chat: telego.Chat{ID: 999, Type: "private"}, From: &telego.User{ID: 999}, Text: "/ranking"})
+	b.cmdHandler.HandleMessage(t.Context(), &telego.Message{Chat: telego.Chat{ID: 999, Type: "private"}, From: &telego.User{ID: 999}, Text: "/ranking@unobot"})
 	if calls != 3 || api.LastSentMessage() != "🏆 Seus rankings\n\nVocê ainda não possui partidas pontuadas neste mês." {
 		t.Fatalf("expected empty private monthly ranking, got %q", api.LastSentMessage())
 	}
@@ -170,7 +170,7 @@ func TestRankingCommandSharedRendererIsolationAndNoAdmin(t *testing.T) {
 func TestPostCommitRankingReadsUpdatedHistoryAndMatchesCommand(t *testing.T) {
 	svc, _ := game.NewService()
 	api := newMockBotAPI()
-	b := New(api, svc, nil, nil, 0, nil)
+	b := newTestBot(api, svc, nil, nil, 0, nil)
 	repo := &resultRepo{commit: ranking.Commit{Scored: true}, entered: make(chan struct{}), release: make(chan struct{})}
 	b.SetResultRepository(repo)
 	reads := 0
@@ -207,7 +207,7 @@ func TestPostCommitRankingReadsUpdatedHistoryAndMatchesCommand(t *testing.T) {
 		t.Fatal(api.SentMessages)
 	}
 	automatic := api.SentMessages[1].Text
-	b.cmdHandler.HandleMessage(t.Context(), &telego.Message{Chat: telego.Chat{ID: 42, Type: "group"}, From: &telego.User{ID: 999}, Text: "/ranking"})
+	b.cmdHandler.HandleMessage(t.Context(), &telego.Message{Chat: telego.Chat{ID: 42, Type: "group"}, From: &telego.User{ID: 999}, Text: "/ranking@unobot"})
 	if api.LastSentMessage() != automatic || reads != 2 {
 		t.Fatal("different command renderer")
 	}
@@ -228,7 +228,7 @@ func TestInlineScoredClosureSendsExactlyResultAndRanking(t *testing.T) {
 	svc, _ := game.NewService()
 	view, action := readyToFinish(t, svc, -42, uno.BotRules(), false)
 	api := newMockBotAPI()
-	b := New(api, svc, nil, nil, time.Minute, nil)
+	b := newTestBot(api, svc, nil, nil, time.Minute, nil)
 	defer b.dispatcher.Stop(time.Second)
 	repo := &resultRepo{commit: ranking.Commit{Scored: true}}
 	b.SetResultRepository(repo)
@@ -247,7 +247,7 @@ func TestInlineScoredClosureSendsExactlyResultAndRanking(t *testing.T) {
 	if len(api.SentMessages) != 2 {
 		t.Fatalf("expected two independent messages: %+v", api.SentMessages)
 	}
-	if !strings.HasPrefix(api.SentMessages[0].Text, "🏁 Partida encerrada\n\n🥇") || !strings.Contains(api.SentMessages[0].Text, "+1 pt") {
+	if !strings.HasPrefix(api.SentMessages[0].Text, "🏁 Partida encerrada\n\n🥇") || !strings.Contains(api.SentMessages[0].Text, "+10,00 pts") {
 		t.Fatal(api.SentMessages[0].Text)
 	}
 	if api.SentMessages[1].Text != "🏆 Ranking do grupo · Setembro\n\n🥇 Histórico · 5 pts" {
@@ -471,7 +471,7 @@ func TestRenderUserMonthlyRankings_SingleOmittedGroup(t *testing.T) {
 func TestPrivateRankingCommand_ScopesToSenderAndNoButtons(t *testing.T) {
 	svc, _ := game.NewService()
 	api := newMockBotAPI()
-	b := New(api, svc, nil, nil, 0, nil)
+	b := newTestBot(api, svc, nil, nil, 0, nil)
 
 	var queriedUserID int64
 	mockRepo := &mockPrivateRankingRepo{
@@ -496,7 +496,7 @@ func TestPrivateRankingCommand_ScopesToSenderAndNoButtons(t *testing.T) {
 	b.cmdHandler.HandleMessage(t.Context(), &telego.Message{
 		Chat: telego.Chat{ID: 777, Type: "private"},
 		From: &telego.User{ID: 777, FirstName: "Freddy"},
-		Text: "/ranking",
+		Text: "/ranking@unobot",
 	})
 
 	if queriedUserID != 777 {

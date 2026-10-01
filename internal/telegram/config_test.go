@@ -154,7 +154,7 @@ func newTestHarness() *testHarness {
 	svc, _ := game.NewService()
 	tokens := NewTokenStore(100, 10, time.Now, nil)
 	renderer := NewRenderer(nil)
-	bot := New(api, svc, tokens, renderer, time.Minute, nil)
+	bot := newTestBot(api, svc, tokens, renderer, time.Minute, nil)
 	groupRepo := newMockGroupRepo()
 	userRepo := newMockUserRepo(groupRepo)
 	bot.SetGroupConfigs(groupRepo)
@@ -172,8 +172,7 @@ func newTestHarness() *testHarness {
 	}
 }
 
-
-// 1 & 20: Grupo sem config explícita -> Classic + Legacy. Setup nunca bloqueia /novo.
+// 1 & 20: Grupo sem config explícita -> Classic + Updated. Setup nunca bloqueia /novo.
 func TestConfig_DefaultsAndNeverBlocked(t *testing.T) {
 	h := newTestHarness()
 	ctx := t.Context()
@@ -183,7 +182,7 @@ func TestConfig_DefaultsAndNeverBlocked(t *testing.T) {
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: 10, FirstName: "Player1"},
-		Text: "/novo",
+		Text: "/novo@unobot",
 	})
 
 	summary, err := h.svc.FindChatGame(ctx, game.ChatID(chatID))
@@ -197,8 +196,8 @@ func TestConfig_DefaultsAndNeverBlocked(t *testing.T) {
 	if view.Rules.AllowSwapHands {
 		t.Error("expected Classic mode by default (AllowSwapHands = false)")
 	}
-	if view.GroupConfig.RankingSystem != groups.Legacy {
-		t.Errorf("expected Legacy ranking by default, got %v", view.GroupConfig.RankingSystem)
+	if view.GroupConfig.RankingSystem != groups.Updated {
+		t.Errorf("expected Updated ranking by default, got %v", view.GroupConfig.RankingSystem)
 	}
 }
 
@@ -217,7 +216,7 @@ func TestConfig_NovoUsesGroupDefault(t *testing.T) {
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: 10, FirstName: "Player1"},
-		Text: "/novo",
+		Text: "/novo@unobot",
 	})
 
 	summary, err := h.svc.FindChatGame(ctx, game.ChatID(chatID))
@@ -243,7 +242,7 @@ func TestConfig_NovoOverridesPreserveGroupConfig(t *testing.T) {
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: 10, FirstName: "Player1"},
-		Text: "/novo classico",
+		Text: "/novo@unobot classico",
 	})
 
 	summary, _ := h.svc.FindChatGame(ctx, game.ChatID(chatID))
@@ -261,14 +260,14 @@ func TestConfig_NovoOverridesPreserveGroupConfig(t *testing.T) {
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: 10, FirstName: "Player1"},
-		Text: "/cancelar",
+		Text: "/cancelar@unobot",
 	})
 
 	// Next /novo without args returns to Caseiro
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: 10, FirstName: "Player1"},
-		Text: "/novo",
+		Text: "/novo@unobot",
 	})
 	summary2, _ := h.svc.FindChatGame(ctx, game.ChatID(chatID))
 	view2, _ := h.svc.PublicView(ctx, summary2.GameID)
@@ -288,7 +287,7 @@ func TestConfig_ActiveGamePreservesSnapshotOnConfigChange(t *testing.T) {
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: 10, FirstName: "Admin"},
-		Text: "/novo",
+		Text: "/novo@unobot",
 	})
 	summary, _ := h.svc.FindChatGame(ctx, game.ChatID(chatID))
 
@@ -303,12 +302,12 @@ func TestConfig_ActiveGamePreservesSnapshotOnConfigChange(t *testing.T) {
 		ID:      "cb2",
 		From:    telego.User{ID: 10, FirstName: "Admin"},
 		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 99},
-		Data:    fmt.Sprintf("cfg_rank_updated_%d", chatID),
+		Data:    fmt.Sprintf("cfg_rank_legacy_%d", chatID),
 	})
 
 	// Check that GroupConfig was updated in storage
 	cfg, _ := h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if cfg.DefaultGameMode != groups.Caseiro || cfg.RankingSystem != groups.Updated {
+	if cfg.DefaultGameMode != groups.Caseiro || cfg.RankingSystem != groups.Legacy {
 		t.Fatalf("expected updated config in repo, got %+v", cfg)
 	}
 
@@ -317,7 +316,7 @@ func TestConfig_ActiveGamePreservesSnapshotOnConfigChange(t *testing.T) {
 	if view.Rules.AllowSwapHands {
 		t.Error("active game AllowSwapHands was mutated by config change!")
 	}
-	if view.GroupConfig.RankingSystem != groups.Legacy {
+	if view.GroupConfig.RankingSystem != groups.Updated {
 		t.Errorf("active game ranking system snapshot was mutated! got %v", view.GroupConfig.RankingSystem)
 	}
 }
@@ -334,7 +333,7 @@ func TestConfig_AdminCanOpenAndModify(t *testing.T) {
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: adminID, FirstName: "Creator"},
-		Text: "/config",
+		Text: "/config@unobot",
 	})
 
 	if len(h.api.SentMessages) == 0 {
@@ -388,7 +387,7 @@ func TestConfig_NonAdminCannotModify(t *testing.T) {
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: regularUserID, FirstName: "Bob"},
-		Text: "/config",
+		Text: "/config@unobot",
 	})
 
 	lastMsg := h.api.SentMessages[len(h.api.SentMessages)-1]
@@ -431,7 +430,7 @@ func TestConfig_InstallerStillMemberCanConfigure(t *testing.T) {
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: installerID, FirstName: "Installer"},
-		Text: "/config",
+		Text: "/config@unobot",
 	})
 
 	lastMsg := h.api.SentMessages[len(h.api.SentMessages)-1]
@@ -468,7 +467,7 @@ func TestConfig_InstallerLeftGroupCannotConfigure(t *testing.T) {
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: installerID, FirstName: "ExMember"},
-		Text: "/config",
+		Text: "/config@unobot",
 	})
 
 	lastMsg := h.api.SentMessages[len(h.api.SentMessages)-1]
@@ -494,7 +493,7 @@ func TestConfig_UnknownInstallerAdminsStillWork(t *testing.T) {
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: adminID, FirstName: "Admin"},
-		Text: "/config",
+		Text: "/config@unobot",
 	})
 
 	lastMsg := h.api.SentMessages[len(h.api.SentMessages)-1]
@@ -576,7 +575,7 @@ func TestConfig_OrthogonalChanges(t *testing.T) {
 		Data:    fmt.Sprintf("cfg_mode_caseiro_%d", chatID),
 	})
 	cfg, _ := h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if cfg.DefaultGameMode != groups.Caseiro || cfg.RankingSystem != groups.Legacy {
+	if cfg.DefaultGameMode != groups.Caseiro || cfg.RankingSystem != groups.Updated {
 		t.Fatalf("mode change altered ranking: %+v", cfg)
 	}
 
@@ -585,10 +584,10 @@ func TestConfig_OrthogonalChanges(t *testing.T) {
 		ID:      "cb2",
 		From:    telego.User{ID: adminID},
 		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
-		Data:    fmt.Sprintf("cfg_rank_updated_%d", chatID),
+		Data:    fmt.Sprintf("cfg_rank_legacy_%d", chatID),
 	})
 	cfg, _ = h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if cfg.DefaultGameMode != groups.Caseiro || cfg.RankingSystem != groups.Updated {
+	if cfg.DefaultGameMode != groups.Caseiro || cfg.RankingSystem != groups.Legacy {
 		t.Fatalf("ranking change altered mode: %+v", cfg)
 	}
 }
@@ -721,14 +720,14 @@ func TestConfig_PersistedSurvivesRestart(t *testing.T) {
 	// Simulate restart by creating completely new Bot and Service instances
 	api := newMockBotAPI()
 	newSvc, _ := game.NewService()
-	newBot := New(api, newSvc, NewTokenStore(100, 10, time.Now, nil), NewRenderer(nil), time.Minute, nil)
+	newBot := newTestBot(api, newSvc, NewTokenStore(100, 10, time.Now, nil), NewRenderer(nil), time.Minute, nil)
 	newBot.SetGroupConfigs(groupRepo)
 
 	// New bot checks /novo
 	newBot.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: 10, FirstName: "Player"},
-		Text: "/novo",
+		Text: "/novo@unobot",
 	})
 
 	summary, err := newSvc.FindChatGame(ctx, game.ChatID(chatID))
@@ -768,7 +767,7 @@ func TestConfig_KnownUserObservedAtInteractionPoints(t *testing.T) {
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: 200, FirstName: "AdminConfig", Username: "admin200"},
-		Text: "/config",
+		Text: "/config@unobot",
 	})
 	key2 := fmt.Sprintf("%d:%d", chatID, 200)
 	if u, ok := h.userRepo.users[key2]; !ok || u.DisplayName != "AdminConfig" {
@@ -796,6 +795,10 @@ func TestConfig_RankingConflictReturnsErrNeedsProductDecision(t *testing.T) {
 	chatID := int64(-1024)
 	adminID := int64(10)
 	h.api.ChatMembers[adminID] = &telego.ChatMemberOwner{Status: telego.MemberStatusCreator}
+
+	legacy := groups.Defaults(chatID)
+	legacy.RankingSystem = groups.Legacy
+	h.groupRepo.configs[chatID] = legacy
 
 	// Simulate that group already has accumulated scores in Legacy ranking
 	h.groupRepo.conflictOnRankChange = true
@@ -870,18 +873,18 @@ func TestConfig_FirstConfigInGroupWithoutExistingConfig_ObservesUser(t *testing.
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: adminID, FirstName: "AdminNovo", Username: "admin_novo"},
-		Text: "/config",
+		Text: "/config@unobot",
 	})
 
-	// 1. Group config deve existir com os defaults (Classic + Legacy)
+	// 1. Group config deve existir com os defaults (Classic + Updated)
 	h.groupRepo.mu.Lock()
 	cfg, exists := h.groupRepo.configs[chatID]
 	h.groupRepo.mu.Unlock()
 	if !exists {
 		t.Fatal("expected group config to be created")
 	}
-	if cfg.DefaultGameMode != groups.Classic || cfg.RankingSystem != groups.Legacy {
-		t.Fatalf("expected defaults Classic + Legacy, got mode=%v rank=%v", cfg.DefaultGameMode, cfg.RankingSystem)
+	if cfg.DefaultGameMode != groups.Classic || cfg.RankingSystem != groups.Updated {
+		t.Fatalf("expected defaults Classic + Updated, got mode=%v rank=%v", cfg.DefaultGameMode, cfg.RankingSystem)
 	}
 
 	// 2. Usuário deve ter sido observado com sucesso (sem erro de foreign key)
@@ -926,7 +929,7 @@ func TestConfig_FirstConfigInGroupWithoutExistingConfig_NonAdmin_ObservesUserAnd
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: regularUserID, FirstName: "ComumNovo", Username: "comum_novo"},
-		Text: "/config",
+		Text: "/config@unobot",
 	})
 
 	// 1. Group config deve ter sido criada com defaults
@@ -936,8 +939,8 @@ func TestConfig_FirstConfigInGroupWithoutExistingConfig_NonAdmin_ObservesUserAnd
 	if !exists {
 		t.Fatal("expected group config to be created")
 	}
-	if cfg.DefaultGameMode != groups.Classic || cfg.RankingSystem != groups.Legacy {
-		t.Fatalf("expected defaults Classic + Legacy, got mode=%v rank=%v", cfg.DefaultGameMode, cfg.RankingSystem)
+	if cfg.DefaultGameMode != groups.Classic || cfg.RankingSystem != groups.Updated {
+		t.Fatalf("expected defaults Classic + Updated, got mode=%v rank=%v", cfg.DefaultGameMode, cfg.RankingSystem)
 	}
 
 	// 2. Usuário comum deve ter sido observado com sucesso
@@ -1029,7 +1032,7 @@ func TestConfig_DynamicCallbackUpdates(t *testing.T) {
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
 		From: &telego.User{ID: adminID, FirstName: "Admin"},
-		Text: "/config",
+		Text: "/config@unobot",
 	})
 
 	if len(h.api.SentMessages) == 0 {
@@ -1037,7 +1040,7 @@ func TestConfig_DynamicCallbackUpdates(t *testing.T) {
 	}
 	initialMsg := h.api.SentMessages[len(h.api.SentMessages)-1]
 
-	// Verify initial text (Classic + Legacy)
+	// Verify initial text (Classic + Updated)
 	if !strings.Contains(initialMsg.Text, "<b>Modo padrão de partida:</b> Clássico") {
 		t.Fatalf("expected Classic mode header in: %s", initialMsg.Text)
 	}

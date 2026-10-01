@@ -196,7 +196,7 @@ go run ./cmd/bot
 As migrations SQL versionadas são embutidas no binário e verificadas/aplicadas automaticamente antes de HTTP, Telegram e workers. A conexão tem prazo de 10 segundos; migrations e verificação têm timeout interno total de 2 minutos. Um advisory lock transacional serializa instâncias, e todo o lote pendente e seu ledger são confirmados em uma única transação. Migrations aplicadas não devem ser editadas: checksum divergente, versão desconhecida, timeout ou erro SQL impedem o startup, sem corrigir o ledger ou executar downgrade. Bancos vazios/parciais são atualizados; bancos já atualizados apenas são verificados. Não há comando manual ou segundo binário obrigatório.
 
 **Configuração e Ranking:**
-- Cada grupo possui configuração própria criada sob demanda com os padrões **Clássico** e **Legado**.
+- Cada grupo possui configuração própria criada sob demanda com os padrões **Clássico** e **Atualizado**.
 - O comando `/config` permite que administradores e o usuário que adicionou o bot configurem o modo padrão (`Clássico` / `Caseiro`) e o sistema de ranking (`Legado` / `Atualizado`) através de botões inline interativos.
 - Partidas iniciadas usam o snapshot de configuração capturado na criação; alterações posteriores afetam apenas as partidas futuras.
 - Ao final de cada partida pontuável (mínimo de 2 participantes elegíveis), o bot persiste o resultado de forma atômica e exibe uma mensagem dedicada anunciando os pontos distribuídos.
@@ -209,3 +209,5 @@ TEST_DATABASE_URL='postgres://postgres:senha@localhost:5432/unobot_test?sslmode=
 ```
 
 Documentação de persistência e homologação: [M7](docs/m7-persistence.md).
+
+Em grupos/supergrupos, todo comando deve mencionar o username do bot: `/novo@SeuBot`, `/entrar@SeuBot` ou seu alias `/join@SeuBot`, `/config@SeuBot`, etc. Comandos sem sufixo ou destinados a outro bot são ignorados. No privado, `/start` e `/help` continuam sem sufixo. Grupos já configurados preservam seu sistema de ranking; a migration 0008 altera somente o default para grupos novos.

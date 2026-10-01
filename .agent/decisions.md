@@ -1223,3 +1223,21 @@ Evitar segundo runner/framework, mudança de schema e execução parcial antes d
 
 ## Impacto
 A aplicação permanece fail-closed antes de HTTP/Telegram/workers, reutilizando pool único. Testes PostgreSQL reais adicionados para boundary de startup e gates CI/Makefile ampliados. Nenhum SQL publicado, domínio, frontend ou configuração externa alterado; sem commit/push/deploy.
+
+
+# Decisão: destinatário explícito e default Atualizado
+
+## Data
+2026-10-01
+
+## Contexto
+Usuário aprovou alias /join, Atualizado em novos grupos e respostas em grupos somente a comandos com username do bot.
+
+## Decisão tomada
+Reutilizar handler de entrar e adicionar filtro compartilhado parseMessageCommand para handler e dispatcher/reset. Alterar groups.Defaults e criar migration 0008 com ALTER COLUMN SET DEFAULT, sem UPDATE de configurações existentes. /entrar continua principal no menu; /join é alias documentado na ajuda.
+
+## Motivo
+Filtro antecipado evita respostas e operações de recuperação a comandos não direcionados. Migration do default cobre todos os caminhos de criação e preserva histórico/ledger existentes.
+
+## Impacto
+Privado, callbacks e inline preservados. Grupos existentes mantêm ranking; grupos novos nascem Updated. Sem commit/push/deploy nesta tarefa.

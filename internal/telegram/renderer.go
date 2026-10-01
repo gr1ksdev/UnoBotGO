@@ -415,7 +415,7 @@ func (r *Renderer) RenderHelp(botUsername string) string {
 	sb.WriteString("<b>/start</b> — Mostra a apresentação do bot no privado.\n")
 	sb.WriteString("<b>/help</b> — Exibe esta ajuda. O comando /ajuda é um alias.\n")
 	sb.WriteString("<b>/novo</b> — Cria uma partida no grupo.\n")
-	sb.WriteString("<b>/entrar</b> — Entra na partida aberta ou em andamento.\n")
+	sb.WriteString("<b>/entrar</b> — Entra na partida aberta ou em andamento. /join é um alias.\n")
 	sb.WriteString("<b>/trancar</b> — Impede novos jogadores de entrar.\n")
 	sb.WriteString("<b>/destrancar</b> — Permite novas entradas.\n")
 	sb.WriteString("<b>/iniciar</b> — Inicia a partida quando houver pelo menos dois jogadores.\n")
@@ -425,6 +425,10 @@ func (r *Renderer) RenderHelp(botUsername string) string {
 	sb.WriteString("<b>/cancelar</b> — Cancela a partida. O comando /kill é um alias.\n")
 	sb.WriteString("<b>/reset</b> — Recupera o grupo e limpa sua partida e histórico.")
 	sb.WriteString("</blockquote>\n\n")
+	sb.WriteString("Em grupos, todos os comandos precisam mencionar este bot. No privado, o sufixo é opcional.\n")
+	if botUsername != "" {
+		sb.WriteString(fmt.Sprintf("Exemplo: <code>/join@%s</code>\n\n", html.EscapeString(strings.TrimPrefix(botUsername, "@"))))
+	}
 
 	sb.WriteString("<b>Como jogar suas cartas:</b>\n")
 	sb.WriteString("Quando for a sua vez, clique no botão <b>Suas cartas</b> ou digite no chat:\n")
