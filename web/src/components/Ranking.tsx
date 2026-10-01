@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
+import { ScrollingName } from './ScrollingName'
 import { useQuery } from '@tanstack/react-query'
 import { authHeaders, type RankingItem, type System } from '../api/client'
 import { formatScore, scoreUnit } from '../lib/score'
+
+// Presentation only: persisted Telegram names and ranking identities stay intact.
+export function displayName(item: RankingItem) {
+ return !item.group_ref && !/[^\p{P}\p{Z}\p{C}\s]/u.test(item.name) ? 'Jogador' : item.name
+}
 
 export function Avatar({ item, large = false }: { item: RankingItem; large?: boolean }) {
  const ref = useRef<HTMLSpanElement>(null)
@@ -28,7 +34,7 @@ export function Avatar({ item, large = false }: { item: RankingItem; large?: boo
    const next = URL.createObjectURL(photo.data); setUrl(next)
    return () => URL.revokeObjectURL(next)
  }, [photo.data])
- const initials = item.name.trim().split(/\s+/u).slice(0, 2).map(part => Array.from(part)[0]).join('')
+ const initials = displayName(item).trim().split(/\s+/u).slice(0, 2).map(part => Array.from(part)[0]).join('')
  return <span ref={ref} className={`avatar ${large ? 'avatar-large' : ''}`} aria-hidden="true">{url ? <img src={url} loading="lazy" alt="" onError={() => setUrl(undefined)} /> : initials}</span>
 }
 
@@ -42,7 +48,7 @@ export function Score({ item, system }: { item: RankingItem; system: System }) {
  return <span className="score">{formatScore(item.score_units, system)} <small>{scoreUnit(item.score_units, system)}</small></span>
 }
 export function RankingCard({ item, system, tab }: { item: RankingItem; system: System; tab: string }) {
- const content = <><RankBadge position={item.position} /><Avatar item={item} /><span className="identity"><span className="player-name">{item.name}</span><span className="masked-id">{item.masked_id}</span></span><Score item={item} system={system} /></>
+ const content = <><RankBadge position={item.position} /><Avatar item={item} /><span className="identity"><span className="player-name"><ScrollingName name={displayName(item)} /></span><span className="masked-id">{item.masked_id}</span></span><Score item={item} system={system} /></>
  const className = `ranking-card place-${item.position}`
  return <li>{item.group_ref ? <Link className={className} to={`/groups/${encodeURIComponent(item.group_ref)}?system=${system}&tab=${tab}`}>{content}</Link> : <div className={className}>{content}</div>}</li>
 }

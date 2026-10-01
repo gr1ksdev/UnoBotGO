@@ -15,7 +15,8 @@ interface TelegramApp {
 }
 declare global { interface Window { Telegram?: { WebApp: TelegramApp } } }
 
-export function useTelegram(back?: () => void) {
+export function useTelegram(back?: () => void, options: { manageBackButton?: boolean } = {}) {
+ const manageBackButton = options.manageBackButton ?? true
  useEffect(() => {
    const app = window.Telegram?.WebApp
    if (!app) return
@@ -30,11 +31,15 @@ export function useTelegram(back?: () => void) {
    update()
    const events = ['safeAreaChanged', 'contentSafeAreaChanged', 'viewportChanged']
    events.forEach(event => app.onEvent?.(event, update))
-   if (back) { app.BackButton?.show(); app.BackButton?.onClick(back) } else app.BackButton?.hide()
+   if (manageBackButton) {
+     if (back) { app.BackButton?.show(); app.BackButton?.onClick(back) } else app.BackButton?.hide()
+   }
    return () => {
      events.forEach(event => app.offEvent?.(event, update))
-     if (back) app.BackButton?.offClick(back)
-     app.BackButton?.hide()
+     if (manageBackButton) {
+       if (back) app.BackButton?.offClick(back)
+       app.BackButton?.hide()
+     }
    }
- }, [back])
+ }, [back, manageBackButton])
 }

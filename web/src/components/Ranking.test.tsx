@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Avatar, RankBadge, Score, RankingCard, Skeleton, ErrorState, Segmented } from './Ranking'
+import { Avatar, RankBadge, Score, RankingCard, Skeleton, ErrorState, Segmented, displayName } from './Ranking'
 import type { RankingItem } from '../api/client'
 
 const testQueryClient = new QueryClient({
@@ -73,6 +73,26 @@ describe('Ranking Components', () => {
       wrap(<Score item={dummyPlayerItem} system="legacy" />)
       expect(screen.getByText(/1/)).toBeInTheDocument()
       expect(screen.getByText('pt')).toBeInTheDocument()
+    })
+  })
+
+  describe('displayName', () => {
+    it.each(['.', ' ... ', '', '   ', '\u200b'])('uses a neutral player fallback for %j without changing the item', name => {
+      const item = { ...dummyPlayerItem, name }
+      expect(displayName(item)).toBe('Jogador')
+      expect(item.name).toBe(name)
+    })
+
+    it.each(['João', '李', '🦊', 'é', '123'])('preserves useful Unicode names: %s', name => {
+      expect(displayName({ ...dummyPlayerItem, name })).toBe(name)
+    })
+
+    it('preserves group titles and uses the fallback in the player row and avatar', () => {
+      expect(displayName({ ...dummyItem, name: '.' })).toBe('.')
+      wrap(<RankingCard item={{ ...dummyPlayerItem, name: '.' }} system="updated" tab="players" />)
+      expect(screen.getByText('Jogador')).toBeInTheDocument()
+      expect(screen.getByText('J')).toBeInTheDocument()
+      expect(screen.getByText('ID ••••5678')).toBeInTheDocument()
     })
   })
 

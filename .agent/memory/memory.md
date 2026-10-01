@@ -1,3 +1,30 @@
+# Massa fictícia de homologação para o Mini App de Ranking Global — 2026-09-30 (somente dev; pronto para homologação)
+
+- Pedido do usuário aprovado no plano: `massa-ficticia-homologacao-miniapp_2026-09-30_22-40.md`.
+- Arquitetura implementada em `internal/devseed` e `cmd/devseed`:
+  - **Namespace e Separação Cirúrgica**:
+    - Chat IDs reservados para grupos do seed: faixa negativa `[-990000000999, -990000000001]`.
+    - User IDs reservados para jogadores do seed: faixa positiva `[9900000001, 9900000999]`.
+    - Game IDs reservados: prefixo `devseed_game_`.
+    - Limpeza cirúrgica com `make clean-miniapp-seed` baseada nessas restrições exatas, sem tocar dados reais e sem `TRUNCATE`.
+  - **Proteção Fail-Closed Contra Produção**:
+    - Exige explicitamente `APP_ENV=development` ou `ALLOW_DEV_SEED=1`.
+    - Validação de `DATABASE_URL`: rejeita URLs vazias ou hosts de produção.
+    - Operação inteiramente transacional (rollback automático em erro).
+  - **Massa Determinística Completa**:
+    - **Mês Corrente Dinâmico**: calculado via `ranking.MonthStart` em `America/Sao_Paulo`.
+    - **Atualizado**: 80 grupos e 180 jogadores (superando o limite de paginação de 50). Nomes curtos, médios, emojis, acentos, 1 grupo com nome gigante e 1 grupo sem título (`Grupo ••••0005`), 1 jogador sem nome (`Jogador ••••0017`).
+    - **Legado**: 65 grupos e 140 jogadores completamente segregados do Atualizado (com sobreposição intencional de UserIDs sem compartilhamento de pontuação).
+    - **Casos Especiais**: Grupo grande com 60 membros para scroll profundo, grupo pequeno com 2 membros, grupo principal ("UNO da Galera") com scores idênticos para testar desempate por `last_placement` (LucasZ à frente de Mariana) e `last_completed_game_at`.
+    - **Multi-Grupo e Histórico**: Jogador Freddy presente em 5 grupos com score acumulado alto (~25.000,00 pts) e display name atualizado para "Freddy UNO".
+  - **Idempotência**:
+    - Execuções consecutivas de `make seed-miniapp` limpam fixtures anteriores do namespace e reinserem os dados exatos determinísticos sem duplicar scores.
+    - `make clean-miniapp-seed` é um no-op seguro se executado repetidamente.
+- Verificações completas: testes de segurança e integração no PostgreSQL, 35 testes vitest, Go vet, build e git diff limpos.
+- Regras de isolamento: zero commit, zero push, main intocada, sem deploy/migration em produção.
+
+---
+
 # Refinamento visual das cartas de UNO no hero de detalhe — 2026-09-30 (somente dev; pronto para homologação)
 
 - Pedido do usuário aprovado no plano: `refinamento-cartas-hero-detalhe_2026-09-30_14-15.md`.
@@ -687,3 +714,85 @@
 - go test -count=1 ./... e variante debugcards, vet/build normais/debugcards, diff check aprovados. Race não executável localmente: CGO padrão 0; CGO_ENABLED=1 falha ThreadSanitizer VMA 39 (requer 48). Não declarar race aprovado. Integração com PostgreSQL real não reexecutada nesta correção sem alterações de banco.
 - Simulador: Caseiro 4 players seed 20260924 (126 ações), Clássico 2 players seed 20260928 (23 ações), concluídos; relatórios somente /tmp.
 - Homologação Telegram pendente; nenhum push nem promoção. main permanece 62fc344. A documentação geral de status possuía referências de publicação antigas; esta atualização documenta o novo fluxo, não reaudita toda a matriz.
+
+
+# Refino visual do detalhe do grupo — 2026-09-30
+
+- Somente dev, working tree para homologação; sem commit/push/deploy/migration.
+- Hero sem card interno: group-hero não tem border, background, border-radius ou shadow. Header compacto 192px com dados usuais, sem insets Telegram. Avatar 64px (56px em largura estreita), score 26px, duas cartas 32x50px em coluna reservada; decoração removida abaixo de 310px.
+- Painel com raio 20px e sobreposição 12px; linhas 62px, avatar 38px, medalhas 23x30px, top 3 com cores suaves. Estilos compactos restritos a detail-view.
+- Nome pontual: observedName concatena FirstName/LastName do Telegram; results.go persiste DisplayName e global_rankings.go retorna nomes não vazios sem filtrar pontuação. TestRankingPreservesObservedDotName confirma preservação intencional de '.'. Sem consulta a registro de produção. Fallback 'Jogador' somente na apresentação frontend de jogadores com nome vazio ou somente pontuação/espaços/controles. Preservados grupos, nomes Unicode/emoji, IDs, persistência e regras competitivas.
+- Validação Node 24.21.0: lint/typecheck/test (31 testes)/build aprovados. Go test -count=1 ./... e go build ./... aprovados após build frontend. git diff --check aprovado. Testes PostgreSQL não garantem execução de integrações sem banco configurado.
+- Browser local Brave via Playwright temporário, API/Telegram simulados: larguras 280/320/360/390/480px, nomes extensos e score int64 máximo sem overflow horizontal. Em 390x844, nove linhas completas usuais; oito com score extremo. Abaixo de 310px scores usam linha adicional. Capturas em /tmp/unobot-visual-validation/detail-390.png e detail-320-stress.png.
+- Mockup local inspecionado, porém anexos novos não disponíveis na conversa. Mockup antigo tem card; instrução atual de removê-lo prevalece. Homologação real no celular permanece com usuário.
+
+
+# Recuperação das proporções da referência — 2026-09-30
+
+- A rodada compacta anterior foi REPROVADA. A referência agora disponível em `Ranking do Grupo em Estilo UNO.png` é autoritativa; objetivo atual é fidelidade de composição/escala, não maximizar quantidade de rows visíveis. Não reutilizar os números compactos anteriores como especificação.
+- Hero integrado mantido, sem card interno. Em 390/430 CSS px: header 286px antes da sobreposição e sem insets nativos, avatar 96px, nome 28px, score 44px, ID 15px, período 14px. Sheet raio 36px, overlap 22px, padding superior 24px; título 17px/ícone 22px.
+- Três cartas físicas de 112x174px com rotações e sombras, parcialmente fora da viewport à direita e abaixo da sheet; overflow decorativo intencional contido no header. Removida coluna de pequenos ícones.
+- Rows 88px em dados usuais, avatares 56px e medalhas 30x40px; top 1 dourado suave, top 2/3 neutros e sombras leves. Max-width 480px mantido no desktop sem scale interno. Ajustes específicos de largura estreita preservam leitura, e score excepcionalmente grande quebra linhas em vez de reduzir toda a interface.
+- Apenas styles.css e o markup decorativo/título do hero alterados nesta rodada. Fallback Jogador da rodada anterior intacto; sem mudanças em API/backend/ranking/auth/group_ref/score/paginação.
+- Validação Node 24.21.0: lint, typecheck, 31 testes frontend, build e diff check aprovados. Go test -count=1 ./... e go build ./... aprovados após regenerar assets embed; sem migrations.
+- Brave/Playwright temporário com API/Telegram simulados: 280/320/360/390/430/1280px; nomes longos e int64 máximo sem overflow de conteúdo. No desktop: avatar 96px, score 44px, rows 88px, iguais ao mobile prioritário. Browser Back navega para global. Sem insets reais do Telegram nestes testes.
+- Comparação lado a lado (mesma largura de imagem): /tmp/unobot-visual-validation/comparacao-proporcoes.html e comparacao-proporcoes.png. Capturas proportions-390.png, proportions-430.png e proportions-desktop.png. Referência inclui barra nativa; capturas usam dados simulados e fallback de avatar. Homologação visual permanece com usuário.
+- Somente dev, sem commit/push/deploy; referência fornecida preservada como arquivo untracked. Plano: restaurar-proporcoes-referencia_2026-09-30_20-41.md.
+
+
+# Polimento do hero com artes reais — 2026-09-30
+
+- Rota /groups/:groupRef: App.tsx → RankingsPage, com Avatar/Score/RankingCard e novo HeroCards. Estilos permanecem em styles.css, sem alterações em API/backend/SQL/auth/navegação.
+- Assets locais prévios: somente swap_hands_grey.png. Artes coloridas reais estavam no mapa Stickers de internal/telegram/stickers.go; recuperadas via getFile read-only (g_0/y_0/r_0), sem mensagens nem mudanças na integração, e copiadas intactas para web/src/assets/cards/{green,yellow,red}-zero.webp. Origem documentada no README desse diretório. Total ~31KB, WebP alpha 342x512. Vite emite três arquivos estáticos versionados; nenhuma chamada ao Telegram ou credencial para decoração em runtime.
+- Removidos spans/ovais e cores genéricas CSS. HeroCards renderiza imgs decorativas com alt vazio, aria-hidden, dimensões intrínsecas e draggable=false. Composição mantém três cartas reais, width 128px e height auto (~192px), rotações distintas, sombras alpha, clipping à direita e pela sheet; fora do caminho de interação.
+- Avatar ampliado 96→108px, deslocado 4px acima e com sombra suave. Grid ajustado para 108px + conteúdo, gap 12px, reserva 64px à direita e padding externo 22px. Nome 30px, ID 16px, score 46px/unidade 23px e período 15px. Header usual 304px sem insets; sem card interno. Em <=360px avatar 92px, score 40px e decoração reposicionada. Rows 88px, top 1 e estrutura da lista preservados; sombra dourada ajustada levemente.
+- Checks finais com Node 24.21.0: lint/typecheck/test (31 testes)/build/diff check aprovados; go test -count=1 ./... e go build ./... aprovados após regenerar embed.
+- Browser Brave com API/Telegram simulados, assets reais do build/dev: 280/320/360/390/430/1280px, nomes longos e int64 máximo sem overflow de conteúdo. Onde há decoração, bounding box do red card não invade summary. Abaixo de 310px cartas ocultas. Confirmados Updated/Legacy, header de autenticação, navegação de volta preservando system/tab e carregamento autenticado de avatar com imagem de teste.
+- Mesma leitura de dados via useRanking/client preservada e coberta por testes e fixtures; nenhum banco/ranking de produção consultado. Aceite real no Telegram permanece com usuário.
+- Capturas: /tmp/unobot-visual-validation/real-cards-390.png, real-cards-430.png, real-cards-desktop.png e real-cards-with-avatar-390.png (dados e avatar de teste). Só dev; nenhum commit/push/main/deploy/migration. Plano polir-hero-assets-reais_2026-09-30_21-08.md.
+
+
+# Lapidação final: avatar e onda — 2026-09-30
+
+- Estrutura/identidade geral e cards foram aprovados pelo usuário antes desta rodada; não redesenhar nem retomar objetivos de densidade.
+- Alterações de produto limitadas a styles.css e novo assets/hero-wave.svg. Avatar 108→116px (92→100px <=360), sem mudar borda/sombra/fallback. Grid recebe padding-left6 e gap reduzido4; avatar deslocado6px, resumo10px à direita. Cartas reais intactas, apenas offset8px à direita para acompanhar a reserva de texto.
+- Sheet usa pseudo-elemento ::before com máscara SVG alpha, altura24px, viewBox480x24 e preserveAspectRatio none. Dois picos assimétricos (y3/y5) e vale y17, variação máxima21px. Contorno superior arredondado antigo substituído pela onda; margin-top e padding da sheet intactos. Surface horizontal com os mesmos tons é compartilhada com a máscara para evitar seam; sombra reta do topo removida. Overlap de1px da máscara/body evita gaps.
+- Hero usual continua304px sem insets. Browser comparou snapshots da lista antes/depois em320/360/390/430/1280: posições, alturas, larguras, tipografia, backgrounds, sombras, radius e gaps idênticos, incluindo título. Avatar cresceu8 e deslocou6; resumo deslocou10 em todas essas larguras. Não há mudança de altura/layout por causa da onda.
+- Browser Brave com API/Telegram/avatars de teste: larguras280–430 e desktop, nomes longos/int64 máximo, sem overflow de conteúdo ou sobreposição do red-card com resumo quando visível. Confirmados Legado/Atualizado, auth headers, carregamento de foto e back com system/tab preservados. Sem consulta a ranking de produção.
+- Node24.21.0: lint/typecheck/test(31)/build aprovados; git diff --check aprovado. go build ./... aprovado para embed; nenhum Go alterado, portanto go test não repetido nesta rodada. Build CSS inclui prefixos -webkit-mask e CSP existente permite imagens data:, sem mudar backend.
+- Capturas /tmp/unobot-visual-validation/final-wave-{390,430,desktop}.png e final-wave-with-avatar-390.png; dados/avatar simulados. Plano lapidar-avatar-onda_2026-09-30_21-34.md concluído; nova homologação visual com usuário. Somente dev, sem commit/push/main/deploy/migration.
+
+
+# Navegação principal inferior — 2026-09-30
+
+- Estrutura visual aprovada preservada; mudança exclusivamente frontend/UI/navegação na dev, sem commit/push/main/deploy/backend/API/banco.
+- RankingsPage remove Segmented Tipo de ranking do ranking-panel e monta BottomNavigation somente global, fora dos branches loading/error/empty. Atualizado/Legado continua no header. system/tab em searchParams continuam única fonte de verdade; React Router Link aponta para /?system=...&tab=groups|players, preservando deep links e refresh, sem estado duplicado nem novas queries.
+- Novo BottomNavigation usa ícone UsersIcon existente e SVG de pessoa na mesma abordagem, labels e aria-current=page. Ativo com peso, indicador pequeno e fundo de ícone; cores vermelho grupos/azul players, inativo cinza. Links têm foco de teclado e área de toque60px.
+- Barra fixed com max-width480 centralizada, branco98%, borda/sombra suaves. Altura de conteúdo60px +1px border +safe bottom. global-view usa padding-bottom60+safe+16px; safe=max(env(safe-area-inset-bottom), --telegram-bottom) e safe lateral com as variáveis existentes. Desktop>=500: bottom20, bordas inferiores32, igual container centralizado; mobile bottom0.
+- No detalhe não há nav nem padding extra. Back visual, fallback de erro e Telegram BackButton retornam sempre tab=groups preservando system, inclusive deep links com tab=players. useTelegram recebe opção manageBackButton; root App não disputa propriedade com Page, corrigindo root hide após Page show em abertura direta. initData/autenticação/eventos/queries/backend intactos.
+- Quatro testes de navegação adicionados e existentes adaptados para links: defaults, sistema preservado na troca, URL/deep link, root não oculta BackButton do detalhe, loading/error/empty, retorno e cleanup. Total35 testes aprovados.
+- Node24.21.0: lint/typecheck/test(35)/build aprovados; git diff --check aprovado; go build ./... aprovado para assets embed. Nenhum Go alterado, go test não repetido nesta rodada.
+- Browser Brave com API/Telegram simulados:320/390/430/1280px e safe bottom0/34, nav largura min(viewport,480), alinhada ao app, altura61/95, último card43px acima da barra no scroll final; sem overflow. Também validado teclado Enter, refresh, URLs/system, retorno UI/Telegram, footer oculto no detalhe, loading/empty/error e paginação6 itens.
+- Capturas /tmp/unobot-visual-validation/bottom-nav-players.png, bottom-nav-mobile-safe.png e bottom-nav-desktop.png. Sem consulta a ranking de produção. Working tree anterior preservado; plano bottom-navigation-rankings_2026-09-30_21-45.md concluído; homologação visual com usuário.
+
+
+# Navegação em pílula de vidro — 2026-09-30
+
+- Usuário pediu barra separada, pílula com estética Liquid Glass; interpretado como flutuante/descolada das bordas, ainda acessível ao rolar. Mudança só em styles.css; links/estado/BackButton/detail intactos.
+- Cápsula max340px, margem lateral mínima20px, radius999, altura70px (toques60/frame10). Distância inferior12px +safe, e20px adicionais de margem externa desktop. Safe area fica fora da cápsula, sem deformar altura; reserva global98px+safe protege conteúdo.
+- Vidro CSS inspirado: gradient translúcido, backdrop blur22/saturate180%, borda branca/reflexo e sombras suaves. Seleção como subpílula clara com ícone/cor/peso; indicador linear anterior removido. Fallback branco96% quando backdrop-filter não suportado.
+- Node24.21.0: lint/typecheck/test35/build aprovados; git diff --check aprovado; go build ./... aprovado para embed. Nenhum Go alterado.
+- Browser fixtures320/390/430/1280px com safe0/34: caps280/340px, nav dentro do app, safe externa, sem overflow e último card44px acima da pílula no scroll final. Verificados Enter, refresh, system/tab, retornos UI/Telegram, footer oculto no detalhe, loading/error/empty e paginação.
+- Capturas /tmp/unobot-visual-validation/glass-pill-players.png, glass-pill-mobile-safe.png e glass-pill-desktop.png. Somente dev/working tree; sem commit/push/main/deploy/backend/API/ranking/auth. Plano pilula-liquid-glass_2026-09-30_21-58.md concluído; homologação visual pendente.
+
+## Liquid Glass — 2026-09-30
+- BottomNavigation preserva rotas e safe area; material web usa backdrop real com filtro SVG e mapa de deslocamento gerado por canvas apenas no resize.
+- Documentação Apple consultada: adopting-liquid-glass e HIG Materials. Não é a API nativa SwiftUI/UIKit; compatibilidade óptica validada no Brave/Chromium, sem homologação Safari/WebView real.
+- Alternativas: blur CSS, superfície opaca sem suporte e preferências de contraste/transparência; redução de movimento respeitada.
+
+- Polimento da seleção: gradiente cinza translúcido 18%/10% e blur 3px em .glass-selection; acessibilidade mantém superfície sólida sem blur. Lint/typecheck/35 testes/build/diff-check aprovados.
+
+## Nomes longos — 2026-09-30
+- ScrollingName compartilhado no hero e cards de grupos/players mede overflow com ResizeObserver e fonte carregada. Apenas nomes que não cabem animam para a esquerda com pausa e retorno.
+- Uma única cópia do nome, title completo e foco em textos longos. prefers-reduced-motion desativa animação e permite scroll manual.
+- Validação: lint/typecheck/37 testes/build/diff-check aprovados; browser confirmou deslocamento, nomes curtos estáticos, resize, navegação e ausência de overflow em 390/430px.

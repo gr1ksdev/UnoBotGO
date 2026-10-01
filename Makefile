@@ -1,4 +1,4 @@
-.PHONY: help dev dev-back dev-web web-build preview build run start test test-race vet check clean simulator local db up down logs
+.PHONY: help dev dev-back dev-web web-build preview build run start test test-race vet check clean simulator local db up down logs seed-miniapp clean-miniapp-seed
 
 BIN_DIR := bin
 BIN_NAME := $(BIN_DIR)/unobotgo
@@ -24,6 +24,8 @@ help:
 	@echo "  make up          Sobe app + PostgreSQL via docker compose"
 	@echo "  make down        Derruba containers docker compose"
 	@echo "  make logs        Exibe logs docker compose"
+	@echo "  make seed-miniapp        Popula banco local com fixtures de homologação do Mini App"
+	@echo "  make clean-miniapp-seed  Remove exclusivamente as fixtures de homologação do Mini App"
 
 dev:
 	node scripts/dev.mjs
@@ -104,3 +106,9 @@ down:
 
 logs:
 	docker compose logs -f
+
+seed-miniapp:
+	@APP_ENV=development go run ./cmd/devseed miniapp
+
+clean-miniapp-seed:
+	@APP_ENV=development go run ./cmd/devseed clean-miniapp

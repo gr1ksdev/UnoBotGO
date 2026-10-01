@@ -1,3 +1,41 @@
+# Decisão: massa fictícia e ferramenta de devseed para homologação do Mini App de Ranking Global
+
+## Data
+2026-09-30
+
+## Contexto
+O Mini App de Ranking Global do UnoBotGO necessita de validação visual e funcional em cenários extremos antes da configuração de domínio HTTPS, BotFather e abertura no Telegram real (listas longas > 50 itens para paginação e scroll infinito, nomes longos e com emojis, pontuações elevadas de até 25.000 pts, empates exatos com múltiplos critérios de desempate, fallbacks de avatares sem chamadas de rede, e isolamento completo entre Atualizado e Legado). Ao mesmo tempo, era imperativo garantir segurança absoluta fail-closed para impedir qualquer execução acidental em ambientes de produção ou poluição de dados reais.
+
+## Decisão tomada
+1. Namespace estrito e reservado para fixtures de desenvolvimento:
+   - Chat IDs: intervalo negativo `[-990000000999, -990000000001]`.
+   - User IDs: intervalo positivo `[9900000001, 9900000999]`.
+   - Game IDs: prefixo `devseed_game_*`.
+2. Camadas de proteção fail-closed:
+   - Exigência mandatória de `APP_ENV=development` ou `ALLOW_DEV_SEED=1`.
+   - Validação explícita de host da URL do PostgreSQL (bloqueio automático de hosts com substrings como `prod`, `production`, `live`, etc.).
+   - Mascaramento de credenciais da URL do banco nos logs e saída de terminal.
+3. Transacionalidade e Idempotência:
+   - Limpeza cirúrgica prévia (`Clean`) executada dentro da mesma transação antes da inserção dos dados determinísticos, impedindo duplicação de pontuações ou acúmulo descontrolado caso o comando seja executado múltiplas vezes.
+   - Remoção sem uso de `TRUNCATE`, respeitando a ordem de chaves estrangeiras (`completed_game_players`, `completed_games`, `player_group_monthly_stats`, `player_group_stats`, `known_group_users`, `group_configs`).
+4. Cobertura determinística de cenários visuais e de produto:
+   - **Atualizado**: 80 grupos (paginação >50 ativa), 180 jogadores, grupo gigante (60 jogadores), grupo pequeno (2 jogadores), empates com desempate por última partida, nomes longos com overflow/ellipsis, nomes com emojis variados, pontuações até 25.000,00 pts (2.500.000 units), e jogadores em múltiplos grupos.
+   - **Legado**: 65 grupos, 140 jogadores, pontuações inteiras puras de até 2.450 pts (245.000 units).
+   - Mês corrente calculado em `America/Sao_Paulo` via `ranking.RankingLocation()`, sincronizado com a engine de ranking.
+   - Fallbacks de avatar nativos (iniciais e ícones), sem chamadas remotas de Bot API durante o seed.
+5. Ferramental CLI e Make:
+   - Pacote `internal/devseed` desacoplado e reutilizável com suite de testes unitários e de integração.
+   - CLI `cmd/devseed` com subcomandos `miniapp`, `clean-miniapp` e `help`.
+   - Alvos `make seed-miniapp` e `make clean-miniapp-seed`.
+
+## Motivo
+Garantir ambiente completo para testes de estresse de interface e performance sem riscos de integridade, mantendo separação estrita e determinística entre dados de homologação e dados reais.
+
+## Impacto
+Desenvolvedores e homologadores podem popular e limpar o banco local instantaneamente em segundos para testar qualquer aspecto do Mini App no navegador sem necessidade de simulações manuais de partidas.
+
+---
+
 # Decisão: refinamento visual cirúrgico do leque de cartas UNO no hero de detalhe de grupo
 
 ## Data
@@ -995,3 +1033,128 @@ Evitar troca obrigatória e término artificial de um alvo por mão vazia; prese
 
 ## Impacto
 KeepHand e HandKept explícitos; ColorChoice reutilizado com metadados de troca. Snapshot pendente novo requer runtime compatível. Sem mudança de M7/GroupConfig/ranking, Classic, transporte ou banco. Somente dev; sem push, main intacta.
+
+
+# Decisão: hero integrado e fallback de apresentação
+
+## Data
+2026-09-30
+
+## Contexto
+Usuário rejeitou card interno do hero; nome '.' é preservado intencionalmente no backend a partir de dados observados do Telegram.
+
+## Decisão tomada
+Remover a aparência de caixa interna e compactar somente estilos do detalhe. Aplicar nome neutro 'Jogador' apenas no frontend para nomes sem conteúdo visual útil (pontuação/espaços/controles), inclusive iniciais do avatar.
+
+## Motivo
+Atender composição visual solicitada sem alterar dados históricos, API, contratos ou semântica competitiva.
+
+## Impacto
+Ranking/ordenação/pontuação intactos; fallback vale para apresentação de jogadores no Mini App. Homologação visual no celular pendente, anexos novos não recebidos.
+
+
+# Decisão: fidelidade visual acima de densidade no detalhe
+
+## Data
+2026-09-30
+
+## Contexto
+Usuário reprovou a miniaturização e forneceu referência aprovada; o objetivo anterior de compactação deixou de ser critério visual.
+
+## Decisão tomada
+Recuperar escala do hero, score, avatar, cartas físicas, sheet e rows, individualmente, com presença e profundidade. Manter resumo diretamente no hero e desktop com as mesmas dimensões internas do mobile.
+
+## Motivo
+A referência e a nova hierarquia solicitada têm precedência sobre números/densidade da rodada anterior.
+
+## Impacto
+Alteração somente de apresentação, preservando backend e regras. Mais altura visual é intencional. Aceite final depende de homologação pelo usuário.
+
+
+# Decisão: reutilizar stickers originais como assets estáticos
+
+## Data
+2026-09-30
+
+## Contexto
+Decoração do hero era desenhada em CSS. O único PNG local era cinza; cartas coloridas originais eram referências no mapa de stickers do bot.
+
+## Decisão tomada
+Recuperar uma vez g_0/y_0/r_0 e manter WebP intactos em web/src/assets/cards, importados pelo Vite no componente HeroCards. Registrar origem sem credenciais.
+
+## Motivo
+Usar as artes reais já utilizadas pelo projeto sem nova geração de imagens, integração runtime ou endpoint de backend.
+
+## Impacto
+~31KB adicionais no bundle estático, preservando auth/API/pontuação/Telegram bot. Nova composição amplia avatar e melhora alinhamento sem recriar card interno; homologação visual pendente.
+
+
+# Decisão: onda decorativa sem alteração de layout
+
+## Data
+2026-09-30
+
+## Contexto
+Design aprovado; usuário solicita apenas avatar ligeiramente maior/centralizado e duas lombadas rasas entre hero e sheet.
+
+## Decisão tomada
+SVG vetorial como máscara alpha de um pseudo-elemento da sheet, responsivo a100% de largura e24px de altura. Pseudo-elemento sobreposto ao hero, sem espaço em fluxo; contorno substitui curva anterior. Fundo horizontal compartilhado mantém continuidade. Avatar+8px com pequeno deslocamento do grid; cartas só recebem offset8px.
+
+## Motivo
+Solução localizada, sem dependência externa, sem alterar hero/lista/dados/markup funcional e com SVG fácil de manter.
+
+## Impacto
+Somente styles.css e assets/hero-wave.svg em produto. Lista e altura hero verificadas idênticas; auth/API/ranking intactos. Homologação visual pendente.
+
+
+# Decisão: seção principal no footer, sistema no header
+
+## Data
+2026-09-30
+
+## Contexto
+Usuário aprovou visual e solicitou substituir segmented Grupos/Players por bottom navigation mobile, sem alterar backend/API.
+
+## Decisão tomada
+Links React Router alimentados pelos mesmos system/tab da URL, aria-current=page e SVGs sem dependências. Footer fixed restrito ao max-width do app, safe-area compartilhada com reserva de conteúdo, montado apenas nas páginas globais. Detalhe volta sempre a groups no mesmo sistema. Page controla Telegram BackButton; root App deixa de sobrescrever o estado dele.
+
+## Motivo
+Hierarquia clara entre sistema e seção, com deep links e refresh preservados, sem estado de aba duplicado. Corrigir competição de hooks no BackButton é necessário para preservar navegação direta do detalhe.
+
+## Impacto
+Só frontend: BottomNavigation, RankingsPage, CSS, App/hook de Telegram e testes. Ranking/score/paginação/autenticação/endpoints inalterados. Footer permanece disponível em loading/error/empty. Homologação visual pendente.
+
+
+# Decisão: footer flutuante com vidro CSS
+
+## Data
+2026-09-30
+
+## Contexto
+Usuário pediu navegação separada em pílula, com aparência Liquid Glass, em vez de barra colada ao rodapé.
+
+## Decisão tomada
+Manter links/estado e acessibilidade da navegação existente, alterando apenas CSS para cápsula max340, margens externas/safe e material translúcido via backdrop-filter com fallback opaco. Safe area é margem inferior externa e a reserva do conteúdo acompanha a geometria.
+
+## Motivo
+Atender formato flutuante sem redesenhar app, introduzir dependências ou alterar comportamento.
+
+## Impacto
+Somente CSS e documentação nesta rodada; checks e navegação preservados. Efeito CSS inspirado no vidro, sem prometer material nativo Apple. Homologação visual pendente.
+
+# Decisão: material óptico web da bottom navigation
+
+## Data
+2026-09-30
+
+## Contexto
+A pílula translúcida com blur intenso não apresentava a refração solicitada. Consultadas documentação Apple de adoção de Liquid Glass e HIG Materials.
+
+## Decisão tomada
+Usar deslocamento SVG do backdrop real com mapa de borda gerado localmente por canvas no resize, película mais transparente, reflexos e seleção deslizante. Manter fallback CSS e preferências de acessibilidade.
+
+## Motivo
+A aplicação React não pode usar diretamente o material nativo SwiftUI/UIKit. A solução web reproduz propriedades ópticas sem duplicar conteúdo nem adicionar dependências.
+
+## Impacto
+Somente frontend. Chromium validado com capturas comparativas: 3678 pixels alterados exclusivamente no retângulo da pílula. Safari/Telegram em dispositivo requerem homologação visual.
