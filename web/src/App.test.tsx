@@ -135,6 +135,9 @@ describe('App and Full Routing Flows', () => {
         initData: 'query_id=test&user=%7B%22id%22%3A123%7D&auth_date=1727700000&hash=mock',
         ready: vi.fn(),
         expand: vi.fn(),
+        isVersionAtLeast: vi.fn(() => true),
+        requestFullscreen: vi.fn(),
+        setHeaderColor: vi.fn(),
         BackButton: {
           show: vi.fn(),
           hide: vi.fn(),
@@ -165,18 +168,21 @@ describe('App and Full Routing Flows', () => {
     })
 
     // Click group card link to go to detail
+    expect(window.Telegram?.WebApp.requestFullscreen).toHaveBeenCalledTimes(1)
     const groupLink = screen.getByRole('link', { name: /Grupo Alpha/ })
     fireEvent.click(groupLink)
 
     // Should render detail view
     await waitFor(() => {
       expect(screen.getByRole('heading', { level: 1, name: 'Ranking do grupo' })).toBeInTheDocument()
-      expect(screen.getByText(/Total em Setembro/)).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Ranking interno do grupo · Setembro' })).toBeInTheDocument()
+      expect(screen.queryByText(/Total em/)).not.toBeInTheDocument()
     })
 
     expect(screen.queryByRole('navigation', { name: 'Navegação principal' })).not.toBeInTheDocument()
 
     // Click back button
+    expect(window.Telegram?.WebApp.setHeaderColor).toHaveBeenLastCalledWith('#99121f')
     const backBtn = screen.getByRole('button', { name: 'Voltar ao Ranking Global' })
     fireEvent.click(backBtn)
 
@@ -184,6 +190,8 @@ describe('App and Full Routing Flows', () => {
     await waitFor(() => {
       expect(screen.getByRole('heading', { level: 1, name: /Ranking Global/ })).toBeInTheDocument()
     })
+    expect(window.Telegram?.WebApp.requestFullscreen).toHaveBeenCalledTimes(1)
+    expect(window.Telegram?.WebApp.setHeaderColor).toHaveBeenLastCalledWith('#073b82')
   })
 
   it('renders empty state when ranking returns zero items', async () => {

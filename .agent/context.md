@@ -460,3 +460,13 @@
 - Webhook preserva setWebhook em cada startup, URL pública explícita HTTPS com caminho dedicado e comparação constante do header. Secret = Base64URL sem padding de HMAC-SHA256 com master decodificado32bytes e contexto unobotgo/v2/telegram-webhook-secret/v1. Rotação do master atualiza secret no próximo startup; master nunca enviado/logado.
 - Bot.Run gera Direct Mini App https://t.me/<username>/ranking com getMe já existente; shortname ranking constante. URL HTTPS externa pertence ao BotFather.
 - Variáveis antigas em registros anteriores de .agent são históricas, não instruções de instalação atuais. .env real preservado; ferramentas devseed/migrate e V1 continuam com suas configurações específicas fora do runtime V2.
+
+
+# Configuração V2 simplificada — 2026-10-01
+
+- Loader único internal/config/config.go com seis configurações normais; WEBHOOK_URL adicional só em webhook.
+- Políticas fixas em defaults.go; secret webhook derivado com contexto exclusivo em webhook_secret.go. Config Web e opções antigas não são mais lidas.
+- Direct Mini App ranking usa username do getMe startup; configuração HTTPS permanece no BotFather.
+
+## Integração dev após autorização de push — 2026-10-01
+Trabalhos paralelos conciliados por merge de origin/dev: fullscreen do Mini App e remoção do período no hero preservados. Derivação webhook canônica permanece unobotgo/v2/telegram-webhook-secret/v1; referências históricas ao outro contexto registram a implementação paralela substituída. Método Config.WebhookSecret delega à função DeriveWebhookSecret validada. Políticas drop=false centralizadas e testes de ambas as versões mantidos. make check completo e race aprovados na integração (45 testes frontend).

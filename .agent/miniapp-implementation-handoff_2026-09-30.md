@@ -101,11 +101,11 @@ Nenhum commit/push foi executado. main não foi alterada. Nenhuma migration de p
 
 ### Startup e bot
 
-- `internal/config/web.go`: WEB_ADDR, alias WEBHOOK_LISTEN_ADDR com conflito recusado, MINIAPP_LAUNCH_URL, MINIAPP_SECRET obrigatório, INITDATA_MAX_AGE e MIGRATION_TIMEOUT.
+- `internal/config/config.go` (atualizado em 2026-10-01): loader único com seis configurações normais e WEBHOOK_URL condicional. Políticas fixas em defaults.go; segredo webhook derivado com contexto separado em webhook_secret.go.
 - `internal/app/app.go`: migrar/verificar antes de listener; HTTP único; atomic readiness e handler webhook; construir bot depois do listener; supervisão/cancelamento/shutdown.
 - `cmd/bot/main.go` foi simplificado para config/log/signal/app.Run; `--dev` permite assets ausentes sem bypass de autenticação.
 - `internal/telegram/shared_http.go` + alterações em bot.go: modo webhook no servidor compartilhado e callback de readiness; defer para drenar dispatcher.
-- `SetMiniAppURL` e markup URL comum em respostas de ranking grupo/privado (também caminho compartilhado pós-partida). Ausência de URL omite botão; startup avisa.
+- Markup URL comum em respostas de ranking grupo/privado; link /ranking gerado automaticamente pelo getMe existente no startup, sem setter externo.
 - `migrations.go`: somente mensagem/comentário atualizados; sem alteração dos SQLs ou semântica.
 - Teste de Initialize fail-closed existe; testes de startup real/listener/webhook/concurrency ainda insuficientes.
 

@@ -105,3 +105,9 @@ AGENTS.md requer aprovação explícita do plano antes da implementação. Este 
 
 ## Autorização posterior de versionamento
 Usuário solicitou explicitamente git commit e git push após conclusão e validação da refatoração. Esta autorização substitui a restrição anterior exclusivamente para publicar as alterações revisadas na dev. Estratégia: conferir status/diff, sincronização remota e diff-check; commit sem amend e push explícito HEAD:dev sem force. Nenhum deploy ou mudança em main autorizado.
+
+## Integração para push autorizado
+- Commit local f313ff4 criado. Fetch revelou commit remoto3c7c455; primeira tentativa de push recusada sem fast-forward, sem force.
+- Integrado origin/dev via merge normal, preservando melhorias remotas de fullscreen e remoção do período do hero, respectivos planos e testes. Refatorações paralelas reconciliadas: contexto canônico unobotgo/v2/telegram-webhook-secret/v1, única função validada DeriveWebhookSecret e método de conveniência remoto delegando a ela. Políticas de drop=false centralizadas; validação remota adicional de URL preservada.
+- Testes remotos de configuração preservados em installation_test.go e adaptados ao contexto aprovado; outros testes remotos e locais mantidos. Duplicação automática do campo de mock GetMeCalls removida após falha de compilação; validações completas repetidas.
+- Resultado integrado: make check integral aprovado, incluindo45testes frontend, Go/debugcards/vet/build e PostgreSQL isolado; go test -race ./... aprovado. Sem mudanças em main, force push ou deploy.

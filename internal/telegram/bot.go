@@ -175,7 +175,7 @@ func (b *Bot) runPolling(ctx context.Context) error {
 		return fmt.Errorf("check webhook info: %w", err)
 	}
 	if info != nil && info.URL != "" {
-		if err := b.api.DeleteWebhook(ctx, &telego.DeleteWebhookParams{DropPendingUpdates: false}); err != nil {
+		if err := b.api.DeleteWebhook(ctx, &telego.DeleteWebhookParams{DropPendingUpdates: config.WebhookDropPendingUpdates}); err != nil {
 			return fmt.Errorf("delete webhook before polling: %w", err)
 		}
 		b.logger.Info("deleted existing webhook before polling")
@@ -241,7 +241,7 @@ func (b *Bot) runWebhook(ctx context.Context, cfg TransportConfig) error {
 		return nil
 	default:
 	}
-	if err := b.api.SetWebhook(ctx, &telego.SetWebhookParams{URL: cfg.WebhookURL, SecretToken: cfg.WebhookSecret, AllowedUpdates: allowedUpdates, DropPendingUpdates: false}); err != nil {
+	if err := b.api.SetWebhook(ctx, &telego.SetWebhookParams{URL: cfg.WebhookURL, SecretToken: cfg.WebhookSecret, AllowedUpdates: allowedUpdates, DropPendingUpdates: config.WebhookDropPendingUpdates}); err != nil {
 		_ = server.Shutdown(context.Background())
 		b.dispatcher.Stop(10 * time.Second)
 		return fmt.Errorf("set webhook: %w", err)

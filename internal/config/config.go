@@ -82,7 +82,7 @@ func LoadFromLookup(lookup func(string) (string, bool)) (*Config, error) {
 			return nil, ErrMissingWebhookURL
 		}
 		u, err := url.Parse(cfg.WebhookURL)
-		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" {
+		if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 			return nil, ErrInvalidWebhookURL
 		}
 		path := u.Path

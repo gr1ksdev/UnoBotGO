@@ -5,13 +5,14 @@ import (
 	"time"
 )
 
-// Fixed application policies, intentionally not environment configuration.
+// Fixed application policies, deliberately not configurable via environment.
 const (
-	LogLevel             = slog.LevelInfo
-	HistoryLimit         = 100
-	InlineTokenTTL       = 2 * time.Minute
-	InlineTokenLimit     = 20000
-	InlineTokenUserLimit = 512
-	InitDataMaxAge       = time.Hour
-	MigrationTimeout     = 2 * time.Minute
+	LogLevel                  = slog.LevelInfo
+	HistoryLimit              = 100
+	InlineTokenTTL            = 2 * time.Minute
+	InlineTokenLimit          = 20000
+	InlineTokenUserLimit      = 512
+	InitDataMaxAge            = time.Hour
+	MigrationTimeout          = 2 * time.Minute
+	WebhookDropPendingUpdates = false
 )

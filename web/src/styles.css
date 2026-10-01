@@ -528,7 +528,6 @@ a.ranking-card:active {
   letter-spacing: -.8px;
 }
 .group-summary .score small { font-size: 23px; font-weight: 600; color: white; }
-.hero-caption { font-size: 15px; color: rgba(255,255,255,.8); margin-top: 8px; line-height: 1.35; }
 
 /* Original bot artwork, clipped at the hero edge and layered behind the sheet. */
 .uno-cards {

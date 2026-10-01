@@ -1161,6 +1161,8 @@ Somente frontend. Chromium validado com capturas comparativas: 3678 pixels alter
 
 # Decisão: configuração externa mínima e autenticação webhook derivada
 
+# Decisão: fullscreen nativo com cabeçalho próprio
+
 ## Data
 2026-10-01
 
@@ -1175,3 +1177,32 @@ Remover parsing/structs mortos sem aliases ou redução de segurança. Derivaç�
 
 ## Impacto
 Webhook reaplica secret derivado via setWebhook no startup e sempre preserva pending updates. Rotação do master altera secret webhook junto com refs/cursors, conforme comportamento de rotação anterior destes últimos. Nenhuma alteração de gameplay, auth initData, SQL, schema ou UI. Testes antigos de integração estabilizados apenas quanto ao mês consultado, após falha reproduzida no commit base.
+
+Usuário solicitou usar o cabeçalho do Mini App em vez da barra normal do Telegram.
+
+## Decisão tomada
+Solicitar `requestFullscreen()` na inicialização única do App em clientes com suporte à API 8.0; manter `expand()` como fallback, sem insistir ao navegar. Preservar controles nativos e margens seguras, atualizando layout pelos eventos fullscreen. Ajustar `setHeaderColor` por página para contraste nativo.
+
+## Motivo
+É a API oficial para fullscreen. Não existe autorização da API para remover controles nativos obrigatórios; mantê-los acessíveis evita sobreposição e preserva saída/navegação.
+
+## Impacto
+Somente integração frontend. Nenhuma alteração de dados, ranking, API ou backend. Homologação em Telegram móvel necessária; sem commit/push/deploy.
+
+
+# Decisão: configuração V2 mínima e webhook derivado
+
+## Data
+2026-10-01
+
+## Contexto
+Usuário aprovou refatoração de configuração e autorizou depois commit/push dev, interrompendo verificações adicionais.
+
+## Decisão tomada
+Loader único com seis configurações normais e WEBHOOK_URL exclusiva de webhook. Políticas fixas em internal/config/defaults.go. Secret token derivado de MINIAPP_SECRET por HMAC-SHA256 com contexto unobotgo/telegram/webhook-secret/v1 e Base64 URL sem padding, separado dos contextos de refs/IDs. Direct Link /ranking construído no getMe existente.
+
+## Motivo
+A URL pública é indispensável ao setWebhook e não decorre do bind interno. A derivação elimina configuração redundante sem enviar a chave mestre e preserva autenticação em tempo constante.
+
+## Impacto
+Sem alteração de schema, ranking, auth initData, AES/refs ou frontend nesta refatoração. Testes focados e go test ./... passaram; race, vet/build completos e make check ficaram pendentes após interrupções e pedido de encerrar checks. make check recusou ausência de TEST_DATABASE_URL; race padrão recusou CGO desabilitado. Publicação somente dev por autorização posterior; sem deploy/main.
