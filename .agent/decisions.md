@@ -1,3 +1,32 @@
+# Decisão: promoção da árvore pública V2 e publicação na branch main
+
+## Data
+2026-10-02
+
+## Contexto
+Após o encerramento da Milestone M7, da implementação do Mini App Telegram de Ranking Global com React 19 embutido, do runtime HTTP unificado, das migrations 0006/0007/0008 com autostartup em `internal/app`, dos comandos endereçados `@bot`, do alias `/join` e da correção do CI PostgreSQL com testes 100% aprovados, fez-se necessária a promoção da versão pública na branch `main`. Conforme `docs/branching.md`, a branch `main` possui histórico independente e deve manter uma árvore pública limpa, sem artefatos internos ou códigos legados.
+
+## Decisão tomada
+1. Promoção isolada via worktree sem merge de históricos:
+   - Utilização de worktree temporário baseado em `origin/main` (`6eea6c1`), garantindo que os históricos de commit de `dev` e `main` permaneçam desacoplados.
+2. Allowlist estrita de componentes públicos V2:
+   - Sincronização dos pacotes Go (`cmd/bot`, `cmd/simulator`, `cmd/devseed`, `internal/*`), frontend do Mini App (`web/*`, mantendo `dist/.keep`), documentação pública (`docs/*`, exceto `v2-audit.md`), configurações de container (`Dockerfile.v2`, `.env.example`, `.dockerignore`) e workflows de CI/publicação (`.github/workflows/main-container.yml`, `.github/workflows/public-tree.yml`).
+   - Remoção de `cmd/migrate` em `main` (consolidado em `internal/app`).
+3. Rejeição total de caminhos privados/legados:
+   - Zero arquivos internos promovidos: proibição total de `.agent/`, `AGENTS.md`, `.reports/`, `codemaps/`, fontes V1 `*.go` na raiz, imagens `*.png` na raiz e `docker-compose.yml`, verificado com sucesso pelo regex de `public-tree.yml`.
+4. Validação completa pré-push:
+   - Aprovados na árvore de release: `npm ci`, `npm test`, `npm build`, `go test -race`, `go vet`, `go build`, `git diff --check`, `public-tree check` e testes de integração PostgreSQL.
+5. Publicação:
+   - Commit `6feef1d` criado e enviado para `origin/main`, acionando o build de imagens multi-arquitetura OCI (`linux/amd64` e `linux/arm64`) para o GHCR (`ghcr.io/gr1ksdev/unobotgo:latest`).
+
+## Motivo
+Garantir entregas de produção previsíveis, seguras e auditadas, mantendo a integridade da imagem de produção e a privacidade das ferramentas de controle e histórico de desenvolvimento.
+
+## Impacto
+A branch `main` e a imagem oficial do UnoBotGO no GHCR agora contam com o conjunto completo de funcionalidades da V2 (Mini App, rankings mensais, autostartup e comandos modernos do Telegram), prontas para deploy em produção.
+
+---
+
 # Decisão: explicitação de ranking Legado em testes de isolamento e blindagem da migration 0008
 
 ## Data

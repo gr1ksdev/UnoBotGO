@@ -1,3 +1,14 @@
+# Publicação na branch main — 2026-10-02 (commit 6feef1d)
+
+- Promoção da árvore pública V2 aprovada em `dev` para o histórico independente de `main`:
+  - Commit em `main`: `6feef1d` (`feat(v2): release Mini App, monthly ranking, unified app and V2 updates`).
+  - Árvore pública limpa e estrita, sem arquivos internos (`.agent/`, `AGENTS.md`, `.reports/`, `codemaps/`, `*.go` na raiz, `*.png` na raiz, `docker-compose.yml`, `Dockerfile` legado ou `docs/v2-audit.md`).
+  - Inclui Mini App (`web/`), HTTP API, proxy de mídia com cache LRU, migrations 0006/0007/0008 com autostartup em `internal/app`, comandos endereçados `@bot`, alias `/join`, CLI `cmd/devseed` e workflow multi-arquitetura atualizado.
+  - Validações completas aprovadas localmente antes do push: `npm ci`, `npm test`, `npm build`, `go test -race`, `go vet`, `go build`, `git diff --check`, `public-tree` regex check e testes de integração PostgreSQL.
+  - Push realizado com sucesso para `origin/main`, acionando o build de container multi-arquitetura OCI e publicação no GHCR (`ghcr.io/gr1ksdev/unobotgo:latest`).
+
+---
+
 # Correção do CI PostgreSQL após migration 0008 — 2026-10-01 (branch dev)
 
 - Causa da falha no CI:
