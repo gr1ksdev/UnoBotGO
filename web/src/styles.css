@@ -171,21 +171,38 @@ h1, h2, p {
 }
 
 .title-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   min-height: 44px;
   margin-bottom: 15px;
 }
 
+.title-bar-left {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.title-bar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
 .title-bar h1 {
-  flex: 1;
   text-align: center;
   font-size: 18px;
   font-weight: 750;
   line-height: 1.25;
   letter-spacing: -0.3px;
   color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px;
 }
 
 .back-button {
@@ -481,7 +498,7 @@ a.ranking-card:active {
 }
 
 .detail-header .title-bar { margin-bottom: 28px; }
-.detail-header .title-bar h1 { padding-right: 36px; font-size: 20px; font-weight: 700; }
+.detail-header .title-bar h1 { font-size: 20px; font-weight: 700; }
 .detail-header .back-button svg { width: 26px; height: 26px; }
 
 /* Layout only: no background, border, rounded box or shadow around group data. */
@@ -740,9 +757,13 @@ a.ranking-card:active {
   .detail-view .ranking-card .avatar, .detail-view .skeleton-avatar { width: 52px; height: 52px; }
   .detail-view .player-name { font-size: 17px; }
   .detail-view .ranking-card .score { font-size: 18px; }
+  .title-bar h1 { font-size: 16.5px; letter-spacing: -0.2px; }
+  .detail-header .title-bar h1 { font-size: 18px; }
 }
 
 @media (max-width: 310px) {
+  .title-bar h1 { font-size: 15px; }
+  .detail-header .title-bar h1 { font-size: 16.5px; }
   .ranking-card {
     grid-template-columns: 26px 42px minmax(0, 1fr);
   }

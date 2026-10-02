@@ -130,6 +130,12 @@ describe('App and Full Routing Flows', () => {
   })
 
   it('navigates to group detail and allows navigating back preserving system and tab', async () => {
+    const backButton = {
+      show: vi.fn(),
+      hide: vi.fn(),
+      onClick: vi.fn<(fn: () => void) => void>(),
+      offClick: vi.fn(),
+    }
     window.Telegram = {
       WebApp: {
         initData: 'query_id=test&user=%7B%22id%22%3A123%7D&auth_date=1727700000&hash=mock',
@@ -138,12 +144,7 @@ describe('App and Full Routing Flows', () => {
         isVersionAtLeast: vi.fn(() => true),
         requestFullscreen: vi.fn(),
         setHeaderColor: vi.fn(),
-        BackButton: {
-          show: vi.fn(),
-          hide: vi.fn(),
-          onClick: vi.fn(),
-          offClick: vi.fn(),
-        },
+        BackButton: backButton,
       },
     }
 
@@ -181,15 +182,21 @@ describe('App and Full Routing Flows', () => {
 
     expect(screen.queryByRole('navigation', { name: 'Navegação principal' })).not.toBeInTheDocument()
 
-    // Click back button
+    // Native BackButton was enabled and custom back button is not rendered in Telegram
     expect(window.Telegram?.WebApp.setHeaderColor).toHaveBeenLastCalledWith('#99121f')
-    const backBtn = screen.getByRole('button', { name: 'Voltar ao Ranking Global' })
-    fireEvent.click(backBtn)
+    expect(screen.queryByRole('button', { name: 'Voltar ao Ranking Global' })).not.toBeInTheDocument()
+    expect(window.Telegram?.WebApp.BackButton?.show).toHaveBeenCalled()
+
+    // Trigger Telegram native BackButton
+    const backCallback = backButton.onClick.mock.calls.at(-1)?.[0]
+    expect(backCallback).toBeDefined()
+    act(() => backCallback?.())
 
     // Back on global list
     await waitFor(() => {
       expect(screen.getByRole('heading', { level: 1, name: /Ranking Global/ })).toBeInTheDocument()
     })
+    expect(screen.queryByRole('button', { name: /Voltar|Fechar/ })).not.toBeInTheDocument()
     expect(window.Telegram?.WebApp.requestFullscreen).toHaveBeenCalledTimes(1)
     expect(window.Telegram?.WebApp.setHeaderColor).toHaveBeenLastCalledWith('#073b82')
   })
@@ -286,4 +293,133 @@ describe('App and Full Routing Flows', () => {
     expect(screen.getByRole('navigation')).toBeInTheDocument()
   })
 
+  it('does not render custom back or close button in Global ranking view', async () => {
+    window.Telegram = {
+      WebApp: {
+        initData: 'query_id=test&user=%7B%22id%22%3A123%7D&auth_date=1727700000&hash=mock',
+        ready: vi.fn(),
+        expand: vi.fn(),
+      },
+    }
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockPage,
+    } as Response)
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/']}>
+          <App />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 1, name: /Ranking Global/ })).toBeInTheDocument()
+    })
+
+    expect(screen.queryByRole('button', { name: /Voltar|Fechar/ })).not.toBeInTheDocument()
+    expect(document.querySelector('.calendar-icon')).toBeInTheDocument()
+  })
+
+  it('renders web fallback back button in detail view when Telegram BackButton is not available', async () => {
+    window.Telegram = {
+      WebApp: {
+        initData: 'query_id=test&user=%7B%22id%22%3A123%7D&auth_date=1727700000&hash=mock',
+        ready: vi.fn(),
+        expand: vi.fn(),
+      },
+    }
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockPage,
+    } as Response)
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/groups/grp1?system=updated&tab=groups']}>
+          <App />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 1, name: 'Ranking do grupo' })).toBeInTheDocument()
+    })
+
+    const fallbackBtn = screen.getByRole('button', { name: 'Voltar ao Ranking Global' })
+    expect(fallbackBtn).toBeInTheDocument()
+    fireEvent.click(fallbackBtn)
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 1, name: /Ranking Global/ })).toBeInTheDocument()
+    })
+  })
+
+  it('handles repeated navigation global -> detail -> global -> detail without accumulating BackButton listeners', async () => {
+    const backButton = {
+      show: vi.fn(),
+      hide: vi.fn(),
+      onClick: vi.fn<(fn: () => void) => void>(),
+      offClick: vi.fn(),
+    }
+    window.Telegram = {
+      WebApp: {
+        initData: 'fixture',
+        ready: vi.fn(),
+        expand: vi.fn(),
+        isVersionAtLeast: vi.fn(() => true),
+        setHeaderColor: vi.fn(),
+        BackButton: backButton,
+      },
+    }
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockPage,
+    } as Response)
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/?system=updated&tab=groups']}>
+          <App />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Grupo Alpha')).toBeInTheDocument()
+    })
+
+    // 1st entry to detail
+    fireEvent.click(screen.getByRole('link', { name: /Grupo Alpha/ }))
+    await screen.findByRole('heading', { name: 'Ranking do grupo', level: 1 })
+    expect(backButton.onClick).toHaveBeenCalledTimes(1)
+    expect(backButton.offClick).toHaveBeenCalledTimes(0)
+
+    // 1st back to global
+    const cb1 = backButton.onClick.mock.calls[0][0]
+    act(() => cb1())
+    await screen.findByRole('heading', { name: /Ranking Global/, level: 1 })
+    expect(backButton.offClick).toHaveBeenCalledTimes(1)
+    expect(backButton.offClick).toHaveBeenCalledWith(cb1)
+
+    // 2nd entry to detail
+    fireEvent.click(screen.getByRole('link', { name: /Grupo Alpha/ }))
+    await screen.findByRole('heading', { name: 'Ranking do grupo', level: 1 })
+    expect(backButton.onClick).toHaveBeenCalledTimes(2)
+    expect(backButton.offClick).toHaveBeenCalledTimes(1)
+
+    // 2nd back to global
+    const cb2 = backButton.onClick.mock.calls[1][0]
+    act(() => cb2())
+    await screen.findByRole('heading', { name: /Ranking Global/, level: 1 })
+    expect(backButton.offClick).toHaveBeenCalledTimes(2)
+    expect(backButton.offClick).toHaveBeenCalledWith(cb2)
+  })
 })

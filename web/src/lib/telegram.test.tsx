@@ -101,4 +101,32 @@ describe('Telegram fullscreen', () => {
    rerender({ color: '#99121f' })
    expect(app.setHeaderColor).toHaveBeenLastCalledWith('#99121f')
  })
+
+ it('registers and cleanly unregisters BackButton callbacks without leaks', () => {
+   const { app } = client()
+   const backButton = {
+     show: vi.fn(),
+     hide: vi.fn(),
+     onClick: vi.fn(),
+     offClick: vi.fn(),
+   }
+   Object.assign(app, { BackButton: backButton })
+   const backHandler = vi.fn()
+   const { unmount, rerender } = renderHook(({ back }) => useTelegram(back), {
+     initialProps: { back: backHandler as (() => void) | undefined },
+   })
+
+   expect(backButton.show).toHaveBeenCalledTimes(1)
+   expect(backButton.onClick).toHaveBeenCalledWith(backHandler)
+   expect(backButton.offClick).not.toHaveBeenCalled()
+
+   // Switching back to undefined (e.g. Navigating back to Global view)
+   rerender({ back: undefined })
+   expect(backButton.offClick).toHaveBeenCalledWith(backHandler)
+   expect(backButton.hide).toHaveBeenCalled()
+
+   // Unmounting
+   unmount()
+   expect(backButton.hide).toHaveBeenCalled()
+ })
 })

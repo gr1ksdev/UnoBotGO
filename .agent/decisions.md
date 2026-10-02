@@ -1,3 +1,35 @@
+# Decisão: integração contínua do cabeçalho do Telegram Mini App e remoção de navegação duplicada
+
+## Data
+2026-10-02
+
+## Contexto
+O Telegram Mini App possuía duplicação visual de navegação no topo: no Ranking Global existia o chrome nativo com botão de fechar e, logo abaixo, outro botão com seta/fechar customizado desenhado pelo app; no detalhe de grupo existia simultaneamente o `BackButton` nativo do Telegram e um botão de voltar customizado desenhado dentro do hero carmesim. Além disso, o título do detalhe dependia de um compensador artificial (`padding-right: 36px`) para parecer centralizado.
+
+## Decisão tomada
+1. Reconhecimento estrito dos limites da API do Telegram Mini Apps:
+   - A API oficial do Telegram (Bot API até a versão 8.0+) não permite injetar títulos de texto arbitrário ou JSX customizado dentro da barra nativa do cliente Telegram (o cliente reserva esse espaço para o título do bot e controles nativos como Fechar, Menus e BackButton).
+   - Não tentar técnicas de overlay absoluto, hacks de CSS por cima da barra nativa ou coordenadas hardcoded dependentes de plataformas específicas (iOS/Android).
+2. Integração contínua e eliminação de duplicidades:
+   - Unificar a primeira faixa visual do frontend mantendo a coloração do chrome nativo sincronizada via `setHeaderColor` (`#073b82` para o Ranking Global e `#99121f` para o Detalhe de Grupo).
+   - Remover completamente o botão de fechar/voltar customizado do DOM na raiz do Ranking Global.
+   - Ocultar a seta customizada do hero no Detalhe de Grupo sempre que o `BackButton` nativo do Telegram estiver disponível, delegando a ação de navegação de volta exclusivamente ao controle nativo.
+   - Preservar um fallback discreto no DOM do Detalhe exclusivamente quando executado fora do Telegram ou em ambientes sem suporte ao `BackButton` nativo.
+3. Centralização geométrica via Grid de 3 colunas:
+   - Refatorar a barra `.title-bar` para `grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center;`.
+   - Utilizar slots simétricos `.title-bar-left` e `.title-bar-right` para que o título central permaneça matematicamente no centro da viewport, independentemente da presença do botão fallback de voltar ou do ícone de calendário.
+   - Remover a compensação artificial `padding-right: 36px` do título do hero.
+4. Ciclo de vida estrito e idempotência do BackButton:
+   - Registrar callback com `BackButton.onClick` no detalhe e garantir cleanup rigoroso com `BackButton.offClick` e `BackButton.hide()` na desmontagem ou retorno à raiz, evitando acúmulo de listeners em navegações sucessivas.
+
+## Motivo
+Garantir uma interface limpa, elegante e integrada, que respeite as diretrizes oficiais de design do Telegram Mini Apps sem hacks frágeis, preservando a usabilidade em desktop/browser e mantendo fidelidade absoluta ao design do produto.
+
+## Impacto
+A aplicação ganha aparência de barra única contínua com o Telegram. A experiência de navegação torna-se nativa e previsível, sem duplicação de botões de voltar e sem vazamento de memória ou acúmulo de listeners.
+
+---
+
 # Decisão: promoção da árvore pública V2 e publicação na branch main
 
 ## Data

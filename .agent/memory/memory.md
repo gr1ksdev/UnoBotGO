@@ -1,3 +1,26 @@
+# Refinamento de navegação e cabeçalho do Telegram Mini App — 2026-10-02 (somente dev)
+
+- Pedido do usuário aprovado no plano: `refinar-navegacao-header-telegram_2026-10-02_13-35.md`.
+- Eliminação de controles redundantes e duplicações visuais:
+  - **Ranking Global**: Removido o botão/seta customizado `<button className="back-button">` do DOM. A raiz não possui rota anterior interna; o fechamento da janela pertence exclusivamente ao chrome nativo do Telegram. O topo exibe apenas o título centralizado e o calendário.
+  - **Detalhe do Grupo**: Ao executar dentro do Telegram (onde `BackButton` nativo está disponível via `window.Telegram.WebApp.BackButton`), a seta customizada do hero vermelho é ocultada. A navegação de retorno é delegada integralmente ao `BackButton` nativo do Telegram.
+  - **Fallback Web**: Caso a aplicação seja executada fora do Telegram (ambiente de testes/dev sem `BackButton` nativo), o botão customizado de voltar é renderizado discretamente no slot esquerdo do detalhe.
+- Centralização dos títulos e layout em Grid:
+  - `.title-bar` migrado para CSS Grid simétrico em 3 colunas: `grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center;`.
+  - Slots laterais com classes `.title-bar-left` e `.title-bar-right` garantem que o elemento central (`h1`) fique matematicamente no centro da viewport.
+  - Removido o compensador artificial `padding-right: 36px` de `.detail-header .title-bar h1`.
+  - Ajustes responsivos de fonte para telas estreitas (<= 360px e <= 310px) evitando quebra indesejada ou overflow horizontal.
+- Integração de cores com a barra nativa do Telegram:
+  - Sincronização dinâmica mantida via `setHeaderColor`: `#073b82` no Ranking Global e `#99121f` no Detalhe de Grupo, restaurando `#073b82` ao retornar para a raiz.
+  - Confirmado que a API do Telegram Mini Apps não permite injetar títulos customizados de texto arbitrário dentro da barra nativa do cliente. A solução correta adotada é a continuidade visual perfeita entre o chrome nativo e a primeira faixa da aplicação sem navegação duplicada.
+- Ciclo de vida e cleanup do BackButton:
+  - `useTelegram` gerencia o desregistro com `offClick` e ocultação com `hide()` ao navegar de volta para o global ou ao desmontar o componente.
+  - Testes cobrem ausência de acúmulo de listeners em navegações sucessivas (`global -> detalhe -> global -> detalhe -> global`).
+- Todos os elementos preexistentes aprovados preservados: cards, avatares, scores, cards UNO decorativos no hero, onda SVG, marquee, filtros e TanStack Query cache.
+- Validações completas: `npm run lint`, `npm run typecheck`, `npm run test` (49 testes passando), `npm run build`, `go test ./...`, `go vet ./...`, `make build`, `make test` e `git diff --check`.
+
+---
+
 # Publicação na branch main — 2026-10-02 (commit 6feef1d)
 
 - Promoção da árvore pública V2 aprovada em `dev` para o histórico independente de `main`:
