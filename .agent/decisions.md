@@ -1,3 +1,25 @@
+# Decisão: promoção e publicação da versão V2 na branch main
+
+## Data
+2026-10-02
+
+## Contexto
+Após homologação, implementação e testes bem-sucedidos na branch `dev` (incluindo permissões de cancelamento por admin/criador, modo anônimo no ranking/perfil, layout do mini app e correção de teste no Telegram), o usuário solicitou o commit limpo e publicação para a branch `main`.
+
+## Decisão tomada
+1. Utilizar worktree temporário isolado a partir de `origin/main` para sincronizar os componentes públicos V2 via allowlist estrita (`cmd/`, `internal/`, `web/`, `docs/`, `assets/`, `Makefile`, etc.).
+2. Auditar e validar a árvore pública contra a regex do workflow `public-tree.yml`, garantindo ausência de arquivos internos (`.agent/`, `AGENTS.md`, `.reports/`, etc.).
+3. Executar `go test ./...`, `go test -race ./...`, `go vet ./...` e `go build ./...` antes do commit.
+4. Criar commit descritivo linear na `main` (`feat(v2): release group admin cancel, privacy mode, and stability updates`) e fazer push para `origin main`, acionando o build de container multi-arquitetura OCI no GHCR via `main-container.yml`.
+
+## Motivo
+Manter estrita conformidade com a arquitetura de branching (`docs/branching.md`), preservando o histórico público limpo e auditável na `main` sem dependência de merge com a `dev`.
+
+## Impacto
+Versão estável e pública atualizada na `main` e nova imagem de container disponível no GitHub Packages.
+
+---
+
 # Decisão: correção da condição de parada de SwapHands no helper readyToFinish em lifecycle_test.go
 
 ## Data

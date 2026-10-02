@@ -1,3 +1,20 @@
+# Promoção e Publicação da Versão V2 na Branch Main — 2026-10-02
+
+- Pedido do usuário aprovado no plano: `promover-publicar-main_2026-10-02_20-45.md`.
+- **Publicação na Branch `main`**:
+  - Commit limpo `57daf31`: `feat(v2): release group admin cancel, privacy mode, and stability updates`.
+  - Recursos e correções promovidos:
+    1. Permissão para criador e administradores do grupo cancelarem e matarem partidas (`/cancelar` e `/kill`).
+    2. Modo anônimo no ranking global, menu de privacidade `/config` e aba Perfil no Mini App com conversão dinâmica de foto e nome.
+    3. Correção de layout/footer do Mini App e navegação unificada de header no Telegram.
+    4. Migration `0009_ranking_privacy.up.sql` e persistência de preferências de privacidade.
+    5. Correção de estabilidade no helper de teste de ciclo de vida (`readyToFinish` com `SwapHands` sob regra `caseiro`).
+  - Árvore pública limpa: auditada e aprovada contra a regex do workflow `public-tree.yml` (sem `.agent/`, `AGENTS.md`, `.reports/`, arquivos legados ou fotos brutas).
+  - Validações completas aprovadas localmente antes do push: `go test ./...`, `go test -race ./...`, `go vet ./...`, `go build ./...`, `git diff --check`.
+  - Push realizado para `origin/main` (`6feef1d..57daf31`), disparando `public-tree.yml` e o workflow `main-container.yml` para compilação e publicação da imagem OCI multi-arquitetura (`ghcr.io/gr1ksdev/unobotgo:latest`).
+
+---
+
 # Correção da Falha de CI no Pacote internal/telegram (readyToFinish / Caseiro) — 2026-10-02
 
 - Pedido do usuário aprovado no plano: `corrigir-falha-lifecycle-test-ready-to-finish_2026-10-02_20-34.md`.
