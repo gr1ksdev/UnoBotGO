@@ -1,5 +1,58 @@
 # UnoBotGO V2 — Telegram Adapter (Milestone 3)
 
+## Resultado e ranking acumulado (2026-09-29, dev; homologação pendente)
+
+Depois do commit de uma partida pontuada, são enviadas duas mensagens independentes:
+
+```text
+🏁 Partida encerrada
+
+🥇 Freddy · +10,00 pts
+🥈 Mezi · +5,00 pts
+🥉 João · +0,00 pts
+Carlos · fora do ranking
+```
+
+```text
+🏆 Ranking do grupo
+
+🥇 Ana · 20,00 pts
+🥈 Freddy · 15,00 pts
+🥉 Mezi · 15,00 pts
+4. João · 0,00 pts
+```
+
+Os números são ilustrativos. A primeira mensagem usa os pontos calculados pelo
+sistema/snapshot da partida; a segunda lê os totais de `player_group_stats`,
+incluindo participantes históricos ausentes, como Ana. Legacy apresenta inteiros
+(`+1 pt`, `+0 pts`), sem casas artificiais; Updated usa centésimos com vírgula.
+Posições históricas são únicas e sequenciais. Scores iguais são desempatados pela
+melhor colocação na última partida elegível de cada jogador, depois pela conclusão
+mais recente e pelo UserID crescente. Não é necessário terem jogado juntos.
+A colocação da partida continua sendo a conquistada na engine. Somente o top 3 usa medalhas;
+as demais posições aparecem como `4.`, `5.` etc.
+
+`/ranking` usa o mesmo renderer, sem exigir admin, sem buscar membros no Telegram
+e sem misturar grupos. Está na ajuda e no menu de grupos. No privado, orienta
+consultar em um grupo. Sem stats válidas: “Ainda não há partidas pontuadas neste grupo.”
+Mensagens grandes preservam linhas completas até 4000 unidades UTF-16 e informam
+`… e mais N jogadores.`. Nomes são escapados para HTML, preservando Unicode.
+
+Falha no commit mantém o encerramento sem ganhos e o retry existente. Commit
+idempotente não repete notificações. Falha na leitura do ranking após commit
+informa indisponibilidade, sem fingir ranking vazio nem refazer pontuação.
+
+Homologar manualmente antes de publicar:
+
+1. Consultar `/ranking` em grupo vazio, em privado e como membro sem admin.
+2. Concluir duas partidas Updated e conferir resultado separado dos totais acumulados.
+3. Conferir histórico de quem não participou da segunda partida e isolamento de outro grupo.
+4. Repetir em grupo Legacy; conferir inteiros, pluralização e posições únicas nos empates, pela última colocação elegível e data de conclusão.
+5. Conferir abandono definitivo como “fora do ranking” e reentrada elegível normal.
+6. Conferir nomes Unicode/HTML, posições a partir de `4.` e aviso de jogadores omitidos.
+
+Nenhuma publicação ou deploy faz parte desta entrega.
+
 ## Gameplay UX Polish (2026-09-26, somente dev)
 
 - `/trancar` e `/destrancar`: controle exclusivo do responsável, incluindo owner
@@ -275,8 +328,8 @@ Para prevenir ataques de repetição, falsificação de jogadas e cache indevido
 4. **Invalidação**:
    - Cancelamento, encerramento ou saída de jogador invalidam imediatamente todos os tokens pendentes daquela partida/usuário.
 5. **Limites e Evicção FIFO**:
-   - Limite global configurável (`INLINE_TOKEN_LIMIT`, padrão 20.000).
-   - Limite por usuário (`INLINE_TOKEN_USER_LIMIT`, padrão 512).
+   - Limite global interno fixo de 20.000.
+   - Limite interno fixo de 512 por usuário.
    - Limpeza oportunista na inserção sem necessidade de timers em background.
 
 ---
@@ -372,8 +425,14 @@ Quando `cache_time` é 0, o encoder padrão omite o campo, fazendo o Telegram ad
 
 ## Transporte Webhook
 
-O transporte padrão é o long polling (`TELEGRAM_MODE=polling`). Para receber updates por webhook, configure `TELEGRAM_MODE=webhook`, uma `WEBHOOK_URL` pública HTTPS, `WEBHOOK_SECRET` e, se necessário, `WEBHOOK_LISTEN_ADDR` (padrão `:8080`). A terminação TLS fica no reverse proxy ou plataforma externa; o processo atende HTTP internamente. O segredo é validado no header `X-Telegram-Bot-Api-Secret-Token` e nunca é registrado.
+O transporte padrão é o long polling (`TELEGRAM_MODE=polling`). Para receber updates por webhook, configure `TELEGRAM_MODE=webhook` e uma `WEBHOOK_URL` pública HTTPS com caminho dedicado, por exemplo `https://bot.exemplo.com/telegram`. O servidor compartilhado atende em `WEB_ADDR` (padrão `:8080`); a terminação TLS fica no reverse proxy ou plataforma externa. A URL pública não pode ser deduzida do endereço local. O segredo é derivado internamente com HMAC-SHA256, master `MINIAPP_SECRET` decodificado e contexto exclusivo `unobotgo/v2/telegram-webhook-secret/v1`. A saída em Base64URL sem padding tem 43 caracteres compatíveis com `secret_token`; não é a chave AES original. O header `X-Telegram-Bot-Api-Secret-Token` é validado em tempo constante e o segredo nunca é registrado.
 
-No modo webhook o bot aplica `setWebhook` em todo startup, inclusive quando a URL não mudou, para garantir que alterações do segredo sejam efetivadas. `WEBHOOK_DROP_PENDING_UPDATES` é `false` por padrão. Ao voltar para polling, um webhook existente é removido com `drop_pending_updates=false`, preservando updates pendentes. O shutdown normal não remove o webhook remoto.
+No modo webhook o bot aplica `setWebhook` em todo startup, inclusive quando a URL não mudou, para garantir que alterações do segredo sejam efetivadas. `drop_pending_updates` é sempre `false` (política interna fixa). Ao voltar para polling, um webhook existente é removido com `drop_pending_updates=false`, preservando updates pendentes. O shutdown normal não remove o webhook remoto.
 
 `GET /healthz` retorna apenas `200 OK` para liveness. O endpoint de webhook aceita somente `POST` JSON no caminho configurado, com corpo limitado a 1 MiB. Updates repetidos são ignorados por uma deduplicação em memória; após reinício essa proteção é perdida.
+
+## Endereçamento de comandos em grupos
+
+Comandos em grupos e supergrupos exigem `@username` do bot, com comparação sem distinção de maiúsculas/minúsculas. `/join@SeuBot` é alias de `/entrar@SeuBot`, com as mesmas restrições de entrada. `/reset` também exige destinatário antes de entrar na recovery lane. Comandos sem sufixo ou dirigidos a outro bot são ignorados; callbacks e consultas inline mantêm seu fluxo. No privado, comandos sem sufixo continuam aceitos.
+
+Novas configurações de grupo usam Clássico e ranking Atualizado. A migration 0008 altera somente o DEFAULT SQL, sem converter grupos existentes nem alterar pontos.

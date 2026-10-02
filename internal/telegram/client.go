@@ -133,7 +133,7 @@ func (s *SafeAPICaller) Call(ctx context.Context, url string, data *telegoapi.Re
 		// Network errors, timeouts or context errors are not retried.
 		s.logger.DebugContext(ctx, "telegram transport error",
 			"method", SanitizeMethod(url),
-			"error", err.Error(),
+			"error", "network request failed",
 		)
 		return nil, err
 	}

@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/malbs/UnoGoBot/internal/config"
 	"github.com/malbs/UnoGoBot/internal/game"
 	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/ranking"
@@ -46,6 +47,8 @@ type Bot struct {
 	turnTimeout      time.Duration
 	transport        TransportConfig
 	dedupe           *updateDeduper
+	externalHTTP     bool
+	onReady          func()
 }
 
 func (b *Bot) SetGroupConfigs(repository groups.Repository) {
@@ -77,7 +80,6 @@ func (b *Bot) lookupMembership(ctx context.Context, chatID, userID int64) (group
 	return lookupMembershipAPI(ctx, b.api, chatID, userID)
 }
 
-
 func (b *Bot) SetTurnTimeout(timeout time.Duration) { b.turnTimeout = timeout }
 func (b *Bot) SetTransport(cfg TransportConfig)     { b.transport = cfg.normalized() }
 func New(api BotAPI, service *game.Service, tokens *TokenStore, renderer *Renderer, tokenTTL time.Duration, logger *slog.Logger) *Bot {
@@ -85,7 +87,7 @@ func New(api BotAPI, service *game.Service, tokens *TokenStore, renderer *Render
 		logger = slog.Default()
 	}
 	if tokens == nil {
-		tokens = NewTokenStore(20000, 512, time.Now, nil)
+		tokens = NewTokenStore(config.InlineTokenLimit, config.InlineTokenUserLimit, time.Now, nil)
 	}
 	if renderer == nil {
 		renderer = NewRenderer(nil)
@@ -100,6 +102,7 @@ func New(api BotAPI, service *game.Service, tokens *TokenStore, renderer *Render
 }
 
 func (b *Bot) Run(ctx context.Context) error {
+	defer b.dispatcher.Stop(10 * time.Second)
 	me, err := b.api.GetMe(ctx)
 	if err != nil {
 		return fmt.Errorf("verify bot getMe: %w", err)
@@ -110,6 +113,7 @@ func (b *Bot) Run(ctx context.Context) error {
 	b.username = me.Username
 	b.renderer.SetBotID(me.ID)
 	b.cmdHandler.botUsername = me.Username
+	b.cmdHandler.miniAppURL = miniAppLaunchURL(me.Username)
 	b.logger.Info("connected to telegram bot", "username", me.Username, "id", me.ID)
 	if !me.SupportsInlineQueries {
 		return ErrInlineModeDisabled
@@ -120,6 +124,9 @@ func (b *Bot) Run(ctx context.Context) error {
 	cfg := b.transport.normalized()
 	b.transport = cfg
 	if cfg.Mode == TransportWebhook {
+		if b.externalHTTP {
+			return b.runSharedWebhook(ctx, cfg)
+		}
 		return b.runWebhook(ctx, cfg)
 	}
 	return b.runPolling(ctx)
@@ -145,6 +152,7 @@ func (b *Bot) registerCommands(ctx context.Context) error {
 				{Command: "destrancar", Description: "Permite novas entradas"},
 				{Command: "iniciar", Description: "Iniciar a partida"},
 				{Command: "estado", Description: "Ver o estado atual da partida"},
+				{Command: "ranking", Description: "Ver o ranking acumulado do grupo"},
 				{Command: "sair", Description: "Sair da partida em andamento"},
 				{Command: "cancelar", Description: "Cancelar a partida"},
 				{Command: "reset", Description: "Recuperar e limpar o grupo"},
@@ -167,7 +175,7 @@ func (b *Bot) runPolling(ctx context.Context) error {
 		return fmt.Errorf("check webhook info: %w", err)
 	}
 	if info != nil && info.URL != "" {
-		if err := b.api.DeleteWebhook(ctx, &telego.DeleteWebhookParams{DropPendingUpdates: false}); err != nil {
+		if err := b.api.DeleteWebhook(ctx, &telego.DeleteWebhookParams{DropPendingUpdates: config.WebhookDropPendingUpdates}); err != nil {
 			return fmt.Errorf("delete webhook before polling: %w", err)
 		}
 		b.logger.Info("deleted existing webhook before polling")
@@ -177,6 +185,9 @@ func (b *Bot) runPolling(ctx context.Context) error {
 		return fmt.Errorf("start long polling: %w", err)
 	}
 	b.logger.Info("started long polling updates", "username", b.username)
+	if b.onReady != nil {
+		b.onReady()
+	}
 	b.startScheduler(ctx)
 	for {
 		select {
@@ -230,7 +241,7 @@ func (b *Bot) runWebhook(ctx context.Context, cfg TransportConfig) error {
 		return nil
 	default:
 	}
-	if err := b.api.SetWebhook(ctx, &telego.SetWebhookParams{URL: cfg.WebhookURL, SecretToken: cfg.WebhookSecret, AllowedUpdates: allowedUpdates, DropPendingUpdates: cfg.DropPendingUpdates}); err != nil {
+	if err := b.api.SetWebhook(ctx, &telego.SetWebhookParams{URL: cfg.WebhookURL, SecretToken: cfg.WebhookSecret, AllowedUpdates: allowedUpdates, DropPendingUpdates: config.WebhookDropPendingUpdates}); err != nil {
 		_ = server.Shutdown(context.Background())
 		b.dispatcher.Stop(10 * time.Second)
 		return fmt.Errorf("set webhook: %w", err)
@@ -312,11 +323,13 @@ func (b *Bot) enqueueAutoSkip(candidate game.ExpiredTurn) bool {
 			return
 		}
 		notify := b.finalizeOutcome(ctx, outcome)
+		if notify != nil {
+			b.tokens.InvalidateGame(outcome.View.GameID)
+			notify()
+			return
+		}
 		text := "⏱️ O tempo acabou; o turno foi pulado.\n\n" + b.renderer.RenderPublicState(outcome.View)
 		b.cmdHandler.reply(ctx, int64(candidate.ChatID), text, makeGameButtons(outcome.View))
-		if notify != nil {
-			notify()
-		}
 	})
 }
 func (b *Bot) submitUpdate(ctx context.Context, update telego.Update) bool {
@@ -333,7 +346,7 @@ func (b *Bot) submitUpdate(ctx context.Context, update telego.Update) bool {
 }
 func (b *Bot) processUpdate(ctx context.Context, update telego.Update) bool {
 	if update.Message != nil {
-		if command, _, ok := parseBotCommand(update.Message.Text, b.username); ok && command == "reset" {
+		if command, _, ok := parseMessageCommand(update.Message, b.username); ok && command == "reset" {
 			chatID := game.ChatID(update.Message.Chat.ID)
 			return b.dispatcher.EnqueueRecovery(chatID, func(c context.Context) {
 				b.cmdHandler.HandleReset(c, update.Message, func() { b.dispatcher.ResetChat(chatID) })

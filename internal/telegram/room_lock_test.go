@@ -20,7 +20,7 @@ func TestRoomLockCommands(t *testing.T) {
 	h := NewCommandHandler(api, svc, r, NewTokenStore(100, 10, time.Now, nil), "unobot", nil)
 	send := func(id int64, command string, want string) {
 		t.Helper()
-		h.HandleMessage(t.Context(), &telego.Message{Chat: telego.Chat{ID: -10, Type: "supergroup"}, From: &telego.User{ID: id, FirstName: "Player"}, Text: command})
+		h.HandleMessage(t.Context(), &telego.Message{Chat: telego.Chat{ID: -10, Type: "supergroup"}, From: &telego.User{ID: id, FirstName: "Player"}, Text: command + "@unobot"})
 		if !strings.Contains(api.LastSentMessage(), want) {
 			t.Fatalf("%s: %s, want %s", command, api.LastSentMessage(), want)
 		}

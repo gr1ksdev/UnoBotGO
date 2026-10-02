@@ -74,30 +74,40 @@ func TestSwapChoiceMenuFiltersTargetsAndProtectsTokens(t *testing.T) {
 
 // Draw/pass without playing until the unique swap card is available. This
 // reaches the real service flow regardless of shuffle, without a restore hook.
+// A bounded number of draws ensures the draw pile retains enough cards for late joins.
 func readyToSwap(t *testing.T, svc *game.Service) (game.PublicGameView, uno.CardID) {
 	t.Helper()
-	v := createStartedGame(t, svc, -901, uno.CaseiroRules())
-	for i := 0; i < 220; i++ {
-		pv, err := svc.PlayerView(t.Context(), game.Actor{PlayerID: v.CurrentTurn}, v.GameID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, c := range pv.Hand {
-			if c.Card.Rank == uno.SwapHands && c.Playable {
-				return v, c.Card.ID
+	for attempt := 0; attempt < 5; attempt++ {
+		chatID := game.ChatID(-901 - int64(attempt)*10)
+		v := createStartedGame(t, svc, chatID, uno.CaseiroRules())
+		cardsDrawn := 0
+		for i := 0; i < 220; i++ {
+			pv, err := svc.PlayerView(t.Context(), game.Actor{PlayerID: v.CurrentTurn}, v.GameID)
+			if err != nil {
+				t.Fatal(err)
 			}
+			for _, c := range pv.Hand {
+				if c.Card.Rank == uno.SwapHands && c.Playable {
+					if cardsDrawn <= 80 {
+						return v, c.Card.ID
+					}
+					break
+				}
+			}
+			a := uno.Action{Type: uno.DrawCard, PlayerID: v.CurrentTurn, Revision: v.Revision}
+			if pv.DrawnCardID != "" {
+				a.Type = uno.PassTurn
+			} else {
+				cardsDrawn++
+			}
+			out, err := svc.Apply(t.Context(), game.Actor{PlayerID: v.CurrentTurn}, v.GameID, a)
+			if err != nil {
+				break
+			}
+			v = out.View
 		}
-		a := uno.Action{Type: uno.DrawCard, PlayerID: v.CurrentTurn, Revision: v.Revision}
-		if pv.DrawnCardID != "" {
-			a.Type = uno.PassTurn
-		}
-		out, err := svc.Apply(t.Context(), game.Actor{PlayerID: v.CurrentTurn}, v.GameID, a)
-		if err != nil {
-			t.Fatal(err)
-		}
-		v = out.View
 	}
-	t.Fatal("swap card never found")
+	t.Fatal("swap card never found with sufficient deck")
 	return game.PublicGameView{}, ""
 }
 

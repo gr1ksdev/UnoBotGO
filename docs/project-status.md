@@ -1,8 +1,9 @@
 # UnoBotGO V2 — Estado do projeto
 
-Última revisão: **2026-09-27**. Esta versão acompanha a **dev**.
-Base desta revisão: `dev@badf81c` antes de Gameplay UX Polish e `main@fd011ab`.
-Esta revisão inclui Gameplay UX Polish e a fundação M7 na dev; nenhum código foi promovido à main.
+Última revisão da troca opcional: **2026-09-28** (base `dev@bce47d0`, implementação `9afc944`). Esta versão acompanha a **dev**.
+Base da auditoria geral anterior (colunas Main e diferenças abaixo são históricas): `dev@badf81c` antes de Gameplay UX Polish e `main@fd011ab`.
+A revisão geral anterior incluiu Gameplay UX Polish e M7 na dev. A atualização atual
+é restrita à troca opcional, sem promoção à main.
 A M7 foi auditada sobre `e72cd66`; implementação e limitações em [M7](m7-persistence.md).
 
 Este documento descreve **maturidade, validação e publicação**, não arquitetura.
@@ -39,15 +40,16 @@ A coluna Implementado considera a `dev`; Main indica a presença na base públic
 | Recovery / reset | IMPLEMENTED + HOMOLOGATED | Autorização, isolamento, filas/panic | Telegram real | Sim | /reset por grupo na fila de recuperação |
 | GameFinished / lifecycle | IMPLEMENTED + HOMOLOGATED | Dois jogadores, botões e timeout | Telegram real | Sim | Encerramento limpo sem novo turno |
 | Menções / links | IMPLEMENTED + HOMOLOGATED | Destinos e estados do renderer | Telegram real | Sim, base | UserID apenas do responsável atual |
-| Troca opcional + cor | IMPLEMENTED + HOMOLOGATED | Engine, serviço, inline, renderer e simulador | Telegram real | Sim | Troca opcional no Caseiro; término imediato se última carta |
+| Troca opcional + cor | IMPLEMENTED BUT NOT HOMOLOGATED | Engine, serviço, inline, renderer e simulador; race local bloqueado por VMA | Pendente | Não (fluxo novo) | Última carta encerra sem escolhas |
 | Comandos privados | IMPLEMENTED + HOMOLOGATED | Boas-vindas, ajuda, escopos | Telegram real | Não | /start, /help e botão adicionar ao grupo |
 | Correção de falso tópico | IMPLEMENTED + HOMOLOGATED | Threads comuns e tópicos reais | Telegram real | Não | Apenas IsTopicMessage identifica tópico |
 | Gameplay UX Polish | IMPLEMENTED + HOMOLOGATED | Ordem, lock, renderer e regressões | Telegram real | Não | Ordem a partir do atual e /trancar /destrancar |
 | Blefe em +4 sobre +2 | IMPLEMENTED + HOMOLOGATED | Counter legal não desafiável | Telegram real | Não | Caseiro: +4 sobre +2 não é blefe |
 | Reentrada e colocação | IMPLEMENTED + HOMOLOGATED | Late join após saída vs finalizados | Telegram real | Não | Reentrada de quem saiu; colocado bloqueado |
-| M7 Persistência e Snapshots | IMPLEMENTED + HOMOLOGATED | PostgreSQL real, race, migrations, snapshots | Telegram real | Sim | Defaults Classic+Legacy; snapshot imutável por jogo |
-| M7 Ranking Legacy e Updated | IMPLEMENTED + HOMOLOGATED | Cálculo determinístico, half-up, elegibilidade | Telegram real | Sim | Concessão e anúncio pós-commit homologados N=2 e N=3 |
-| M7 UX de Configuração (/config) | IMPLEMENTED + HOMOLOGATED | /config, botões inline, my_chat_member, 23 cenários | Telegram real | Sim | Admin/installer, boas-vindas e garantia de config antes de observação |
+| M7 Persistência e Snapshots | IMPLEMENTED + HOMOLOGATED | PostgreSQL real, race, migrations, snapshots | Telegram real | Não | Defaults Classic+Updated para novos grupos; existentes preservados; snapshot imutável por jogo |
+| M7 Ranking Legacy e Updated | IMPLEMENTED + HOMOLOGATED | Cálculo determinístico, half-up, elegibilidade | Telegram real | Não | Concessão e anúncio pós-commit homologados N=2 e N=3 |
+| Ranking Mensal | IMPLEMENTED BUT NOT HOMOLOGATED | PostgreSQL, timezone America/Sao_Paulo, buckets | Pendente | Não | Particionamento por mês, virada automática às 00:00 SP |
+| M7 UX de Configuração (/config) | IMPLEMENTED + HOMOLOGATED | /config, botões inline, my_chat_member, 23 cenários | Telegram real | Não | Admin/installer, boas-vindas e bloqueio de conflito |
 | M7 Import de ranking antigo | DEFERRED | Parser, reconciliação e staging | N/A | Não | Adiado para milestone futura; sem comando ou aplicação |
 | /dar | IMPLEMENTED BUT NOT HOMOLOGATED | Testes debugcards e exclusão normal | Uso de desenvolvimento | Não | Fora do produto/build padrão (com tag) |
 
@@ -76,18 +78,24 @@ Skip/bloqueio, Reverse, coringa, +2 e +4 estão presentes em ambos os modos.
 **Caseiro** possui regras próprias de resposta às penalidades:
 `+2 → +4` acumula **6**, e `+4 → +2` exige a cor escolhida.
 A correção que preserva o total acumulado já está nas duas branches.
-Na **dev**, Caseiro recusa `+4 → +4`; na **main auditada**, ainda permite essa resposta.
+Caseiro recusa `+4 → +4` na dev e na main atual (`62fc344`).
 O Clássico mantém `+4 → +4` em ambas. Esta publicação documental não muda essas regras.
 
-O baralho Clássico tem 108 cartas. Caseiro tem 109 cartas,
-onde há uma única **Trocar cartas**, sem reduzir as demais especiais.
+O baralho Clássico tem 108 cartas. Caseiro tem 109 em ambas as branches atuais,
+com uma única **Trocar cartas**, sem reduzir as demais especiais.
+Poucas aparições em algumas partidas não demonstram distribuição incorreta.
 
-**Trocar cartas no Caseiro:** descarta a carta, abre `ChoosingPlayer` e permite
-escolher outro jogador ativo ou manter a própria mão (`KeepHand`). Ambas as opções
-avançam para a escolha de cor via Inline Mode; somente a cor aplica a decisão e
-passa a vez. Jogada como última carta, encerra a participação do jogador imediatamente,
-sem trocas nem escolhas, respeitando a colocação e o ranking.
-A renderização e o novo fluxo foram homologados em uso real no Telegram.
+**Trocar cartas — fluxo opcional na dev:** descarta a carta, oferece outro jogador
+ativo ou **Manter minha mão**, e exige cor nos dois caminhos. Somente a cor aplica
+a troca/manutenção e avança turno. Última carta termina imediatamente, sem troca
+ou escolhas, preservando o fluxo normal de colocações/ranking. Cada ação aceita
+avança uma revisão; escolhas pendentes continuam fora de TURN_TIMEOUT.
+
+Implementado e testado automaticamente; **homologação Telegram real pendente**.
+O aceite da carta anterior não homologa este fluxo novo. Esta correção não foi
+publicada na main (`62fc344`, que já contém a versão anterior da carta); a matriz
+histórica de publicação acima não representa uma nova auditoria completa de branches.
+Nenhuma promoção ou push faz parte desta entrega.
 
 ## Lifecycle, contexto e decisões mantidas
 
@@ -153,7 +161,7 @@ Diferenças de produto confirmadas pelas árvores Git, sem promoção nesta mile
   garantem essa regra. Lock pertence à sessão e não altera turno/revisão da engine.
   Implementado e testado na dev; homologação Telegram real pendente; main: não.
 
-- Trocar cartas, seleção de jogador, stickers e suporte no simulador.
+- Troca opcional + cor via Inline Mode e exceção de última carta (novo fluxo somente dev).
 - Recusa de `+4` sobre `+4` no Caseiro.
 - Remoção da linha textual redundante de direção do estado público.
 - Boas-vindas privadas, `/help` por contexto, escopos de comandos e botão de grupo

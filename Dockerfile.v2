@@ -1,3 +1,13 @@
+# Stage 1: Build frontend assets
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS web-builder
+
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
+# Stage 2: Build single Go binary with embedded web/dist
 FROM --platform=$BUILDPLATFORM golang:1.26.3-bookworm AS builder
 
 ARG TARGETOS=linux
@@ -9,11 +19,15 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-w -s" -o /build/unobot ./cmd/bot
+COPY --from=web-builder /web/dist ./web/dist
 
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-w -s" -o /build/unobotgo ./cmd/bot
+
+# Stage 3: Minimal non-root distroless runtime
 FROM gcr.io/distroless/static-debian12:nonroot
+
 EXPOSE 8080
 
-COPY --from=builder /build/unobot /unobot
+COPY --from=builder /build/unobotgo /unobotgo
 
-ENTRYPOINT ["/unobot"]
+ENTRYPOINT ["/unobotgo"]

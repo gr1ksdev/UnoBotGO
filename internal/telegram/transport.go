@@ -12,11 +12,10 @@ const (
 )
 
 type TransportConfig struct {
-	Mode               TransportMode
-	WebhookURL         string
-	WebhookSecret      string
-	ListenAddr         string
-	DropPendingUpdates bool
+	Mode          TransportMode
+	WebhookURL    string
+	WebhookSecret string
+	ListenAddr    string
 }
 
 func (c TransportConfig) normalized() TransportConfig {

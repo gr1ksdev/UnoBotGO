@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/malbs/UnoGoBot/internal/config"
 	"github.com/malbs/UnoGoBot/internal/game"
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
@@ -72,10 +73,10 @@ type TokenStore struct {
 
 func NewTokenStore(globalLimit, userLimit int, now func() time.Time, randReader io.Reader) *TokenStore {
 	if globalLimit <= 0 {
-		globalLimit = 20000
+		globalLimit = config.InlineTokenLimit
 	}
 	if userLimit <= 0 {
-		userLimit = 512
+		userLimit = config.InlineTokenUserLimit
 	}
 	if now == nil {
 		now = time.Now

@@ -10,21 +10,24 @@ import (
 
 	"github.com/malbs/UnoGoBot/internal/game"
 	"github.com/malbs/UnoGoBot/internal/groups"
+	"github.com/malbs/UnoGoBot/internal/ranking"
 	"github.com/malbs/UnoGoBot/internal/uno"
 	"github.com/mymmrac/telego"
 )
 
 type CommandHandler struct {
-	knownUsers    groups.UserRepository
-	finalize      func(context.Context, game.Outcome) func()
-	groupConfigs  groups.Repository
-	groupsService *groups.Service
-	bot           BotAPI
-	service       *game.Service
-	renderer      *Renderer
-	tokens        *TokenStore
-	botUsername   string
-	logger        *slog.Logger
+	rankingService *ranking.Service
+	miniAppURL     string
+	knownUsers     groups.UserRepository
+	finalize       func(context.Context, game.Outcome) func()
+	groupConfigs   groups.Repository
+	groupsService  *groups.Service
+	bot            BotAPI
+	service        *game.Service
+	renderer       *Renderer
+	tokens         *TokenStore
+	botUsername    string
+	logger         *slog.Logger
 }
 
 func (h *CommandHandler) SetGroupsService(s *groups.Service) {
@@ -66,7 +69,6 @@ func NewCommandHandler(
 		logger:      logger,
 	}
 }
-
 
 func stringPtr(s string) *string {
 	return &s
@@ -181,7 +183,6 @@ func makeGroupWelcomeButtons(chatID int64) *telego.InlineKeyboardMarkup {
 	}
 }
 
-
 func (h *CommandHandler) reply(ctx context.Context, chatID int64, text string, markup *telego.InlineKeyboardMarkup) {
 	params := &telego.SendMessageParams{
 		ChatID:    telego.ChatID{ID: chatID},
@@ -207,7 +208,7 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		h.renderer.userCache.Put(uno.PlayerID(msg.From.ID), msg.From.FirstName, msg.From.Username)
 	}
 
-	cmdName, fields, ok := parseBotCommand(msg.Text, h.botUsername)
+	cmdName, fields, ok := parseMessageCommand(msg, h.botUsername)
 	if !ok {
 		return
 	}
@@ -238,10 +239,18 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 			h.reply(ctx, msg.Chat.ID, h.renderer.RenderWelcome(), makePrivateStartButtons(h.botUsername))
 		case "ajuda", "help":
 			h.reply(ctx, msg.Chat.ID, h.renderer.RenderHelp(h.botUsername), nil)
+		case "ranking":
+			h.handlePrivateRanking(ctx, msg.Chat.ID, int64(actorID))
 		default:
 			h.reply(ctx, msg.Chat.ID, "⚠️ Este comando só pode ser utilizado em grupos. Adicione o bot a um grupo para jogar!\n\nUse /help para mais instruções.", nil)
 		}
 		return
+	}
+
+	if isGroup && msg.Chat.Title != "" {
+		if svc := h.getGroupsService(); svc != nil {
+			_ = svc.ObserveGroupTitle(ctx, int64(chatID), msg.Chat.Title)
+		}
 	}
 
 	// Observed names stay in RAM during gameplay and are flushed at closure.
@@ -249,7 +258,12 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		_ = h.service.ObservePlayer(ctx, game.Actor{PlayerID: actorID, ChatID: chatID}, summary.GameID, observedName(*msg.From), msg.From.Username)
 	}
 	// Group command handling
+	if h.handleDebugCommand(ctx, msg, cmdName, fields) {
+		return
+	}
 	switch cmdName {
+	case "ranking":
+		h.handleRanking(ctx, msg.Chat.ID)
 	case "novo":
 		mode := ""
 		if len(fields) > 1 {
@@ -261,7 +275,7 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		h.handleNovoObserved(ctx, actorID, chatID, msg.Chat.Title, mode, msg.From)
 	case "trancar", "destrancar":
 		h.handleRoomLock(ctx, actorID, chatID, cmdName == "trancar")
-	case "entrar":
+	case "entrar", "join":
 		h.handleEntrar(ctx, actorID, chatID)
 	case "start":
 		if len(fields) > 1 && fields[1] == "true" {
@@ -286,6 +300,24 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 	}
 }
 
+// Group commands must explicitly target this bot; private commands may omit it.
+func parseMessageCommand(msg *telego.Message, botUsername string) (string, []string, bool) {
+	if msg == nil {
+		return "", nil, false
+	}
+	if msg.Chat.Type == "group" || msg.Chat.Type == "supergroup" {
+		fields := strings.Fields(msg.Text)
+		if len(fields) == 0 || botUsername == "" {
+			return "", nil, false
+		}
+		command, username, addressed := strings.Cut(fields[0], "@")
+		if !strings.HasPrefix(command, "/") || !addressed || !strings.EqualFold(username, botUsername) {
+			return "", nil, false
+		}
+	}
+	return parseBotCommand(msg.Text, botUsername)
+}
+
 func parseBotCommand(text, botUsername string) (string, []string, bool) {
 	text = strings.TrimSpace(text)
 	if !strings.HasPrefix(text, "/") {
@@ -308,6 +340,10 @@ func (h *CommandHandler) HandleReset(ctx context.Context, msg *telego.Message, r
 	if msg == nil || msg.From == nil || msg.From.IsBot {
 		return
 	}
+	cmdName, _, ok := parseMessageCommand(msg, h.botUsername)
+	if !ok || cmdName != "reset" {
+		return
+	}
 	if msg.SenderChat != nil {
 		h.reply(ctx, msg.Chat.ID, "⚠️ O /reset deve ser executado por um administrador identificável, não como canal ou administrador anônimo.", nil)
 		return
@@ -318,10 +354,6 @@ func (h *CommandHandler) HandleReset(ctx context.Context, msg *telego.Message, r
 	}
 	if msg.IsTopicMessage {
 		h.reply(ctx, msg.Chat.ID, "⚠️ Tópicos de fórum ainda não são suportados. Execute /reset no chat geral do grupo.", nil)
-		return
-	}
-	cmdName, _, ok := parseBotCommand(msg.Text, h.botUsername)
-	if !ok || cmdName != "reset" {
 		return
 	}
 
@@ -609,6 +641,11 @@ func (h *CommandHandler) handleSair(ctx context.Context, actorID uno.PlayerID, c
 		notify = h.finalize(ctx, outcome)
 	}
 	h.tokens.InvalidateUserGame(summary.GameID, actorID)
+	if notify != nil {
+		h.tokens.InvalidateGame(summary.GameID)
+		notify()
+		return
+	}
 
 	if outcome.View.Closed {
 		h.tokens.InvalidateGame(summary.GameID)
@@ -623,9 +660,6 @@ func (h *CommandHandler) handleSair(ctx context.Context, actorID uno.PlayerID, c
 			h.renderer.RenderPublicState(outcome.View),
 		)
 		h.reply(ctx, int64(chatID), msg, makeGameButtons(outcome.View))
-	}
-	if notify != nil {
-		notify()
 	}
 }
 
@@ -750,6 +784,9 @@ func (h *CommandHandler) HandleMyChatMember(ctx context.Context, update *telego.
 	}
 
 	svc := h.getGroupsService()
+	if update.Chat.Title != "" && svc != nil {
+		_ = svc.ObserveGroupTitle(ctx, chatID, update.Chat.Title)
+	}
 	if update.From.ID > 0 && !update.From.IsBot {
 		if svc != nil {
 			if _, err := svc.RecordInstallation(ctx, chatID, update.From.ID); err != nil {

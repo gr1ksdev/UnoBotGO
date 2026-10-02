@@ -15,15 +15,20 @@ Bot de UNO em Go para o Telegram utilizando modo inline com stickers para visual
 - **Como executar o V2**:
   ```bash
   cp .env.example .env
-  # Configure TOKEN e DATABASE_URL no .env
-  go run ./cmd/migrate
-  go run ./cmd/bot
+  # Configure TOKEN, DATABASE_URL e MINIAPP_SECRET no .env
+  make build
+  make run
+  ```
+  Ou em modo desenvolvimento com Mini App Vite sincronizado:
+  ```bash
+  make dev
   ```
   Ou via Docker:
   ```bash
   docker build -f Dockerfile.v2 -t unobotgo:v2 .
-  docker run --rm --env-file .env unobotgo:v2
+  docker run --rm -p 8080:8080 --env-file .env unobotgo:v2
   ```
+  As migrações do PostgreSQL são verificadas e aplicadas automaticamente na inicialização com advisory lock transacional fail-closed.
 
 
   A imagem oficial da `main` é publicada em
@@ -57,6 +62,7 @@ grupos exibem os comandos de partida.
 | `/cancelar` (ou `/kill`) | Cancela a partida (autorizado apenas para o responsável). |
 | `/sair` | Sai da partida em andamento (transfere responsabilidade se necessário). |
 | `/estado` | Exibe o estado público da partida ativa ou lobby. |
+| `/ranking` | Consulta o ranking histórico acumulado deste grupo; disponível a qualquer membro. |
 | `/reset` | Recupera o grupo, cancela trabalhos pendentes e apaga a partida e o histórico daquele grupo (responsável ou administrador). |
 | `/config` | Configura o modo padrão (Clássico/Caseiro) e sistema de ranking (Legado/Atualizado) do grupo (admin ou instalador). |
 
@@ -65,6 +71,21 @@ mesmo quando a fila normal do grupo está cheia ou uma operação anterior ficou
 presa. Depois da autorização, o bot invalida o trabalho antigo daquele grupo,
 remove seu estado e seus tokens e abre uma fila limpa para novos comandos. O
 comando não afeta partidas de outros grupos.
+
+Ao terminar uma partida pontuada, após o commit no PostgreSQL, o bot envia duas
+mensagens separadas: **🏁 Partida encerrada**, com colocação e pontos ganhos naquela
+partida, e **🏆 Ranking do grupo**, com os totais históricos atualizados. `/ranking`
+mostra esse mesmo ranking, incluindo jogadores que não participaram da última partida.
+Legacy usa `1 pt`, `2 pts`, `0 pts`; Updated usa centésimos, como `8,57 pts`.
+As medalhas são somente `🥇`, `🥈`, `🥉`; depois vêm `4.`, `5.` etc.
+No ranking acumulado, posições são únicas: scores iguais são ordenados pela melhor
+colocação na última partida elegível de cada jogador, depois pela conclusão mais
+recente e, por estabilidade técnica, pelo UserID crescente. Abandono definitivo
+aparece como `Nome · fora do ranking` no resultado, sem posição nem pontos elegíveis.
+Rankings extensos exibem as linhas que cabem e a quantidade de jogadores restantes.
+Sem partidas pontuadas, o bot informa isso; no privado, orienta consultar em um grupo.
+
+Esta UX está na `dev`, aguardando homologação manual antes de publicação.
 
 ---
 
@@ -142,22 +163,40 @@ duas arquiteturas após as validações.
 
 ### Transporte Telegram
 
-Long polling é o padrão e o modo recomendado. Webhook permanece experimental, sem homologação real aprovada; consulte o [estado do projeto](docs/project-status.md#transportes-e-evidência-real). Para webhook, use `TELEGRAM_MODE=webhook`, `WEBHOOK_URL`, `WEBHOOK_SECRET` e `WEBHOOK_LISTEN_ADDR=:8080`; publique o endpoint HTTPS por um proxy externo. `WEBHOOK_DROP_PENDING_UPDATES=false` preserva updates pendentes.
+Long polling é o padrão e o modo recomendado. Webhook permanece experimental, sem homologação real aprovada; consulte o [estado do projeto](docs/project-status.md#transportes-e-evidência-real). Para webhook, use `TELEGRAM_MODE=webhook` e `WEBHOOK_URL=https://bot.exemplo.com/telegram`; publique esse endpoint HTTPS por um proxy externo encaminhando ao servidor compartilhado (`WEB_ADDR`, padrão `:8080`). A URL pública é necessária para `setWebhook` e não pode ser deduzida do endereço local. O segredo de autenticação é derivado internamente; updates pendentes são sempre preservados.
+
+### Configuração V2
+
+O [.env.example](.env.example) contém somente as configurações normais de instalação:
+
+| Variável | Finalidade / padrão |
+|---|---|
+| `TOKEN` | Token obrigatório do bot Telegram |
+| `TELEGRAM_MODE` | `polling` (padrão) ou `webhook` |
+| `DATABASE_URL` | Conexão PostgreSQL obrigatória |
+| `TURN_TIMEOUT` | Duration positiva; padrão `2m` |
+| `WEB_ADDR` | Endereço HTTP compartilhado; padrão `:8080` |
+| `MINIAPP_SECRET` | Exatamente 32 bytes em Base64; gere com `openssl rand -base64 32` |
+
+Somente webhook exige também `WEBHOOK_URL`, com HTTPS e caminho dedicado fora de `/api`, `/assets`, `/healthz` e `/readyz`. O segredo enviado ao Telegram é `Base64URL-sem-padding(HMAC-SHA256(MINIAPP_SECRET decodificado, "unobotgo/v2/telegram-webhook-secret/v1"))`. O contexto separa esse protocolo das referências AES-GCM; a chave original não é enviada. A rotação de `MINIAPP_SECRET` atualiza esse segredo no próximo startup, que reaplica `setWebhook`. Referências antigas também deixam de valer com a rotação, como antes.
+
+O botão **🌐 Ranking Global** usa automaticamente `https://t.me/<username-do-bot>/ranking`, montado a partir do `getMe` já realizado no startup. Configure o Direct Mini App com short name **ranking** e sua URL externa HTTPS no BotFather; essa URL não é configuração do backend.
+
+Políticas internas fixas: logs `info`, histórico 100, tokens inline com TTL `2m`, limite global 20.000 e por usuário 512, validade de initData `1h`, timeout das migrations de startup `2m` e descarte de updates pendentes desativado. Opções antigas não são mais lidas; não há aliases ou fallback de configuração.
 
 ### PostgreSQL e Ranking V2
 
-O runtime V2 exige PostgreSQL configurado via `DATABASE_URL` e schema versionado atualizado. Antes de iniciar o bot:
+O runtime V2 exige PostgreSQL configurado via `DATABASE_URL`. Com o `.env` configurado, basta iniciar o processo principal:
 
 ```sh
-export DATABASE_URL='postgres://unobot:senha@localhost:5432/unobot?sslmode=disable'
-go run ./cmd/migrate
 go run ./cmd/bot
+# Em produção: ./bin/unobotgo
 ```
 
-O comando de migrations (`cmd/migrate`) não exige `TOKEN`. O bot valida a conexão e as migrations com prazo de 10 segundos antes de conectar ao Telegram; falhas encerram o processo com código de erro sem expor credenciais nos logs.
+As migrations SQL versionadas são embutidas no binário e verificadas/aplicadas automaticamente antes de HTTP, Telegram e workers. A conexão tem prazo de 10 segundos; migrations e verificação têm timeout interno total de 2 minutos. Um advisory lock transacional serializa instâncias, e todo o lote pendente e seu ledger são confirmados em uma única transação. Migrations aplicadas não devem ser editadas: checksum divergente, versão desconhecida, timeout ou erro SQL impedem o startup, sem corrigir o ledger ou executar downgrade. Bancos vazios/parciais são atualizados; bancos já atualizados apenas são verificados. Não há comando manual ou segundo binário obrigatório.
 
 **Configuração e Ranking:**
-- Cada grupo possui configuração própria criada sob demanda com os padrões **Clássico** e **Legado**.
+- Cada grupo possui configuração própria criada sob demanda com os padrões **Clássico** e **Atualizado**.
 - O comando `/config` permite que administradores e o usuário que adicionou o bot configurem o modo padrão (`Clássico` / `Caseiro`) e o sistema de ranking (`Legado` / `Atualizado`) através de botões inline interativos.
 - Partidas iniciadas usam o snapshot de configuração capturado na criação; alterações posteriores afetam apenas as partidas futuras.
 - Ao final de cada partida pontuável (mínimo de 2 participantes elegíveis), o bot persiste o resultado de forma atômica e exibe uma mensagem dedicada anunciando os pontos distribuídos.
@@ -170,3 +209,5 @@ TEST_DATABASE_URL='postgres://postgres:senha@localhost:5432/unobot_test?sslmode=
 ```
 
 Documentação de persistência e homologação: [M7](docs/m7-persistence.md).
+
+Em grupos/supergrupos, todo comando deve mencionar o username do bot: `/novo@SeuBot`, `/entrar@SeuBot` ou seu alias `/join@SeuBot`, `/config@SeuBot`, etc. Comandos sem sufixo ou destinados a outro bot são ignorados. No privado, `/start` e `/help` continuam sem sufixo. Grupos já configurados preservam seu sistema de ranking; a migration 0008 altera somente o default para grupos novos.

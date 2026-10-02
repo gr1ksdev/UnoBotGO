@@ -6,6 +6,7 @@ import (
 	"github.com/malbs/UnoGoBot/internal/game"
 	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/mymmrac/telego"
+	"strings"
 	"testing"
 )
 
@@ -28,6 +29,9 @@ func (r *configRepo) SetRankingSystem(context.Context, int64, groups.RankingSyst
 func (r *configRepo) SetInstalledBy(context.Context, int64, int64) (groups.Config, error) {
 	panic("unexpected SetInstalledBy call")
 }
+func (r *configRepo) ObserveGroupTitle(context.Context, int64, string) error {
+	return nil
+}
 
 func TestNovoGroupDefaultAndOverrides(t *testing.T) {
 	for _, tt := range []struct {
@@ -39,12 +43,12 @@ func TestNovoGroupDefaultAndOverrides(t *testing.T) {
 	} {
 		t.Run(tt.cmd+string(tt.mode), func(t *testing.T) {
 			svc, _ := game.NewService()
-			h := NewCommandHandler(newMockBotAPI(), svc, NewRenderer(nil), nil, "", nil)
+			h := NewCommandHandler(newMockBotAPI(), svc, NewRenderer(nil), nil, "unobot", nil)
 			r := &configRepo{config: groups.Defaults(42)}
 			r.config.DefaultGameMode = tt.mode
 			r.config.RankingSystem = groups.Updated
 			h.groupConfigs = r
-			h.HandleMessage(t.Context(), &telego.Message{Chat: telego.Chat{ID: 42, Type: "group"}, From: &telego.User{ID: 1}, Text: tt.cmd})
+			h.HandleMessage(t.Context(), &telego.Message{Chat: telego.Chat{ID: 42, Type: "group"}, From: &telego.User{ID: 1}, Text: strings.Replace(tt.cmd, "/novo", "/novo@unobot", 1)})
 			summary, err := svc.FindChatGame(t.Context(), 42)
 			if err != nil {
 				t.Fatal(err)
@@ -61,7 +65,7 @@ func TestNovoGroupDefaultAndOverrides(t *testing.T) {
 			}
 			// A later gameplay command must work even if persistence is unavailable.
 			r.err = errors.New("offline")
-			h.HandleMessage(t.Context(), &telego.Message{Chat: telego.Chat{ID: 42, Type: "group"}, From: &telego.User{ID: 1}, Text: "/entrar"})
+			h.HandleMessage(t.Context(), &telego.Message{Chat: telego.Chat{ID: 42, Type: "group"}, From: &telego.User{ID: 1}, Text: "/entrar@unobot"})
 			v, _ = svc.PublicView(t.Context(), summary.GameID)
 			if len(v.Players) != 1 || r.calls != 1 {
 				t.Fatal("join depended on DB")

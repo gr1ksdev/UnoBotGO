@@ -1,8 +1,11 @@
 package telegram
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"github.com/malbs/UnoGoBot/internal/config"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -87,5 +90,38 @@ func TestWebhookStartupAlwaysSetsWebhook(t *testing.T) {
 	}
 	if api.SetWebhookCalls[0].SecretToken != "secret" || api.SetWebhookCalls[0].DropPendingUpdates {
 		t.Fatalf("unexpected params: %#v", api.SetWebhookCalls[0])
+	}
+}
+
+func TestSharedWebhookUsesDerivedSecret(t *testing.T) {
+	for _, keyByte := range []byte{1, 2} {
+		cfg := &config.Config{MiniAppSecret: bytes.Repeat([]byte{keyByte}, 32)}
+		secret := cfg.WebhookSecret()
+		api := newMockBotAPI()
+		svc, _ := game.NewService()
+		b := New(api, svc, nil, nil, time.Minute, nil)
+		b.SetTransport(TransportConfig{Mode: TransportWebhook, WebhookURL: "https://bot.example/telegram", WebhookSecret: secret})
+		ctx, cancel := context.WithCancel(t.Context())
+		b.UseSharedHTTP(cancel)
+		if err := b.Run(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if len(api.SetWebhookCalls) != 1 || api.SetWebhookCalls[0].SecretToken != secret || api.SetWebhookCalls[0].DropPendingUpdates {
+			t.Fatal("registration lost secret or pending updates")
+		}
+		for _, token := range []string{secret, "", "wrong", base64.RawURLEncoding.EncodeToString(cfg.MiniAppSecret)} {
+			request := httptest.NewRequest("POST", "/telegram", strings.NewReader(`{"update_id":123}`))
+			request.Header.Set(telego.WebhookSecretTokenHeader, token)
+			request.Header.Set("Content-Type", "application/json")
+			recorder := httptest.NewRecorder()
+			b.WebhookHandler().ServeHTTP(recorder, request)
+			want := http.StatusForbidden
+			if token == secret {
+				want = http.StatusOK
+			}
+			if recorder.Code != want {
+				t.Fatalf("derived secret authentication status=%d want=%d", recorder.Code, want)
+			}
+		}
 	}
 }

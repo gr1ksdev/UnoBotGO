@@ -4,14 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"html"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/malbs/UnoGoBot/internal/game"
-	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/ranking"
 	"github.com/malbs/UnoGoBot/internal/uno"
 	"github.com/mymmrac/telego"
@@ -25,8 +22,8 @@ func (b *Bot) SetResultRepository(repository ranking.Repository) {
 	b.inlineHandler.finalize = b.finalizeOutcome
 }
 
-// finalizeOutcome waits for COMMIT, then returns an optional notification to be
-// sent after the handler's existing compact final message. No notification is
+// finalizeOutcome waits for COMMIT, then returns an optional notification
+// replacing the handler's unscored final summary. No notification is
 // returned for failed persistence, N<2 or a previously committed retry.
 func (b *Bot) finalizeOutcome(ctx context.Context, outcome game.Outcome) func() {
 	if outcome.Completed == nil || b.resultRepository == nil {
@@ -63,13 +60,14 @@ func (b *Bot) persistResult(ctx context.Context, input ranking.Result) (*ranking
 }
 
 func (b *Bot) notifyPoints(ctx context.Context, result ranking.Result) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	_, err := b.api.SendMessage(ctx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: result.ChatID}, Text: renderPoints(result), ParseMode: "HTML"})
+	sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	_, err := b.api.SendMessage(sendCtx, &telego.SendMessageParams{ChatID: telego.ChatID{ID: result.ChatID}, Text: renderPoints(result), ParseMode: "HTML"})
+	cancel()
 	if err != nil {
 		b.logger.Warn("failed to send committed game points", "game_id", result.GameID, "chat_id", result.ChatID, "error", err)
 	}
 	// Telegram delivery does not roll back scores or retain/requeue a DB result.
+	b.cmdHandler.handleRanking(ctx, result.ChatID)
 }
 
 func renderPoints(result ranking.Result) string {
@@ -95,26 +93,15 @@ func renderPoints(result ranking.Result) string {
 		return 0
 	})
 	var text strings.Builder
-	if r.RankingSystem == groups.Legacy {
-		text.WriteString("📊 Resultado do ranking\n\n")
-	} else {
-		text.WriteString("📊 Pontuação da partida\n\n")
-	}
+	text.WriteString("🏁 Partida encerrada\n\n")
 	for i, p := range r.Players {
 		if i > 0 {
 			text.WriteByte('\n')
 		}
-		name := p.DisplayName
-		if name == "" {
-			name = strconv.FormatInt(p.UserID, 10)
-		}
-		amount := strconv.FormatInt(int64(p.Score)/100, 10)
-		if r.RankingSystem == groups.Updated {
-			amount = fmt.Sprintf("%d,%02d", p.Score/100, p.Score%100)
-		}
-		fmt.Fprintf(&text, "%s +%s", html.EscapeString(name), amount)
 		if !p.Eligible() {
-			text.WriteString(" (fora do ranking)")
+			fmt.Fprintf(&text, "%s · fora do ranking", rankingName(p.DisplayName, p.UserID))
+		} else {
+			fmt.Fprintf(&text, "%s %s · +%s", placementLabel(p.Position), rankingName(p.DisplayName, p.UserID), ranking.FormatScore(r.RankingSystem, p.Score))
 		}
 	}
 	return text.String()

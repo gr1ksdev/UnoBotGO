@@ -2,3 +2,10 @@ UnoGoBot
 .env
 ranking_data.json
 .reports/simulations/
+bin/
+web/node_modules/
+web/dist/*
+!web/dist/.keep
+web/coverage/
+mockup*.png
+/devseed

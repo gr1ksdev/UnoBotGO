@@ -117,12 +117,12 @@ func TestRenderPoints_FormattingAndEscaping(t *testing.T) {
 
 	text := renderPoints(legacyResult)
 	expectedLines := []string{
-		"📊 Resultado do ranking",
+		"🏁 Partida encerrada",
 		"",
-		"&lt;Alice &amp; Bob&gt; +1",
-		"Bob +0",
-		"Charlie +0 (fora do ranking)",
-		"4 +0 (fora do ranking)",
+		"🥇 &lt;Alice &amp; Bob&gt; · +1 pt",
+		"🥈 Bob · +0 pts",
+		"Charlie · fora do ranking",
+		"4 · fora do ranking",
 	}
 	expected := strings.Join(expectedLines, "\n")
 	if text != expected {
@@ -145,12 +145,12 @@ func TestRenderPoints_FormattingAndEscaping(t *testing.T) {
 
 	textUpdated := renderPoints(updatedResult)
 	expectedUpdatedLines := []string{
-		"📊 Pontuação da partida",
+		"🏁 Partida encerrada",
 		"",
-		"Alice +10,00",
-		"Bob +5,00",
-		"Charlie +0,00",
-		"Dave +0,00 (fora do ranking)",
+		"🥇 Alice · +10,00 pts",
+		"🥈 Bob · +5,00 pts",
+		"🥉 Charlie · +0,00 pts",
+		"Dave · fora do ranking",
 	}
 	expectedUpdated := strings.Join(expectedUpdatedLines, "\n")
 	if textUpdated != expectedUpdated {
@@ -191,6 +191,9 @@ func TestFinalizeOutcome_NotificationOrder(t *testing.T) {
 	b.SetResultRepository(repo)
 
 	// Player 1 leaves -> game ends
+	b.SetRankingService(&ranking.Service{Repository: rankingReadFunc(func(context.Context, int64, time.Time) (ranking.GroupRanking, error) {
+		return ranking.GroupRanking{System: groups.Legacy}, nil
+	})})
 	b.cmdHandler.handleSair(ctx, 1, 42)
 
 	api.mu.Lock()
@@ -203,7 +206,7 @@ func TestFinalizeOutcome_NotificationOrder(t *testing.T) {
 	if !strings.Contains(msgs[0].Text, "Partida encerrada") {
 		t.Fatalf("first message should be game closure, got: %s", msgs[0].Text)
 	}
-	if !strings.Contains(msgs[1].Text, "Resultado do ranking") {
+	if !strings.Contains(msgs[1].Text, "🏆 Ranking do grupo") {
 		t.Fatalf("second message should be points notification, got: %s", msgs[1].Text)
 	}
 }
@@ -313,10 +316,10 @@ func TestRetryPendingResults_NotifiesOnNewCommit(t *testing.T) {
 	msgs := api.SentMessages
 	api.mu.Unlock()
 
-	if len(msgs) != 1 {
-		t.Fatalf("expected 1 points notification from retry, got %d", len(msgs))
+	if len(msgs) != 2 {
+		t.Fatalf("expected points and ranking availability notification from retry, got %d", len(msgs))
 	}
-	if !strings.Contains(msgs[0].Text, "Resultado do ranking") {
+	if !strings.Contains(msgs[0].Text, "🏁 Partida encerrada") {
 		t.Fatalf("expected ranking text in retry notification, got: %s", msgs[0].Text)
 	}
 

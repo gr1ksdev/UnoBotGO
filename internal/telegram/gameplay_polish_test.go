@@ -107,7 +107,7 @@ func TestGameplayActionEffectResultAndFinish(t *testing.T) {
 	out.View.Placements = []uno.Placement{{PlayerID: 11, Position: 1}, {PlayerID: 22, Position: 2}, {PlayerID: 33, Position: 3}, {PlayerID: 44, Position: 4}}
 	out.Events = append(out.Events, uno.Event{Type: uno.PlayerWon, PlayerID: 22, Position: 2})
 	text = plainGameplay(r.RenderActionConfirmation(22, uno.Action{Type: uno.PlayCard}, out))
-	requireGameplay(t, text, "🥈 Mezi terminou em 2º lugar!", "🏆 Partida encerrada\n\n🥇 Freddy\n🥈 Mezi\n🥉 Jeesttin\n4º Novo")
+	requireGameplay(t, text, "🥈 Mezi terminou em 2º lugar!", "🏆 Partida encerrada\n\n🥇 Freddy\n🥈 Mezi\n🥉 Jeesttin\n4. Novo")
 	if strings.Count(text, "Partida encerrada") != 1 || strings.Contains(text, "chegou ao fim") || strings.Contains(text, "🎯 Vez:") || strings.Contains(text, "👥") {
 		t.Fatal(text)
 	}
@@ -116,7 +116,7 @@ func TestGameplayActionEffectResultAndFinish(t *testing.T) {
 		text = plainGameplay(r.RenderActionConfirmation(22, uno.Action{Type: uno.PlayCard}, out))
 		requireGameplay(t, text, fmt.Sprintf("Mezi terminou em %dº lugar!", position))
 		if position > 3 {
-			requireGameplay(t, text, "🏅 Mezi terminou")
+			requireGameplay(t, text, fmt.Sprintf("%d. Mezi terminou", position))
 		}
 	}
 }

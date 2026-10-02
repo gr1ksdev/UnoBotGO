@@ -27,6 +27,11 @@ func (r *memoryRepo) SetInstalledBy(_ context.Context, _ int64, installerID int6
 	r.c.InstalledByUserID = &installerID
 	return r.c, nil
 }
+func (r *memoryRepo) ObserveGroupTitle(_ context.Context, _ int64, title string) error {
+	r.writes++
+	r.c.Title = title
+	return nil
+}
 
 func TestPermission(t *testing.T) {
 	installer := int64(7)
@@ -77,5 +82,12 @@ func TestRecordInstallation(t *testing.T) {
 	}
 	if c.InstalledByUserID == nil || *c.InstalledByUserID != 99 {
 		t.Fatalf("unexpected installed by: %v", c.InstalledByUserID)
+	}
+}
+
+func TestNewGroupsDefaultToUpdated(t *testing.T) {
+	c := Defaults(123)
+	if c.RankingSystem != Updated || c.DefaultGameMode != Classic || c.Revision != 1 {
+		t.Fatalf("incorrect new group defaults: %+v", c)
 	}
 }

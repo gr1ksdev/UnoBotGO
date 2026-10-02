@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"strings"
+
 	"github.com/malbs/UnoGoBot/internal/groups"
 )
 
@@ -112,4 +114,18 @@ func (s *Store) SetInstalledBy(ctx context.Context, chatID int64, installerID in
 		return groups.Config{}, operationError(ctx, "set installed by user")
 	}
 	return c, nil
+}
+
+func (s *Store) ObserveGroupTitle(ctx context.Context, chatID int64, title string) error {
+	title = strings.TrimSpace(title)
+	if chatID == 0 || title == "" {
+		return nil
+	}
+	_, err := s.pool.Exec(ctx, `INSERT INTO group_configs(chat_id, title) VALUES($1, $2)
+ ON CONFLICT(chat_id) DO UPDATE SET title=EXCLUDED.title, updated_at=now()
+ WHERE EXCLUDED.title <> '' AND group_configs.title IS DISTINCT FROM EXCLUDED.title`, chatID, title)
+	if err != nil {
+		return operationError(ctx, "observe group title")
+	}
+	return nil
 }
