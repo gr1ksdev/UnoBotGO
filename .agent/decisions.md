@@ -1,3 +1,33 @@
+# Decisão: permissão para cancelar e matar partidas (/cancelar e /kill) por criador e administradores
+
+## Data
+2026-10-02
+
+## Contexto
+Anteriormente, o comando `/cancelar` (e seu alias `/kill`) só podia ser executado pelo jogador que detinha a posse atual da liderança da sala (`OwnerID`). Se o criador da sala saísse do jogo ou se a sala ficasse ociosa, administradores do grupo não podiam cancelar a partida por `/cancelar`, dependendo do comando de recuperação forçada `/reset`. Solicitou-se que qualquer administrador do grupo e quem criou a sala pudessem cancelar/matar a partida.
+
+## Decisão tomada
+1. Flexibilização de `authorize` no Game Engine (`internal/game/service.go`):
+   - `uno.CancelGame` agora é autorizado se `actor.ChatAdmin == true || actor.PlayerID == entry.ownerID || actor.PlayerID == entry.creatorID`.
+   - `uno.SetRules` permanece restrito exclusivamente ao líder ativo do lobby (`entry.ownerID`).
+2. Fast-path de verificação via `GameSummary` (`internal/game/views.go`):
+   - O campo `CreatorID uno.PlayerID` foi adicionado a `GameSummary`, permitindo que o handler do Telegram verifique imediatamente em memória se o remetente é o criador da sala ou o líder atual sem precisar consultar a API do Telegram.
+3. Checagem de Administrador no Telegram (`internal/telegram/commands.go`):
+   - Se o remetente não for o criador nem o dono atual, `handleCancelar` consulta `lookupMembershipAPI(ctx, h.bot, chatID, userID)`.
+   - Se for administrador (`membership.Admin`), a ação é despachada com `actor.ChatAdmin = true` e confirmada com a mensagem `"🛑 <b>Partida cancelada por um administrador.</b>"`.
+   - Se não for administrador, responde `"⚠️ Apenas o responsável pela partida ou um administrador do grupo pode cancelá-la."`.
+4. Atualização da Ajuda e Testes:
+   - Em `RenderHelp` (`internal/telegram/renderer.go`), a descrição do comando `/cancelar` foi enriquecida com `(criador, responsável ou admin)`.
+   - Testes unitários completos cobrindo autorização do motor de jogo e do handler do Telegram.
+
+## Motivo
+Garantir controle operacional aos administradores do chat sem recorrer a resets agressivos, e garantir ao criador da sala a capacidade contínua de encerrar seu jogo mesmo após transferência de posse.
+
+## Impacto
+Administradores e criadores podem encerrar salas livremente usando `/cancelar` ou `/kill`.
+
+---
+
 # Decisão: exibição de nome e avatar na aba Perfil com conversão dinâmica para Anônimo
 
 ## Data

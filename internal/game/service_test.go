@@ -188,9 +188,46 @@ func TestOwnerTransferAndEmptyLobby(t *testing.T) {
 	if r.View.OwnerID != 2 || len(r.View.Players) != 2 || r.View.Players[0].Status != uno.Left {
 		t.Fatal("owner transfer changed participation")
 	}
-	denied(t, s, v.GameID, Actor{PlayerID: 1, ChatID: -2}, uno.Action{Type: uno.CancelGame, PlayerID: 1, Revision: 3}, ErrForbidden)
+	denied(t, s, v.GameID, Actor{PlayerID: 99, ChatID: -2}, uno.Action{Type: uno.CancelGame, PlayerID: 99, Revision: 3}, ErrForbidden)
 	act(t, s, v.GameID, Actor{PlayerID: 2, ChatID: -2}, uno.Action{Type: uno.CancelGame})
 	assertIndexes(t, s)
+}
+
+func TestCancelGamePermissions(t *testing.T) {
+	s := testService(t)
+	// Player 1 creates game; Player 2 joins
+	v := create(t, s, -100, 1, uno.BotRules())
+	join(t, s, v, 1)
+	join(t, s, v, 2)
+
+	// Creator leaves, transferring ownership to Player 2
+	r := act(t, s, v.GameID, Actor{PlayerID: 1, ChatID: -100}, uno.Action{Type: uno.LeaveGame})
+	if r.View.OwnerID != 2 {
+		t.Fatalf("expected owner to be 2, got %d", r.View.OwnerID)
+	}
+
+	// 1. Unrelated player without admin is denied
+	denied(t, s, v.GameID, Actor{PlayerID: 99, ChatID: -100, ChatAdmin: false}, uno.Action{Type: uno.CancelGame, PlayerID: 99, Revision: r.View.Revision}, ErrForbidden)
+
+	// 2. Creator (Player 1) CAN cancel even after leaving
+	// Test on a fresh game where creator cancels
+	v2 := create(t, s, -200, 10, uno.BotRules())
+	join(t, s, v2, 10)
+	join(t, s, v2, 20)
+	r2 := act(t, s, v2.GameID, Actor{PlayerID: 10, ChatID: -200}, uno.Action{Type: uno.LeaveGame})
+	if r2.View.OwnerID != 20 {
+		t.Fatalf("expected owner to be 20, got %d", r2.View.OwnerID)
+	}
+	outCreator := act(t, s, v2.GameID, Actor{PlayerID: 10, ChatID: -200}, uno.Action{Type: uno.CancelGame, Revision: r2.View.Revision})
+	if !outCreator.View.Closed || outCreator.View.CloseReason != Cancelled {
+		t.Fatal("expected creator to be able to cancel game after leaving")
+	}
+
+	// 3. Admin (Player 88 with ChatAdmin: true) CAN cancel
+	outAdmin := act(t, s, v.GameID, Actor{PlayerID: 88, ChatID: -100, ChatAdmin: true}, uno.Action{Type: uno.CancelGame, Revision: r.View.Revision})
+	if !outAdmin.View.Closed || outAdmin.View.CloseReason != Cancelled {
+		t.Fatal("expected group admin to be able to cancel game")
+	}
 }
 
 func TestMultipleGamesLookupsAndContext(t *testing.T) {

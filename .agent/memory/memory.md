@@ -1,3 +1,26 @@
+# Permissão para Cancelar e Matar Partidas (/cancelar e /kill) por Criador e Administradores — 2026-10-02 (somente dev; pronto para homologação)
+
+- Pedido do usuário aprovado no plano: `cancelar-partida-admin-criador_2026-10-02_20-05.md`.
+- **Motor de Jogo (`internal/game`)**:
+  - `internal/game/views.go`: adicionado `CreatorID uno.PlayerID` à struct `GameSummary` e preenchido a partir de `v.CreatorID` no método `summary()`.
+  - `internal/game/service.go`: `authorize` para `uno.CancelGame` flexibilizado para aceitar:
+    - O líder atual da sala (`actor.PlayerID == entry.ownerID`);
+    - O criador original da sala (`actor.PlayerID == entry.creatorID`);
+    - Qualquer administrador do grupo (`actor.ChatAdmin == true`).
+  - `uno.SetRules` permanece restrito exclusivamente ao líder do lobby (`entry.ownerID`).
+  - `internal/game/service_test.go`: criada suíte `TestCancelGamePermissions` cobrindo cancelamento por criador após saída, cancelamento por admin e negação com `ErrForbidden` para jogador comum não-admin.
+- **Comandos Telegram (`internal/telegram`)**:
+  - `internal/telegram/commands.go`: em `handleCancelar`:
+    - Validação em memória de criador e líder atual (caminho rápido sem chamadas externas).
+    - Para demais usuários, consulta de membresia no grupo via `lookupMembershipAPI`. Se for admin (`membership.Admin`), despacha como `ChatAdmin: true` e confirma com `"🛑 Partida cancelada por um administrador."`. Se não for admin, recusa com aviso explicativo.
+  - `internal/telegram/renderer.go`: `RenderHelp` atualizado para `/cancelar — Cancela a partida (criador, responsável ou admin). O comando /kill é um alias.`.
+  - `internal/telegram/commands_test.go`: adicionado teste `TestCancelGameByAdminAndCreator` validando cancelamento por admin, cancelamento pelo criador original via `/kill` e bloqueio de usuário não-admin.
+- **Validação e Qualidade**:
+  - `make check` aprovado (100% dos testes unitários Go e Vitest, testes de integração PostgreSQL, lints, typechecks e builds).
+- Regras de isolamento: zero commit, zero push, mantido no working tree da dev.
+
+---
+
 # Exibição de Nome e Avatar do Usuário na aba Perfil com Conversão para Anônimo — 2026-10-02 (somente dev; pronto para homologação)
 
 - Pedido do usuário aprovado no plano: `nome-avatar-perfil-anonimo_2026-10-02_13-41.md`.

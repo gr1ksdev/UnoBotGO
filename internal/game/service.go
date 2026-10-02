@@ -154,7 +154,11 @@ func authorize(entry *managedGame, actor Actor, kind uno.ActionType) error {
 		if actor.ChatID == 0 {
 			return ErrForbidden
 		}
-	case uno.CancelGame, uno.SetRules:
+	case uno.CancelGame:
+		if actor.ChatID == 0 || (!actor.ChatAdmin && actor.PlayerID != entry.ownerID && actor.PlayerID != entry.creatorID) {
+			return ErrForbidden
+		}
+	case uno.SetRules:
 		if actor.ChatID == 0 || actor.PlayerID != entry.ownerID {
 			return ErrForbidden
 		}

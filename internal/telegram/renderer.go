@@ -422,7 +422,7 @@ func (r *Renderer) RenderHelp(botUsername string) string {
 	sb.WriteString("<b>/estado</b> — Mostra o lobby ou o estado atual da partida.\n")
 	sb.WriteString("<b>/ranking</b> — Mostra o ranking mensal do grupo (ou seus rankings mensais se usado no privado).\n")
 	sb.WriteString("<b>/sair</b> — Sai da partida em andamento.\n")
-	sb.WriteString("<b>/cancelar</b> — Cancela a partida. O comando /kill é um alias.\n")
+	sb.WriteString("<b>/cancelar</b> — Cancela a partida (criador, responsável ou admin). O comando /kill é um alias.\n")
 	sb.WriteString("<b>/reset</b> — Recupera o grupo e limpa sua partida e histórico.")
 	sb.WriteString("</blockquote>\n\n")
 	sb.WriteString("Em grupos, todos os comandos precisam mencionar este bot. No privado, o sufixo é opcional.\n")

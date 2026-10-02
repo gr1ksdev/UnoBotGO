@@ -610,7 +610,23 @@ func (h *CommandHandler) handleCancelar(ctx context.Context, actorID uno.PlayerI
 		return
 	}
 
-	actor := game.Actor{PlayerID: actorID, ChatID: chatID}
+	isAdmin := false
+	isCreatorOrOwner := actorID == summary.OwnerID || actorID == summary.CreatorID
+	if !isCreatorOrOwner {
+		membership, err := lookupMembershipAPI(ctx, h.bot, int64(chatID), int64(actorID))
+		if err != nil {
+			h.logger.WarnContext(ctx, "failed to verify cancel permission", "chat_id", chatID, "user_id", actorID, "error", err.Error())
+			h.reply(ctx, int64(chatID), "❌ Não foi possível confirmar sua permissão no grupo. O criador ou responsável ainda pode cancelar.", nil)
+			return
+		}
+		isAdmin = membership.Admin
+		if !isAdmin {
+			h.reply(ctx, int64(chatID), "⚠️ Apenas o responsável pela partida ou um administrador do grupo pode cancelá-la.", nil)
+			return
+		}
+	}
+
+	actor := game.Actor{PlayerID: actorID, ChatID: chatID, ChatAdmin: isAdmin}
 	action := uno.Action{
 		Type:     uno.CancelGame,
 		PlayerID: actorID,
@@ -620,7 +636,7 @@ func (h *CommandHandler) handleCancelar(ctx context.Context, actorID uno.PlayerI
 	_, err = h.service.Apply(ctx, actor, summary.GameID, action)
 	if err != nil {
 		if errors.Is(err, game.ErrForbidden) {
-			h.reply(ctx, int64(chatID), "⚠️ Apenas o responsável pela partida pode cancelá-la.", nil)
+			h.reply(ctx, int64(chatID), "⚠️ Apenas o responsável pela partida ou um administrador do grupo pode cancelá-la.", nil)
 			return
 		}
 		h.reply(ctx, int64(chatID), "❌ Não foi possível cancelar a partida.", nil)
@@ -628,7 +644,11 @@ func (h *CommandHandler) handleCancelar(ctx context.Context, actorID uno.PlayerI
 	}
 
 	h.tokens.InvalidateGame(summary.GameID)
-	h.reply(ctx, int64(chatID), "🛑 <b>Partida cancelada pelo responsável.</b>", nil)
+	if isAdmin && !isCreatorOrOwner {
+		h.reply(ctx, int64(chatID), "🛑 <b>Partida cancelada por um administrador.</b>", nil)
+	} else {
+		h.reply(ctx, int64(chatID), "🛑 <b>Partida cancelada pelo responsável.</b>", nil)
+	}
 }
 
 func (h *CommandHandler) handleSair(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID) {
