@@ -18,6 +18,7 @@ type GlobalRow struct {
 	Activity  time.Time
 	Placement int
 	Position  int64
+	Anonymous bool
 }
 
 type PageKey struct {

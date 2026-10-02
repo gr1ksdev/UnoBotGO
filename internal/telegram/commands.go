@@ -19,6 +19,7 @@ type CommandHandler struct {
 	rankingService *ranking.Service
 	miniAppURL     string
 	knownUsers     groups.UserRepository
+	userPrivacy    UserPrivacyRepository
 	finalize       func(context.Context, game.Outcome) func()
 	groupConfigs   groups.Repository
 	groupsService  *groups.Service
@@ -144,6 +145,14 @@ func makeGroupConfigButtons(config groups.Config) *telego.InlineKeyboardMarkup {
 		legacyText = "✅ Legado"
 	}
 
+	publicText := "Público"
+	anonText := "Anônimo"
+	if config.RankingPrivate {
+		anonText = "✅ Anônimo"
+	} else {
+		publicText = "✅ Público"
+	}
+
 	return &telego.InlineKeyboardMarkup{
 		InlineKeyboard: [][]telego.InlineKeyboardButton{
 			{
@@ -164,6 +173,16 @@ func makeGroupConfigButtons(config groups.Config) *telego.InlineKeyboardMarkup {
 				{
 					Text:         updatedText,
 					CallbackData: fmt.Sprintf("cfg_rank_updated_%d", config.ChatID),
+				},
+			},
+			{
+				{
+					Text:         publicText,
+					CallbackData: fmt.Sprintf("cfg_privacy_public_%d", config.ChatID),
+				},
+				{
+					Text:         anonText,
+					CallbackData: fmt.Sprintf("cfg_privacy_anon_%d", config.ChatID),
 				},
 			},
 		},
@@ -241,6 +260,8 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 			h.reply(ctx, msg.Chat.ID, h.renderer.RenderHelp(h.botUsername), nil)
 		case "ranking":
 			h.handlePrivateRanking(ctx, msg.Chat.ID, int64(actorID))
+		case "privacidade":
+			h.handlePrivatePrivacy(ctx, msg.Chat.ID, int64(actorID))
 		default:
 			h.reply(ctx, msg.Chat.ID, "⚠️ Este comando só pode ser utilizado em grupos. Adicione o bot a um grupo para jogar!\n\nUse /help para mais instruções.", nil)
 		}
@@ -295,6 +316,8 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		h.HandleReset(ctx, msg, nil)
 	case "config":
 		h.handleConfig(ctx, msg)
+	case "privacidade":
+		h.handleGroupPrivacy(ctx, msg)
 	case "ajuda", "help":
 		h.reply(ctx, msg.Chat.ID, h.renderer.RenderHelp(h.botUsername), nil)
 	}
@@ -587,7 +610,23 @@ func (h *CommandHandler) handleCancelar(ctx context.Context, actorID uno.PlayerI
 		return
 	}
 
-	actor := game.Actor{PlayerID: actorID, ChatID: chatID}
+	isAdmin := false
+	isCreatorOrOwner := actorID == summary.OwnerID || actorID == summary.CreatorID
+	if !isCreatorOrOwner {
+		membership, err := lookupMembershipAPI(ctx, h.bot, int64(chatID), int64(actorID))
+		if err != nil {
+			h.logger.WarnContext(ctx, "failed to verify cancel permission", "chat_id", chatID, "user_id", actorID, "error", err.Error())
+			h.reply(ctx, int64(chatID), "❌ Não foi possível confirmar sua permissão no grupo. O criador ou responsável ainda pode cancelar.", nil)
+			return
+		}
+		isAdmin = membership.Admin
+		if !isAdmin {
+			h.reply(ctx, int64(chatID), "⚠️ Apenas o responsável pela partida ou um administrador do grupo pode cancelá-la.", nil)
+			return
+		}
+	}
+
+	actor := game.Actor{PlayerID: actorID, ChatID: chatID, ChatAdmin: isAdmin}
 	action := uno.Action{
 		Type:     uno.CancelGame,
 		PlayerID: actorID,
@@ -597,7 +636,7 @@ func (h *CommandHandler) handleCancelar(ctx context.Context, actorID uno.PlayerI
 	_, err = h.service.Apply(ctx, actor, summary.GameID, action)
 	if err != nil {
 		if errors.Is(err, game.ErrForbidden) {
-			h.reply(ctx, int64(chatID), "⚠️ Apenas o responsável pela partida pode cancelá-la.", nil)
+			h.reply(ctx, int64(chatID), "⚠️ Apenas o responsável pela partida ou um administrador do grupo pode cancelá-la.", nil)
 			return
 		}
 		h.reply(ctx, int64(chatID), "❌ Não foi possível cancelar a partida.", nil)
@@ -605,7 +644,11 @@ func (h *CommandHandler) handleCancelar(ctx context.Context, actorID uno.PlayerI
 	}
 
 	h.tokens.InvalidateGame(summary.GameID)
-	h.reply(ctx, int64(chatID), "🛑 <b>Partida cancelada pelo responsável.</b>", nil)
+	if isAdmin && !isCreatorOrOwner {
+		h.reply(ctx, int64(chatID), "🛑 <b>Partida cancelada por um administrador.</b>", nil)
+	} else {
+		h.reply(ctx, int64(chatID), "🛑 <b>Partida cancelada pelo responsável.</b>", nil)
+	}
 }
 
 func (h *CommandHandler) handleSair(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID) {
@@ -816,4 +859,50 @@ func (h *CommandHandler) HandleMyChatMember(ctx context.Context, update *telego.
 	text := h.renderer.RenderGroupWelcome(config)
 	buttons := makeGroupWelcomeButtons(chatID)
 	h.reply(ctx, chatID, text, buttons)
+}
+
+func (h *CommandHandler) handlePrivatePrivacy(ctx context.Context, chatID int64, actorID int64) {
+	if h.userPrivacy == nil {
+		h.reply(ctx, chatID, "❌ Configuração de privacidade não disponível no momento.", nil)
+		return
+	}
+	private, err := h.userPrivacy.ToggleUserRankingPrivacy(ctx, actorID)
+	if err != nil {
+		h.logger.WarnContext(ctx, "failed to toggle user ranking privacy", "user_id", actorID, "error", err)
+		h.reply(ctx, chatID, "❌ Não foi possível alterar sua privacidade no momento.", nil)
+		return
+	}
+	h.reply(ctx, chatID, h.renderer.RenderUserPrivacy(private), nil)
+}
+
+func (h *CommandHandler) handleGroupPrivacy(ctx context.Context, msg *telego.Message) {
+	if msg == nil || msg.From == nil {
+		return
+	}
+	chatID := msg.Chat.ID
+	actorID := msg.From.ID
+
+	svc := h.getGroupsService()
+	if svc == nil {
+		h.reply(ctx, chatID, "❌ Configuração não disponível no momento.", nil)
+		return
+	}
+
+	_, allowed, err := svc.CanConfigureUser(ctx, chatID, actorID)
+	if err != nil && !errors.Is(err, groups.ErrForbidden) {
+		h.logger.WarnContext(ctx, "failed to check privacy permissions", "chat_id", chatID, "user_id", actorID, "error", err)
+	}
+
+	if !allowed {
+		h.reply(ctx, chatID, "⚠️ Somente administradores ou quem adicionou o bot pode alterar esta configuração.", nil)
+		return
+	}
+
+	updated, err := svc.ToggleRankingPrivate(ctx, chatID, actorID)
+	if err != nil {
+		h.logger.WarnContext(ctx, "failed to toggle group ranking privacy", "chat_id", chatID, "user_id", actorID, "error", err)
+		h.reply(ctx, chatID, "❌ Não foi possível alterar a privacidade do grupo no momento.", nil)
+		return
+	}
+	h.reply(ctx, chatID, h.renderer.RenderGroupPrivacy(updated.RankingPrivate), nil)
 }

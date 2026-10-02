@@ -26,6 +26,7 @@ export function RankingsPage() {
  const detail = !!groupRef
  const navigate = useNavigate()
  const back = useCallback(() => navigate(`/?system=${system}&tab=groups`), [navigate, system])
+ const hasNativeBack = typeof window !== 'undefined' && Boolean(window.Telegram?.WebApp?.BackButton)
  useTelegram(detail ? back : undefined, { headerColor: detail ? '#99121f' : '#073b82' })
  const query = useRanking(detail ? `groups/${encodeURIComponent(groupRef)}` : tab, system)
  const { fetchNextPage } = query
@@ -37,9 +38,13 @@ export function RankingsPage() {
  return <main className={`app-shell ${detail ? 'detail-view' : 'global-view'}`}>
    <header className={`ranking-header ${detail ? 'detail-header' : ''}`}>
      <div className="title-bar">
-       <button className="back-button" aria-label={detail ? 'Voltar ao Ranking Global' : 'Fechar Ranking Global'} onClick={detail ? back : () => window.Telegram?.WebApp.close?.()}><Arrow /></button>
+       <div className="title-bar-left">
+         {detail && !hasNativeBack && <button className="back-button" aria-label="Voltar ao Ranking Global" onClick={back}><Arrow /></button>}
+       </div>
        <h1>{detail ? 'Ranking do grupo' : <>Ranking Global{month && ` · ${month}`}</>}</h1>
-       {!detail && <span className="calendar-icon"><Calendar /></span>}
+       <div className="title-bar-right">
+         {!detail && <span className="calendar-icon"><Calendar /></span>}
+       </div>
      </div>
      {!detail && <Segmented label="Sistema de ranking" className="system-switch" value={system} options={[{ value: 'updated', label: 'Atualizado' }, { value: 'legacy', label: 'Legado' }]} onChange={value => setParams({ system: value, tab })} />}
      {detail && group && <section className="group-hero" aria-label="Resumo do grupo"><Avatar item={group} large /><div className="group-summary"><h2><ScrollingName name={group.name} /></h2><p className="hero-id">{group.masked_id}</p><Score item={group} system={system} /></div><HeroCards /></section>}

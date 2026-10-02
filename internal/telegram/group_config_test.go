@@ -29,6 +29,12 @@ func (r *configRepo) SetRankingSystem(context.Context, int64, groups.RankingSyst
 func (r *configRepo) SetInstalledBy(context.Context, int64, int64) (groups.Config, error) {
 	panic("unexpected SetInstalledBy call")
 }
+func (r *configRepo) SetRankingPrivate(context.Context, int64, bool) (groups.Config, error) {
+	panic("unexpected SetRankingPrivate call")
+}
+func (r *configRepo) ToggleRankingPrivate(context.Context, int64) (groups.Config, error) {
+	panic("unexpected ToggleRankingPrivate call")
+}
 func (r *configRepo) ObserveGroupTitle(context.Context, int64, string) error {
 	return nil
 }

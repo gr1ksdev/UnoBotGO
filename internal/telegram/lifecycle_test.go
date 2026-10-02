@@ -80,7 +80,7 @@ func readyToFinish(t *testing.T, svc *game.Service, chat game.ChatID, rules uno.
 			for _, cv := range pv.Hand {
 				if cv.Playable {
 					action.Type, action.CardID = uno.PlayCard, cv.Card.ID
-					if len(pv.Hand) == 1 && (cv.Card.Rank < uno.Wild || !resolveWild) {
+					if len(pv.Hand) == 1 && (cv.Card.Rank < uno.Wild || cv.Card.Rank == uno.SwapHands || !resolveWild) {
 						return view, action
 					}
 					break
@@ -98,6 +98,9 @@ func readyToFinish(t *testing.T, svc *game.Service, chat game.ChatID, rules uno.
 			t.Fatal(err)
 		}
 		view = out.View
+		if view.Closed || view.Phase == uno.Finished {
+			t.Fatalf("game closed unexpectedly during simulation at step %d", step)
+		}
 	}
 	t.Fatal("game did not reach a final action")
 	return game.PublicGameView{}, uno.Action{}

@@ -1,8 +1,18 @@
 import { useEffect, useRef } from 'react'
+export interface TelegramUser {
+ id?: number
+ first_name?: string
+ last_name?: string
+ username?: string
+ photo_url?: string
+}
 
 interface Insets { top: number; bottom: number; left: number; right: number }
 interface TelegramApp {
  initData: string
+ initDataUnsafe?: {
+  user?: TelegramUser
+ }
  ready(): void
  expand(): void
  close?(): void

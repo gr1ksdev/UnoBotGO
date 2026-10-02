@@ -32,6 +32,16 @@ func (r *memoryRepo) ObserveGroupTitle(_ context.Context, _ int64, title string)
 	r.c.Title = title
 	return nil
 }
+func (r *memoryRepo) SetRankingPrivate(_ context.Context, _ int64, private bool) (Config, error) {
+	r.writes++
+	r.c.RankingPrivate = private
+	return r.c, nil
+}
+func (r *memoryRepo) ToggleRankingPrivate(_ context.Context, _ int64) (Config, error) {
+	r.writes++
+	r.c.RankingPrivate = !r.c.RankingPrivate
+	return r.c, nil
+}
 
 func TestPermission(t *testing.T) {
 	installer := int64(7)
@@ -87,7 +97,46 @@ func TestRecordInstallation(t *testing.T) {
 
 func TestNewGroupsDefaultToUpdated(t *testing.T) {
 	c := Defaults(123)
-	if c.RankingSystem != Updated || c.DefaultGameMode != Classic || c.Revision != 1 {
+	if c.RankingSystem != Updated || c.DefaultGameMode != Classic || c.Revision != 1 || c.RankingPrivate != false {
 		t.Fatalf("incorrect new group defaults: %+v", c)
+	}
+}
+
+func TestRankingPrivateTogglePermissions(t *testing.T) {
+	installer := int64(7)
+	r := &memoryRepo{c: Defaults(42)}
+	r.c.InstalledByUserID = &installer
+	s := Service{Repository: r, LookupMembership: func(_ context.Context, _, userID int64) (Membership, error) {
+		if userID == 8 {
+			return Membership{Admin: true, Member: true}, nil
+		}
+		if userID == 7 {
+			return Membership{Member: true}, nil
+		}
+		return Membership{Member: true}, nil
+	}}
+
+	// Ordinary member cannot toggle
+	_, err := s.ToggleRankingPrivate(t.Context(), 42, 999)
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("expected ErrForbidden for ordinary member, got %v", err)
+	}
+
+	// Admin can toggle
+	cfg, err := s.ToggleRankingPrivate(t.Context(), 42, 8)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.RankingPrivate {
+		t.Fatalf("expected RankingPrivate true, got false")
+	}
+
+	// Installer member can toggle
+	cfg, err = s.ToggleRankingPrivate(t.Context(), 42, 7)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.RankingPrivate {
+		t.Fatalf("expected RankingPrivate false, got true")
 	}
 }

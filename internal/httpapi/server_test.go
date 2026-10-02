@@ -207,3 +207,170 @@ func TestAPI_RateLimiting(t *testing.T) {
 		t.Fatalf("expected 429 with Retry-After: 60, got %d", w.Code)
 	}
 }
+
+type mockPrivacyStore struct {
+	userPrivacy map[int64]bool
+	groupPrivacy map[int64]bool
+}
+
+func (m *mockPrivacyStore) GetUserRankingPrivacy(_ context.Context, userID int64) (bool, error) {
+	return m.userPrivacy[userID], nil
+}
+
+func (m *mockPrivacyStore) SetUserRankingPrivacy(_ context.Context, userID int64, private bool) error {
+	m.userPrivacy[userID] = private
+	return nil
+}
+
+func (m *mockPrivacyStore) IsEntityAnonymous(_ context.Context, kind string, id int64) (bool, error) {
+	if kind == "group" {
+		return m.groupPrivacy[id], nil
+	}
+	return m.userPrivacy[id], nil
+}
+
+func TestAPI_PrivacyEndpoints(t *testing.T) {
+	now := time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC)
+	repo := &globalRepo{page: ranking.GlobalPage{}}
+	refs, _ := NewReferences(make([]byte, 32))
+	privStore := &mockPrivacyStore{
+		userPrivacy:  map[int64]bool{12345: false},
+		groupPrivacy: map[int64]bool{},
+	}
+	a := &API{
+		Rankings:    &ranking.GlobalService{Repository: repo, Now: func() time.Time { return now }},
+		References:  refs,
+		Privacy:     privStore,
+		UserPrivacy: privStore,
+		Token:       "token",
+		MaxAge:      time.Hour,
+		Now:         func() time.Time { return now },
+	}
+	h := a.Handler()
+
+	auth := "tma " + signed("token", now, map[string]string{"id": "12345"})
+
+	// 1. GET /api/v1/me/privacy
+	r := httptest.NewRequest("GET", "/api/v1/me/privacy", nil)
+	r.Header.Set("Authorization", auth)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var res struct {
+		Anonymous bool `json:"anonymous"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Anonymous {
+		t.Fatalf("expected anonymous false, got true")
+	}
+
+	// 2. PUT /api/v1/me/privacy { "anonymous": true }
+	r = httptest.NewRequest("PUT", "/api/v1/me/privacy", strings.NewReader(`{"anonymous":true}`))
+	r.Header.Set("Authorization", auth)
+	r.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !privStore.userPrivacy[12345] {
+		t.Fatalf("expected user privacy to be updated to true in store")
+	}
+
+	// 3. GET /api/v1/me/privacy again -> now true
+	r = httptest.NewRequest("GET", "/api/v1/me/privacy", nil)
+	r.Header.Set("Authorization", auth)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if !res.Anonymous {
+		t.Fatalf("expected anonymous true, got false")
+	}
+}
+
+func TestAPI_AnonymousProjectionAndAvatarShield(t *testing.T) {
+	now := time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC)
+	repo := &globalRepo{
+		page: ranking.GlobalPage{
+			Rows: []ranking.GlobalRow{
+				{ID: 101, Name: "Secret User", Score: 50, Position: 1, Anonymous: true},
+				{ID: 102, Name: "Public User", Score: 40, Position: 2, Anonymous: false},
+			},
+		},
+	}
+	refs, _ := NewReferences(make([]byte, 32))
+	privStore := &mockPrivacyStore{
+		userPrivacy:  map[int64]bool{101: true, 102: false},
+		groupPrivacy: map[int64]bool{},
+	}
+	mediaCalls := 0
+	media := &mockMedia{
+		getFn: func(kind string, id int64) ([]byte, string, bool) {
+			mediaCalls++
+			return []byte("avatar-bytes"), "image/jpeg", false
+		},
+	}
+	a := &API{
+		Rankings:    &ranking.GlobalService{Repository: repo, Now: func() time.Time { return now }},
+		References:  refs,
+		Media:       media,
+		Privacy:     privStore,
+		UserPrivacy: privStore,
+		Token:       "token",
+		MaxAge:      time.Hour,
+		Now:         func() time.Time { return now },
+	}
+	h := a.Handler()
+
+	auth := "tma " + signed("token", now, map[string]string{"id": "999"})
+	r := httptest.NewRequest("GET", "/api/v1/rankings/players", nil)
+	r.Header.Set("Authorization", auth)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var out response
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(out.Items))
+	}
+
+	anonItem := out.Items[0]
+	if anonItem.Name != "Anônimo" || anonItem.MaskedID != "" || anonItem.Avatar != "" || !anonItem.Anonymous {
+		t.Fatalf("anonymous item not properly masked: %+v", anonItem)
+	}
+
+	pubItem := out.Items[1]
+	if pubItem.Name != "Public User" || pubItem.MaskedID == "" || pubItem.Avatar == "" || pubItem.Anonymous {
+		t.Fatalf("public item incorrectly masked: %+v", pubItem)
+	}
+
+	// Try to directly request avatar for anonymous user (simulating URL tampering/guessing)
+	anonRef, _ := refs.seal(reference{
+		Kind:    "user",
+		ID:      101,
+		System:  "updated",
+		Month:   "2026-09-01",
+		Expires: now.Add(time.Hour).Unix(),
+	})
+	r = httptest.NewRequest("GET", "/api/v1/media/"+anonRef, nil)
+	r.Header.Set("Authorization", auth)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 204 {
+		t.Fatalf("expected 204 for shielded anonymous avatar, got %d", w.Code)
+	}
+	if mediaCalls != 0 {
+		t.Fatalf("media.Get should NOT have been called for anonymous entity, calls: %d", mediaCalls)
+	}
+}

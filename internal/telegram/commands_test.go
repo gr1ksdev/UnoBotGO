@@ -770,3 +770,87 @@ func TestCommandHandler_EntrarAlreadyFinished(t *testing.T) {
 		t.Fatalf("expected already finished message, got: %s", lastMsg)
 	}
 }
+
+func TestCancelGameByAdminAndCreator(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, err := game.NewService()
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	renderer := NewRenderer(NewUserCache(100))
+	tokens := NewTokenStore(1000, 100, time.Now, nil)
+	cmdHandler := NewCommandHandler(mockAPI, svc, renderer, tokens, "unobot", nil)
+	ctx := context.Background()
+
+	// Setup mock admin: user 50 is administrator
+	mockAPI.ChatMembers[50] = &telego.ChatMemberAdministrator{
+		Status: telego.MemberStatusAdministrator,
+		User:   telego.User{ID: 50, FirstName: "AdminUser"},
+	}
+
+	// Case 1: Admin can cancel game created by someone else
+	chatID1 := int64(-3001)
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID1, Type: "supergroup", Title: "UNO Admin Test"},
+		From: &telego.User{ID: 10, FirstName: "CreatorAlice"},
+		Text: "/novo@unobot",
+	})
+
+	// Non-admin, non-creator attempts to cancel -> forbidden
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID1, Type: "supergroup", Title: "UNO Admin Test"},
+		From: &telego.User{ID: 20, FirstName: "NormalBob"},
+		Text: "/cancelar@unobot",
+	})
+	lastMsg := mockAPI.LastSentMessage()
+	if !strings.Contains(lastMsg, "Apenas o responsável pela partida ou um administrador") {
+		t.Fatalf("expected forbidden message for normal user, got: %s", lastMsg)
+	}
+
+	// Admin cancels via /cancelar
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID1, Type: "supergroup", Title: "UNO Admin Test"},
+		From: &telego.User{ID: 50, FirstName: "AdminUser"},
+		Text: "/cancelar@unobot",
+	})
+	lastMsg = mockAPI.LastSentMessage()
+	if !strings.Contains(lastMsg, "Partida cancelada por um administrador") {
+		t.Fatalf("expected admin cancel message, got: %s", lastMsg)
+	}
+
+	// Case 2: Creator who left game can still cancel via /kill alias
+	chatID2 := int64(-3002)
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID2, Type: "supergroup", Title: "UNO Creator Test"},
+		From: &telego.User{ID: 10, FirstName: "CreatorAlice"},
+		Text: "/novo@unobot",
+	})
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID2, Type: "supergroup", Title: "UNO Creator Test"},
+		From: &telego.User{ID: 10, FirstName: "CreatorAlice"},
+		Text: "/entrar@unobot",
+	})
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID2, Type: "supergroup", Title: "UNO Creator Test"},
+		From: &telego.User{ID: 20, FirstName: "PlayerBob"},
+		Text: "/entrar@unobot",
+	})
+	// Creator leaves, transferring owner to Bob
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID2, Type: "supergroup", Title: "UNO Creator Test"},
+		From: &telego.User{ID: 10, FirstName: "CreatorAlice"},
+		Text: "/sair@unobot",
+	})
+
+	// Creator uses /kill -> succeeds
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID2, Type: "supergroup", Title: "UNO Creator Test"},
+		From: &telego.User{ID: 10, FirstName: "CreatorAlice"},
+		Text: "/kill@unobot",
+	})
+	lastMsg = mockAPI.LastSentMessage()
+	if !strings.Contains(lastMsg, "Partida cancelada pelo responsável") {
+		t.Fatalf("expected creator cancel message, got: %s", lastMsg)
+	}
+}

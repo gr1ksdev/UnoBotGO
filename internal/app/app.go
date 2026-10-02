@@ -95,7 +95,7 @@ func Run(ctx context.Context, cfg *config.Config, dev bool, logger *slog.Logger)
 		return err
 	}
 	photos := media.New(ctx, telegram.AvatarSource{Bot: client})
-	api := &httpapi.API{Rankings: &ranking.GlobalService{Repository: store}, References: refs, Media: photos, Token: cfg.Token, MaxAge: config.InitDataMaxAge}
+	api := &httpapi.API{Rankings: &ranking.GlobalService{Repository: store}, References: refs, Media: photos, Privacy: store, UserPrivacy: store, Token: cfg.Token, MaxAge: config.InitDataMaxAge}
 	mux := http.NewServeMux()
 	mux.Handle("/api/", api.Handler())
 	mux.Handle("/", httpapi.Static(web.Files()))
@@ -129,6 +129,7 @@ func Run(ctx context.Context, cfg *config.Config, dev bool, logger *slog.Logger)
 	bot := telegram.New(client, svc, telegram.NewTokenStore(config.InlineTokenLimit, config.InlineTokenUserLimit, time.Now, nil), telegram.NewRenderer(nil), config.InlineTokenTTL, logger)
 	bot.SetGroupConfigs(store)
 	bot.SetKnownUsers(store)
+	bot.SetUserPrivacy(store)
 	bot.SetResultRepository(store)
 	bot.SetRankingService(&ranking.Service{Repository: store})
 	bot.SetTurnTimeout(cfg.TurnTimeout)

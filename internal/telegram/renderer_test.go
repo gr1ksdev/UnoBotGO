@@ -365,66 +365,102 @@ func TestRenderer_RenderGroupConfig(t *testing.T) {
 	r := NewRenderer(nil)
 
 	tests := []struct {
-		name              string
-		cfg               groups.Config
-		wantModeHeader    string
-		wantRankHeader    string
-		wantModeBlock     string
-		wantRankBlock     string
-		unwantModeSummary string
-		unwantRankSummary string
+		name                 string
+		cfg                  groups.Config
+		wantModeHeader       string
+		wantRankHeader       string
+		wantPrivacyHeader    string
+		wantModeBlock        string
+		wantRankBlock        string
+		wantPrivacyBlock     string
+		unwantModeSummary    string
+		unwantRankSummary    string
+		unwantPrivacySummary string
 	}{
 		{
-			name: "Classic + Legacy",
+			name: "Classic + Legacy (Public)",
 			cfg: groups.Config{
 				DefaultGameMode: groups.Classic,
 				RankingSystem:   groups.Legacy,
+				RankingPrivate:  false,
 			},
-			wantModeHeader:    "<b>Modo padrão de partida:</b> Clássico",
-			wantRankHeader:    "<b>Sistema de ranking:</b> Legado",
-			wantModeBlock:     "<blockquote><b>🎮 Clássico</b>\nRegras padrão do bot, sem as combinações extras do modo Caseiro.</blockquote>",
-			wantRankBlock:     "<blockquote><b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.</blockquote>",
-			unwantModeSummary: "🎮 Caseiro",
-			unwantRankSummary: "🏆 Atualizado",
+			wantModeHeader:       "<b>Modo padrão de partida:</b> Clássico",
+			wantRankHeader:       "<b>Sistema de ranking:</b> Legado",
+			wantPrivacyHeader:    "<b>Privacidade no ranking:</b> Público",
+			wantModeBlock:        "<blockquote><b>🎮 Clássico</b>\nRegras padrão do bot, sem as combinações extras do modo Caseiro.</blockquote>",
+			wantRankBlock:        "<blockquote><b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.</blockquote>",
+			wantPrivacyBlock:     "<blockquote><b>🌐 Público</b>\nO grupo e seus membros aparecem normalmente com nome e foto no Ranking Global.</blockquote>",
+			unwantModeSummary:    "🎮 Caseiro",
+			unwantRankSummary:    "🏆 Atualizado",
+			unwantPrivacySummary: "🔒 Anônimo",
 		},
 		{
-			name: "Classic + Updated",
+			name: "Classic + Updated (Public)",
 			cfg: groups.Config{
 				DefaultGameMode: groups.Classic,
 				RankingSystem:   groups.Updated,
+				RankingPrivate:  false,
 			},
-			wantModeHeader:    "<b>Modo padrão de partida:</b> Clássico",
-			wantRankHeader:    "<b>Sistema de ranking:</b> Atualizado",
-			wantModeBlock:     "<blockquote><b>🎮 Clássico</b>\nRegras padrão do bot, sem as combinações extras do modo Caseiro.</blockquote>",
-			wantRankBlock:     "<blockquote><b>🏆 Atualizado</b>\nA pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe.</blockquote>",
-			unwantModeSummary: "🎮 Caseiro",
-			unwantRankSummary: "🏆 Legado",
+			wantModeHeader:       "<b>Modo padrão de partida:</b> Clássico",
+			wantRankHeader:       "<b>Sistema de ranking:</b> Atualizado",
+			wantPrivacyHeader:    "<b>Privacidade no ranking:</b> Público",
+			wantModeBlock:        "<blockquote><b>🎮 Clássico</b>\nRegras padrão do bot, sem as combinações extras do modo Caseiro.</blockquote>",
+			wantRankBlock:        "<blockquote><b>🏆 Atualizado</b>\nA pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe.</blockquote>",
+			wantPrivacyBlock:     "<blockquote><b>🌐 Público</b>\nO grupo e seus membros aparecem normalmente com nome e foto no Ranking Global.</blockquote>",
+			unwantModeSummary:    "🎮 Caseiro",
+			unwantRankSummary:    "🏆 Legado",
+			unwantPrivacySummary: "🔒 Anônimo",
 		},
 		{
-			name: "Caseiro + Legacy",
+			name: "Caseiro + Legacy (Public)",
 			cfg: groups.Config{
 				DefaultGameMode: groups.Caseiro,
 				RankingSystem:   groups.Legacy,
+				RankingPrivate:  false,
 			},
-			wantModeHeader:    "<b>Modo padrão de partida:</b> Caseiro",
-			wantRankHeader:    "<b>Sistema de ranking:</b> Legado",
-			wantModeBlock:     "<blockquote><b>🎮 Caseiro</b>\nPermite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4.</blockquote>",
-			wantRankBlock:     "<blockquote><b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.</blockquote>",
-			unwantModeSummary: "🎮 Clássico",
-			unwantRankSummary: "🏆 Atualizado",
+			wantModeHeader:       "<b>Modo padrão de partida:</b> Caseiro",
+			wantRankHeader:       "<b>Sistema de ranking:</b> Legado",
+			wantPrivacyHeader:    "<b>Privacidade no ranking:</b> Público",
+			wantModeBlock:        "<blockquote><b>🎮 Caseiro</b>\nPermite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4.</blockquote>",
+			wantRankBlock:        "<blockquote><b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.</blockquote>",
+			wantPrivacyBlock:     "<blockquote><b>🌐 Público</b>\nO grupo e seus membros aparecem normalmente com nome e foto no Ranking Global.</blockquote>",
+			unwantModeSummary:    "🎮 Clássico",
+			unwantRankSummary:    "🏆 Atualizado",
+			unwantPrivacySummary: "🔒 Anônimo",
 		},
 		{
-			name: "Caseiro + Updated",
+			name: "Caseiro + Updated (Public)",
 			cfg: groups.Config{
 				DefaultGameMode: groups.Caseiro,
 				RankingSystem:   groups.Updated,
+				RankingPrivate:  false,
 			},
-			wantModeHeader:    "<b>Modo padrão de partida:</b> Caseiro",
-			wantRankHeader:    "<b>Sistema de ranking:</b> Atualizado",
-			wantModeBlock:     "<blockquote><b>🎮 Caseiro</b>\nPermite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4.</blockquote>",
-			wantRankBlock:     "<blockquote><b>🏆 Atualizado</b>\nA pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe.</blockquote>",
-			unwantModeSummary: "🎮 Clássico",
-			unwantRankSummary: "🏆 Legado",
+			wantModeHeader:       "<b>Modo padrão de partida:</b> Caseiro",
+			wantRankHeader:       "<b>Sistema de ranking:</b> Atualizado",
+			wantPrivacyHeader:    "<b>Privacidade no ranking:</b> Público",
+			wantModeBlock:        "<blockquote><b>🎮 Caseiro</b>\nPermite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4.</blockquote>",
+			wantRankBlock:        "<blockquote><b>🏆 Atualizado</b>\nA pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe.</blockquote>",
+			wantPrivacyBlock:     "<blockquote><b>🌐 Público</b>\nO grupo e seus membros aparecem normalmente com nome e foto no Ranking Global.</blockquote>",
+			unwantModeSummary:    "🎮 Clássico",
+			unwantRankSummary:    "🏆 Legado",
+			unwantPrivacySummary: "🔒 Anônimo",
+		},
+		{
+			name: "Caseiro + Updated (Private)",
+			cfg: groups.Config{
+				DefaultGameMode: groups.Caseiro,
+				RankingSystem:   groups.Updated,
+				RankingPrivate:  true,
+			},
+			wantModeHeader:       "<b>Modo padrão de partida:</b> Caseiro",
+			wantRankHeader:       "<b>Sistema de ranking:</b> Atualizado",
+			wantPrivacyHeader:    "<b>Privacidade no ranking:</b> Anônimo",
+			wantModeBlock:        "<blockquote><b>🎮 Caseiro</b>\nPermite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4.</blockquote>",
+			wantRankBlock:        "<blockquote><b>🏆 Atualizado</b>\nA pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe.</blockquote>",
+			wantPrivacyBlock:     "<blockquote><b>🔒 Anônimo</b>\nEste grupo aparece como Grupo anônimo no Ranking Global, ocultando nome, foto e membros.</blockquote>",
+			unwantModeSummary:    "🎮 Clássico",
+			unwantRankSummary:    "🏆 Legado",
+			unwantPrivacySummary: "🌐 Público",
 		},
 	}
 
@@ -441,11 +477,17 @@ func TestRenderer_RenderGroupConfig(t *testing.T) {
 			if !strings.Contains(got, tc.wantRankHeader) {
 				t.Fatalf("missing rank header %q in: %s", tc.wantRankHeader, got)
 			}
+			if !strings.Contains(got, tc.wantPrivacyHeader) {
+				t.Fatalf("missing privacy header %q in: %s", tc.wantPrivacyHeader, got)
+			}
 			if !strings.Contains(got, tc.wantModeBlock) {
 				t.Fatalf("missing mode blockquote %q in: %s", tc.wantModeBlock, got)
 			}
 			if !strings.Contains(got, tc.wantRankBlock) {
 				t.Fatalf("missing rank blockquote %q in: %s", tc.wantRankBlock, got)
+			}
+			if !strings.Contains(got, tc.wantPrivacyBlock) {
+				t.Fatalf("missing privacy blockquote %q in: %s", tc.wantPrivacyBlock, got)
 			}
 			if strings.Contains(got, tc.unwantModeSummary) {
 				t.Fatalf("unexpected mode summary %q in: %s", tc.unwantModeSummary, got)
@@ -453,19 +495,22 @@ func TestRenderer_RenderGroupConfig(t *testing.T) {
 			if strings.Contains(got, tc.unwantRankSummary) {
 				t.Fatalf("unexpected rank summary %q in: %s", tc.unwantRankSummary, got)
 			}
-
-			// Exactly 2 blockquotes
-			if count := strings.Count(got, "<blockquote>"); count != 2 {
-				t.Fatalf("expected 2 <blockquote> tags, got %d in: %s", count, got)
-			}
-			if count := strings.Count(got, "</blockquote>"); count != 2 {
-				t.Fatalf("expected 2 </blockquote> tags, got %d in: %s", count, got)
+			if strings.Contains(got, tc.unwantPrivacySummary) {
+				t.Fatalf("unexpected privacy summary %q in: %s", tc.unwantPrivacySummary, got)
 			}
 
-			// Separator on its own line between the blockquotes
+			// Exactly 3 blockquotes
+			if count := strings.Count(got, "<blockquote>"); count != 3 {
+				t.Fatalf("expected 3 <blockquote> tags, got %d in: %s", count, got)
+			}
+			if count := strings.Count(got, "</blockquote>"); count != 3 {
+				t.Fatalf("expected 3 </blockquote> tags, got %d in: %s", count, got)
+			}
+
+			// Separators between the 3 blockquotes
 			const separator = "\n\n────────────\n\n"
-			if !strings.Contains(got, separator) {
-				t.Fatalf("missing separator %q in: %s", separator, got)
+			if count := strings.Count(got, separator); count != 2 {
+				t.Fatalf("expected 2 separators %q, got %d in: %s", separator, count, got)
 			}
 
 			sepIdx := strings.Index(got, "────────────")

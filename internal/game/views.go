@@ -66,13 +66,14 @@ type PlayerGameView struct {
 
 // GameSummary is an index projection published atomically with membership.
 type GameSummary struct {
-	GameID   uno.GameID
-	ChatID   ChatID
-	ChatName string
-	OwnerID  uno.PlayerID
-	Locked   bool
-	Revision uint64
-	Phase    uno.Phase
+	GameID    uno.GameID
+	ChatID    ChatID
+	ChatName  string
+	CreatorID uno.PlayerID
+	OwnerID   uno.PlayerID
+	Locked    bool
+	Revision  uint64
+	Phase     uno.Phase
 }
 
 func (v PublicGameView) clone() PublicGameView {
@@ -87,7 +88,7 @@ func (v PublicGameView) clone() PublicGameView {
 }
 
 func (v PublicGameView) summary() GameSummary {
-	return GameSummary{GameID: v.GameID, ChatID: v.ChatID, ChatName: v.ChatName, OwnerID: v.OwnerID, Locked: v.Locked, Revision: v.Revision, Phase: v.Phase}
+	return GameSummary{GameID: v.GameID, ChatID: v.ChatID, ChatName: v.ChatName, CreatorID: v.CreatorID, OwnerID: v.OwnerID, Locked: v.Locked, Revision: v.Revision, Phase: v.Phase}
 }
 
 func publicView(entry *managedGame, state uno.State) PublicGameView {
