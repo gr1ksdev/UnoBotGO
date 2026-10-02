@@ -1,3 +1,25 @@
+# Correção da Falha de CI no Pacote internal/telegram (readyToFinish / Caseiro) — 2026-10-02
+
+- Pedido do usuário aprovado no plano: `corrigir-falha-lifecycle-test-ready-to-finish_2026-10-02_20-34.md`.
+- **Causa Raiz da Falha no CI**:
+  - No CI do GitHub Actions (`dev-ci`), o passo `go test -tags debugcards ./...` falhou no pacote `github.com/malbs/UnoGoBot/internal/telegram`.
+  - A falha ocorria de forma intermitente no teste `TestFinalInlineActionAcrossTransports` (subteste `webhook/caseiro` ou `polling/caseiro`), reportada em `lifecycle_test.go:145` como `invalid application argument`.
+  - O helper `readyToFinish` simulava rodadas para retornar a última ação de jogo.
+  - Sob as regras `caseiro` (`uno.CaseiroRules()`), a carta `SwapHands` (Rank 15) está presente e pode ser jogada como última carta mesmo com `NoWildFinish` ativado (`card.Rank != SwapHands` em `uno/game.go:450`).
+  - O helper verificava `if len(pv.Hand) == 1 && (cv.Card.Rank < uno.Wild || !resolveWild)`. Como Rank 15 >= 13 (`uno.Wild`), `readyToFinish` não retornava a ação e executava `svc.Apply` internamente.
+  - Como `SwapHands` com 0 cartas na mão encerra imediatamente o jogo no motor do UNO sem passar por escolhas, a partida era fechada. Na iteração seguinte do loop de simulação, `view.CurrentTurn` tornava-se 0, e a chamada `svc.PlayerView(..., Actor{PlayerID: 0})` falhava com `ErrInvalidArgument` ("invalid application argument").
+- **Correção**:
+  - Atualizada a condição em `lifecycle_test.go` para:
+    `if len(pv.Hand) == 1 && (cv.Card.Rank < uno.Wild || cv.Card.Rank == uno.SwapHands || !resolveWild) { return view, action }`
+  - Adicionada salvaguarda explícita com `t.Fatalf` caso a partida feche inesperadamente durante a simulação.
+  - Código de produção e de gameplay de UNO permaneceu 100% intocado.
+- **Validação**:
+  - 500 iterações com race detector (`-race`) em `TestFinalInlineActionAcrossTransports/webhook/caseiro` passaram com 0 falhas.
+  - Suíte completa aprovada: `go test -count=1 -v ./internal/telegram`, `go test -race ./...`, `go test -tags debugcards ./...`, `go vet ./...`, testes de integração PostgreSQL e `git diff --check`.
+- Regras de isolamento: zero commit, zero push, sem alterar produção.
+
+---
+
 # Permissão para Cancelar e Matar Partidas (/cancelar e /kill) por Criador e Administradores — 2026-10-02 (somente dev; pronto para homologação)
 
 - Pedido do usuário aprovado no plano: `cancelar-partida-admin-criador_2026-10-02_20-05.md`.

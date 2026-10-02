@@ -1,3 +1,24 @@
+# Decisão: correção da condição de parada de SwapHands no helper readyToFinish em lifecycle_test.go
+
+## Data
+2026-10-02
+
+## Contexto
+O pipeline de CI na branch `dev` falhou no passo `go test -tags debugcards ./...` com `lifecycle_test.go:145: invalid application argument` em `TestFinalInlineActionAcrossTransports` sob a regra `caseiro`. Identificou-se que o helper `readyToFinish` não considerava `SwapHands` como carta final terminal de jogada direta, executando-a internamente e tentando consultar a visão de jogador com `Actor{PlayerID: 0}` após o encerramento do jogo.
+
+## Decisão tomada
+1. Atualizar a condição em `readyToFinish` (`internal/telegram/lifecycle_test.go`) para `len(pv.Hand) == 1 && (cv.Card.Rank < uno.Wild || cv.Card.Rank == uno.SwapHands || !resolveWild)`.
+2. Incluir verificação defensiva imediata (`t.Fatalf`) caso uma rodada feche inesperadamente a partida durante a simulação intermediária.
+3. Não alterar nenhuma linha do motor de jogo, regras de UNO ou handlers de produção.
+
+## Motivo
+Garantir que simulações que preparam a última ação de jogo entreguem a ação ao teste sem executá-la previamente, eliminando falhas intermitentes (flakiness) causadas pelo baralho aleatório na regra `caseiro`.
+
+## Impacto
+Estabilidade total do CI no GitHub Actions para todos os transportes (webhook e polling) e regras (`classic` e `caseiro`).
+
+---
+
 # Decisão: permissão para cancelar e matar partidas (/cancelar e /kill) por criador e administradores
 
 ## Data
