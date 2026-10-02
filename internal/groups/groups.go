@@ -24,6 +24,7 @@ type Config struct {
 	ChatID               int64
 	DefaultGameMode      Mode
 	RankingSystem        RankingSystem
+	RankingPrivate       bool
 	InstalledByUserID    *int64
 	Revision             int64
 	Title                string
@@ -48,6 +49,8 @@ type Repository interface {
 	SetRankingSystem(context.Context, int64, RankingSystem) (Config, error)
 	SetInstalledBy(context.Context, int64, int64) (Config, error)
 	ObserveGroupTitle(context.Context, int64, string) error
+	SetRankingPrivate(context.Context, int64, bool) (Config, error)
+	ToggleRankingPrivate(context.Context, int64) (Config, error)
 }
 
 var (
@@ -132,4 +135,40 @@ func (s Service) ObserveGroupTitle(ctx context.Context, chatID int64, title stri
 		return nil
 	}
 	return s.Repository.ObserveGroupTitle(ctx, chatID, title)
+}
+
+func (s Service) SetRankingPrivate(ctx context.Context, chatID, userID int64, private bool) (Config, error) {
+	if chatID == 0 || userID <= 0 {
+		return Config{}, ErrInvalid
+	}
+	c, err := s.Repository.GetOrCreateGroupConfig(ctx, chatID)
+	if err != nil {
+		return Config{}, err
+	}
+	role, err := s.LookupMembership(ctx, chatID, userID)
+	if err != nil {
+		return Config{}, ErrForbidden
+	}
+	if !CanConfigure(c, userID, role) {
+		return Config{}, ErrForbidden
+	}
+	return s.Repository.SetRankingPrivate(ctx, chatID, private)
+}
+
+func (s Service) ToggleRankingPrivate(ctx context.Context, chatID, userID int64) (Config, error) {
+	if chatID == 0 || userID <= 0 {
+		return Config{}, ErrInvalid
+	}
+	c, err := s.Repository.GetOrCreateGroupConfig(ctx, chatID)
+	if err != nil {
+		return Config{}, err
+	}
+	role, err := s.LookupMembership(ctx, chatID, userID)
+	if err != nil {
+		return Config{}, ErrForbidden
+	}
+	if !CanConfigure(c, userID, role) {
+		return Config{}, ErrForbidden
+	}
+	return s.Repository.ToggleRankingPrivate(ctx, chatID)
 }

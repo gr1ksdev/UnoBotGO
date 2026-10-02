@@ -25,19 +25,26 @@ func (s *Store) ReadGlobalRanking(ctx context.Context, req ranking.GlobalRequest
 	args := []any{req.GroupID, req.Month, req.Month.AddDate(0, 1, 0), ranking.MonthDateString(req.Month), req.System}
 	// Names used for both ordering and presentation have a safe, masked fallback.
 	base := `SELECT s.chat_id AS id,COALESCE(NULLIF(btrim(c.title),''),'Grupo ••••' || right(abs(s.chat_id::numeric)::text,4)) COLLATE "C" AS name,
- sum(s.score_units)::bigint AS score_units,max(s.last_finished_at) AS last_completed_game_at,0::integer AS last_placement
+ sum(s.score_units)::bigint AS score_units,max(s.last_finished_at) AS last_completed_game_at,0::integer AS last_placement,
+ COALESCE(c.ranking_private, false) AS anonymous
  FROM player_group_monthly_stats s LEFT JOIN group_configs c ON c.chat_id=s.chat_id
- WHERE s.month_start=$4::date AND s.ranking_system=$5 GROUP BY s.chat_id,c.title`
+ WHERE s.month_start=$4::date AND s.ranking_system=$5 GROUP BY s.chat_id,c.title,c.ranking_private`
 	order := `score_units DESC,last_completed_game_at DESC,name COLLATE "C" ASC,id ASC`
 	if req.Kind == "players" {
 		base = `SELECT s.user_id AS id, COALESCE(NULLIF((array_agg(s.display_name ORDER BY s.last_finished_at DESC,s.chat_id ASC))[1],''),'Jogador ••••' || right(s.user_id::text,4)) COLLATE "C" AS name,
- sum(s.score_units)::bigint AS score_units,max(s.last_finished_at) AS last_completed_game_at,0::integer AS last_placement
- FROM player_group_monthly_stats s WHERE s.month_start=$4::date AND s.ranking_system=$5 GROUP BY s.user_id`
+ sum(s.score_units)::bigint AS score_units,max(s.last_finished_at) AS last_completed_game_at,0::integer AS last_placement,
+ COALESCE(u.ranking_private, false) AS anonymous
+ FROM player_group_monthly_stats s LEFT JOIN user_privacy_settings u ON u.user_id=s.user_id
+ WHERE s.month_start=$4::date AND s.ranking_system=$5 GROUP BY s.user_id,u.ranking_private`
 	}
 	if req.Kind == "detail" {
 		base = `SELECT s.user_id AS id,COALESCE(NULLIF(s.display_name,''),'Jogador ••••' || right(s.user_id::text,4)) AS name,
- s.score_units,COALESCE(l.finished_at,s.last_finished_at) AS last_completed_game_at,COALESCE(l.position,2147483647) AS last_placement
- FROM player_group_monthly_stats s LEFT JOIN latest l ON l.user_id=s.user_id
+ s.score_units,COALESCE(l.finished_at,s.last_finished_at) AS last_completed_game_at,COALESCE(l.position,2147483647) AS last_placement,
+ (COALESCE(c.ranking_private, false) OR COALESCE(u.ranking_private, false)) AS anonymous
+ FROM player_group_monthly_stats s
+ LEFT JOIN latest l ON l.user_id=s.user_id
+ LEFT JOIN group_configs c ON c.chat_id=s.chat_id
+ LEFT JOIN user_privacy_settings u ON u.user_id=s.user_id
  WHERE s.chat_id=$1 AND s.month_start=$4::date AND s.ranking_system=$5`
 		order = detailOrder
 	}
@@ -58,10 +65,11 @@ func (s *Store) ReadGlobalRanking(ctx context.Context, req ranking.GlobalRequest
  SELECT *,row_number() OVER (ORDER BY ` + order + `) AS position FROM base), page AS (
  SELECT * FROM ranked WHERE ` + condition + ` ORDER BY ` + order + fmt.Sprintf(` LIMIT $%d
  ), header AS (
- SELECT COALESCE(NULLIF(btrim(c.title),''),'Grupo ••••' || right(abs(s.chat_id::numeric)::text,4)) AS name,sum(s.score_units)::bigint AS total
+ SELECT COALESCE(NULLIF(btrim(c.title),''),'Grupo ••••' || right(abs(s.chat_id::numeric)::text,4)) AS name,sum(s.score_units)::bigint AS total,
+ COALESCE(c.ranking_private, false) AS anonymous
  FROM player_group_monthly_stats s LEFT JOIN group_configs c ON c.chat_id=s.chat_id
- WHERE s.chat_id=$1 AND s.month_start=$4::date AND s.ranking_system=$5 GROUP BY s.chat_id,c.title)
- SELECT p.id,p.name,p.score_units,p.last_completed_game_at,p.last_placement,p.position,h.name,h.total
+ WHERE s.chat_id=$1 AND s.month_start=$4::date AND s.ranking_system=$5 GROUP BY s.chat_id,c.title,c.ranking_private)
+ SELECT p.id,p.name,p.score_units,p.last_completed_game_at,p.last_placement,p.position,p.anonymous,h.name,h.total,h.anonymous
  FROM (SELECT 1) anchor LEFT JOIN page p ON true LEFT JOIN header h ON true
  ORDER BY p.position`, len(args))
 	rows, err := s.pool.Query(ctx, query, args...)
@@ -81,15 +89,17 @@ func (s *Store) ReadGlobalRanking(ctx context.Context, req ranking.GlobalRequest
 		var activity *time.Time
 		var placement *int
 		var position *int64
-		if err := rows.Scan(&id, &name, &score, &activity, &placement, &position, &headerName, &headerScore); err != nil {
+		var pAnonymous *bool
+		var hAnonymous *bool
+		if err := rows.Scan(&id, &name, &score, &activity, &placement, &position, &pAnonymous, &headerName, &headerScore, &hAnonymous); err != nil {
 			return result, operationError(ctx, "scan global ranking")
 		}
 		if id != nil {
-			row = ranking.GlobalRow{ID: *id, Name: *name, Score: ranking.Units(*score), Activity: *activity, Placement: *placement, Position: *position}
+			row = ranking.GlobalRow{ID: *id, Name: *name, Score: ranking.Units(*score), Activity: *activity, Placement: *placement, Position: *position, Anonymous: pAnonymous != nil && *pAnonymous}
 			result.Rows = append(result.Rows, row)
 		}
 		if headerName != nil {
-			result.Group = &ranking.GlobalRow{ID: req.GroupID, Name: *headerName, Score: ranking.Units(*headerScore)}
+			result.Group = &ranking.GlobalRow{ID: req.GroupID, Name: *headerName, Score: ranking.Units(*headerScore), Anonymous: hAnonymous != nil && *hAnonymous}
 		}
 	}
 	if rows.Err() != nil {

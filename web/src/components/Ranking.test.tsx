@@ -156,4 +156,37 @@ describe('Ranking Components', () => {
       expect(onChange).toHaveBeenCalledWith('legacy')
     })
   })
+
+  describe('Anonymous Mode presentation', () => {
+    it('renders neutral anonymous avatar without initials for anonymous item', () => {
+      const anonItem: RankingItem = {
+        position: 1,
+        key: 'anon1',
+        name: 'Anônimo',
+        masked_id: '',
+        score_units: '500',
+        avatar_url: '',
+        anonymous: true,
+      }
+      const { container } = wrap(<Avatar item={anonItem} />)
+      expect(container.querySelector('.avatar-anonymous')).toBeInTheDocument()
+      expect(container.querySelector('.icon-anonymous')).toBeInTheDocument()
+      expect(screen.queryByText('An')).not.toBeInTheDocument()
+    })
+
+    it('omits masked_id when empty in RankingCard', () => {
+      const anonItem: RankingItem = {
+        position: 1,
+        key: 'anon1',
+        name: 'Anônimo',
+        masked_id: '',
+        score_units: '500',
+        avatar_url: '',
+        anonymous: true,
+      }
+      const { container } = wrap(<RankingCard item={anonItem} system="updated" tab="players" />)
+      expect(container.querySelector('.masked-id')).not.toBeInTheDocument()
+      expect(screen.getByText('Anônimo')).toBeInTheDocument()
+    })
+  })
 })

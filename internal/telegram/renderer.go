@@ -467,6 +467,13 @@ func groupRankingSummary(system groups.RankingSystem) (string, string) {
 	}
 }
 
+func groupPrivacySummary(private bool) (string, string) {
+	if private {
+		return "🔒 Anônimo", "Este grupo aparece como Grupo anônimo no Ranking Global, ocultando nome, foto e membros."
+	}
+	return "🌐 Público", "O grupo e seus membros aparecem normalmente com nome e foto no Ranking Global."
+}
+
 // RenderGroupConfig formats the current group configuration for the /config command.
 func (r *Renderer) RenderGroupConfig(config groups.Config) string {
 	modeLabel := "Clássico"
@@ -477,20 +484,29 @@ func (r *Renderer) RenderGroupConfig(config groups.Config) string {
 	if config.RankingSystem == groups.Updated {
 		rankLabel = "Atualizado"
 	}
+	privacyLabel := "Público"
+	if config.RankingPrivate {
+		privacyLabel = "Anônimo"
+	}
 
 	modeTitle, modeDesc := groupModeSummary(config.DefaultGameMode)
 	rankTitle, rankDesc := groupRankingSummary(config.RankingSystem)
+	privTitle, privDesc := groupPrivacySummary(config.RankingPrivate)
 
 	return fmt.Sprintf("⚙️ <b>Configuração do Grupo</b>\n\n"+
 		"<b>Modo padrão de partida:</b> %s\n"+
-		"<b>Sistema de ranking:</b> %s\n\n"+
+		"<b>Sistema de ranking:</b> %s\n"+
+		"<b>Privacidade no ranking:</b> %s\n\n"+
+		"<blockquote><b>%s</b>\n%s</blockquote>\n\n"+
+		"────────────\n\n"+
 		"<blockquote><b>%s</b>\n%s</blockquote>\n\n"+
 		"────────────\n\n"+
 		"<blockquote><b>%s</b>\n%s</blockquote>\n\n"+
 		"<i>Selecione abaixo para alterar.\nAs mudanças afetarão apenas as próximas partidas criadas.</i>",
-		modeLabel, rankLabel,
+		modeLabel, rankLabel, privacyLabel,
 		modeTitle, modeDesc,
-		rankTitle, rankDesc)
+		rankTitle, rankDesc,
+		privTitle, privDesc)
 }
 
 // RenderGroupWelcome formats the introductory message when the bot joins a group.
@@ -498,4 +514,18 @@ func (r *Renderer) RenderGroupWelcome(config groups.Config) string {
 	return "👋 <b>Olá! Obrigado por adicionar o UnoBotGO ao grupo!</b>\n\n" +
 		"O bot já está pronto para jogar. Por padrão, as partidas usam o modo <b>Clássico</b> e o ranking <b>Legado</b>.\n\n" +
 		"Use /novo para iniciar uma partida ou clique no botão abaixo para personalizar as opções do grupo."
+}
+
+func (r *Renderer) RenderUserPrivacy(enabled bool) string {
+	if enabled {
+		return "🔒 <b>Privacidade ativada</b>\n\nVocê aparecerá como Anônimo no Ranking Global.\nSeu nome, foto e identificador não serão exibidos."
+	}
+	return "🔓 <b>Privacidade desativada</b>\n\nSeu perfil voltará a aparecer normalmente no Ranking Global."
+}
+
+func (r *Renderer) RenderGroupPrivacy(enabled bool) string {
+	if enabled {
+		return "🔒 <b>Privacidade do grupo ativada</b>\n\nEste grupo aparecerá como Grupo anônimo no Ranking Global.\nO nome do grupo, foto e membros não serão exibidos publicamente."
+	}
+	return "🔓 <b>Privacidade do grupo desativada</b>\n\nO grupo e seus membros voltarão a aparecer normalmente no Ranking Global."
 }

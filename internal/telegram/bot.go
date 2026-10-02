@@ -33,6 +33,7 @@ type Bot struct {
 	resultRepository ranking.Repository
 	groupConfigs     groups.Repository
 	knownUsers       groups.UserRepository
+	userPrivacy      UserPrivacyRepository
 	groupsService    *groups.Service
 	api              BotAPI
 	service          *game.Service
@@ -51,10 +52,21 @@ type Bot struct {
 	onReady          func()
 }
 
+type UserPrivacyRepository interface {
+	GetUserRankingPrivacy(ctx context.Context, userID int64) (bool, error)
+	SetUserRankingPrivacy(ctx context.Context, userID int64, private bool) error
+	ToggleUserRankingPrivacy(ctx context.Context, userID int64) (bool, error)
+}
+
 func (b *Bot) SetGroupConfigs(repository groups.Repository) {
 	b.groupConfigs = repository
 	b.cmdHandler.groupConfigs = repository
 	b.updateGroupsService()
+}
+
+func (b *Bot) SetUserPrivacy(repository UserPrivacyRepository) {
+	b.userPrivacy = repository
+	b.cmdHandler.userPrivacy = repository
 }
 
 func (b *Bot) SetKnownUsers(repository groups.UserRepository) {

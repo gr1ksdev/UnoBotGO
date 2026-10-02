@@ -82,6 +82,34 @@ func (m *mockGroupRepo) SetInstalledBy(ctx context.Context, chatID int64, instal
 	return c, nil
 }
 
+func (m *mockGroupRepo) SetRankingPrivate(ctx context.Context, chatID int64, private bool) (groups.Config, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.configs[chatID]
+	if !ok {
+		c = groups.Defaults(chatID)
+	}
+	if c.RankingPrivate != private {
+		c.RankingPrivate = private
+		c.Revision++
+	}
+	m.configs[chatID] = c
+	return c, nil
+}
+
+func (m *mockGroupRepo) ToggleRankingPrivate(ctx context.Context, chatID int64) (groups.Config, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.configs[chatID]
+	if !ok {
+		c = groups.Defaults(chatID)
+	}
+	c.RankingPrivate = !c.RankingPrivate
+	c.Revision++
+	m.configs[chatID] = c
+	return c, nil
+}
+
 func (m *mockGroupRepo) ObserveGroupTitle(ctx context.Context, chatID int64, title string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -344,8 +372,8 @@ func TestConfig_AdminCanOpenAndModify(t *testing.T) {
 		t.Fatalf("unexpected message text: %s", lastMsg.Text)
 	}
 	markup, ok := lastMsg.ReplyMarkup.(*telego.InlineKeyboardMarkup)
-	if !ok || markup == nil || len(markup.InlineKeyboard) != 2 {
-		t.Fatalf("expected 2 rows of config buttons, got %+v", lastMsg.ReplyMarkup)
+	if !ok || markup == nil || len(markup.InlineKeyboard) != 3 {
+		t.Fatalf("expected 3 rows of config buttons, got %+v", lastMsg.ReplyMarkup)
 	}
 
 	// Admin clicks Caseiro button
@@ -372,6 +400,32 @@ func TestConfig_AdminCanOpenAndModify(t *testing.T) {
 	cfg, _ = h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
 	if cfg.RankingSystem != groups.Updated {
 		t.Errorf("expected Updated ranking after click, got %v", cfg.RankingSystem)
+	}
+
+	// Admin clicks Anon privacy button
+	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
+		ID:      "cb_priv_anon",
+		From:    telego.User{ID: adminID, FirstName: "Creator"},
+		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
+		Data:    fmt.Sprintf("cfg_privacy_anon_%d", chatID),
+	})
+
+	cfg, _ = h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
+	if !cfg.RankingPrivate {
+		t.Errorf("expected RankingPrivate true after clicking anon, got false")
+	}
+
+	// Admin clicks Public privacy button
+	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
+		ID:      "cb_priv_pub",
+		From:    telego.User{ID: adminID, FirstName: "Creator"},
+		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
+		Data:    fmt.Sprintf("cfg_privacy_public_%d", chatID),
+	})
+
+	cfg, _ = h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
+	if cfg.RankingPrivate {
+		t.Errorf("expected RankingPrivate false after clicking public, got true")
 	}
 }
 
@@ -411,6 +465,24 @@ func TestConfig_NonAdminCannotModify(t *testing.T) {
 	cfg, _ := h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
 	if cfg.DefaultGameMode != groups.Classic {
 		t.Errorf("unauthorized user altered config: %+v", cfg)
+	}
+
+	// Regular user tries privacy callback
+	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
+		ID:      "cb_unauth_priv",
+		From:    telego.User{ID: regularUserID, FirstName: "Bob"},
+		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
+		Data:    fmt.Sprintf("cfg_privacy_anon_%d", chatID),
+	})
+
+	lastAnswer = h.api.AnsweredCallbacks[len(h.api.AnsweredCallbacks)-1]
+	if !lastAnswer.ShowAlert || !strings.Contains(lastAnswer.Text, "Somente administradores ou quem adicionou o bot") {
+		t.Fatalf("expected alert refusing privacy callback, got: %+v", lastAnswer)
+	}
+
+	cfg, _ = h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
+	if cfg.RankingPrivate {
+		t.Errorf("unauthorized user altered privacy: %+v", cfg)
 	}
 }
 
@@ -848,8 +920,8 @@ func TestConfig_WelcomeButtonOpensConfig(t *testing.T) {
 	if !strings.Contains(edited.Text, "Configuração do Grupo") {
 		t.Fatalf("expected config text in edited message, got: %s", edited.Text)
 	}
-	if edited.ReplyMarkup == nil || len(edited.ReplyMarkup.InlineKeyboard) != 2 {
-		t.Fatalf("expected 2 rows of config buttons, got %+v", edited.ReplyMarkup)
+	if edited.ReplyMarkup == nil || len(edited.ReplyMarkup.InlineKeyboard) != 3 {
+		t.Fatalf("expected 3 rows of config buttons, got %+v", edited.ReplyMarkup)
 	}
 }
 
@@ -1056,11 +1128,11 @@ func TestConfig_DynamicCallbackUpdates(t *testing.T) {
 	if strings.Contains(initialMsg.Text, "🏆 Atualizado") {
 		t.Fatalf("unexpected Updated in initial message: %s", initialMsg.Text)
 	}
-	if strings.Count(initialMsg.Text, "<blockquote>") != 2 {
-		t.Fatalf("expected 2 blockquotes, got %d", strings.Count(initialMsg.Text, "<blockquote>"))
+	if strings.Count(initialMsg.Text, "<blockquote>") != 3 {
+		t.Fatalf("expected 3 blockquotes, got %d", strings.Count(initialMsg.Text, "<blockquote>"))
 	}
-	if !strings.Contains(initialMsg.Text, "\n\n────────────\n\n") {
-		t.Fatalf("expected separator in: %s", initialMsg.Text)
+	if strings.Count(initialMsg.Text, "\n\n────────────\n\n") != 2 {
+		t.Fatalf("expected 2 separators in: %s", initialMsg.Text)
 	}
 
 	// Verify config was not altered merely by opening /config
@@ -1105,12 +1177,12 @@ func TestConfig_DynamicCallbackUpdates(t *testing.T) {
 	if strings.Contains(editedAfterMode.Text, "🏆 Atualizado") {
 		t.Fatalf("unexpected Updated summary in: %s", editedAfterMode.Text)
 	}
-	// Exactly 2 blockquotes and separator preserved
-	if strings.Count(editedAfterMode.Text, "<blockquote>") != 2 {
-		t.Fatalf("expected 2 blockquotes in edited message, got %d", strings.Count(editedAfterMode.Text, "<blockquote>"))
+	// Exactly 3 blockquotes and 2 separators preserved
+	if strings.Count(editedAfterMode.Text, "<blockquote>") != 3 {
+		t.Fatalf("expected 3 blockquotes in edited message, got %d", strings.Count(editedAfterMode.Text, "<blockquote>"))
 	}
-	if !strings.Contains(editedAfterMode.Text, "\n\n────────────\n\n") {
-		t.Fatalf("expected separator in edited message: %s", editedAfterMode.Text)
+	if strings.Count(editedAfterMode.Text, "\n\n────────────\n\n") != 2 {
+		t.Fatalf("expected 2 separators in edited message: %s", editedAfterMode.Text)
 	}
 
 	// 3. Change ranking to Updated via callback
@@ -1141,16 +1213,41 @@ func TestConfig_DynamicCallbackUpdates(t *testing.T) {
 	if strings.Contains(editedAfterRank.Text, "🎮 Clássico") {
 		t.Fatalf("unexpected Classic summary in: %s", editedAfterRank.Text)
 	}
-	// Exactly 2 blockquotes and separator preserved
-	if strings.Count(editedAfterRank.Text, "<blockquote>") != 2 {
-		t.Fatalf("expected 2 blockquotes in edited message, got %d", strings.Count(editedAfterRank.Text, "<blockquote>"))
+	// Exactly 3 blockquotes and 2 separators preserved
+	if strings.Count(editedAfterRank.Text, "<blockquote>") != 3 {
+		t.Fatalf("expected 3 blockquotes in edited message, got %d", strings.Count(editedAfterRank.Text, "<blockquote>"))
 	}
-	if !strings.Contains(editedAfterRank.Text, "\n\n────────────\n\n") {
-		t.Fatalf("expected separator in edited message: %s", editedAfterRank.Text)
+	if strings.Count(editedAfterRank.Text, "\n\n────────────\n\n") != 2 {
+		t.Fatalf("expected 2 separators in edited message: %s", editedAfterRank.Text)
 	}
 
 	// Buttons preserved
-	if editedAfterRank.ReplyMarkup == nil || len(editedAfterRank.ReplyMarkup.InlineKeyboard) != 2 {
-		t.Fatalf("expected 2 rows of buttons, got %+v", editedAfterRank.ReplyMarkup)
+	if editedAfterRank.ReplyMarkup == nil || len(editedAfterRank.ReplyMarkup.InlineKeyboard) != 3 {
+		t.Fatalf("expected 3 rows of buttons, got %+v", editedAfterRank.ReplyMarkup)
+	}
+
+	// Dynamic click 3: switch privacy to anon
+	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
+		ID:      "cb_priv_anon",
+		From:    telego.User{ID: adminID, FirstName: "Creator"},
+		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
+		Data:    fmt.Sprintf("cfg_privacy_anon_%d", chatID),
+	})
+
+	if len(h.api.EditedMessages) != 3 {
+		t.Fatalf("expected 3 edits, got %d", len(h.api.EditedMessages))
+	}
+	editedAfterPriv := h.api.EditedMessages[2]
+	if !strings.Contains(editedAfterPriv.Text, "🔒 Anônimo") {
+		t.Fatalf("expected anonymous privacy blockquote in: %s", editedAfterPriv.Text)
+	}
+	if strings.Count(editedAfterPriv.Text, "<blockquote>") != 3 {
+		t.Fatalf("expected 3 blockquotes after privacy edit, got %d", strings.Count(editedAfterPriv.Text, "<blockquote>"))
+	}
+	if editedAfterPriv.ReplyMarkup == nil || len(editedAfterPriv.ReplyMarkup.InlineKeyboard) != 3 {
+		t.Fatalf("expected 3 rows of buttons after privacy edit, got %+v", editedAfterPriv.ReplyMarkup)
+	}
+	if editedAfterPriv.ReplyMarkup.InlineKeyboard[2][1].Text != "✅ Anônimo" {
+		t.Fatalf("expected ✅ Anônimo button, got: %s", editedAfterPriv.ReplyMarkup.InlineKeyboard[2][1].Text)
 	}
 }

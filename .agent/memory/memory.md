@@ -1,3 +1,80 @@
+# Exibição de Nome e Avatar do Usuário na aba Perfil com Conversão para Anônimo — 2026-10-02 (somente dev; pronto para homologação)
+
+- Pedido do usuário aprovado no plano: `nome-avatar-perfil-anonimo_2026-10-02_13-41.md`.
+- **Exibição do Perfil do Usuário no Mini App**:
+  - `web/src/lib/telegram.ts`: expandido o tipo de `TelegramApp.initDataUnsafe` para incluir `user?: TelegramUser` com tipagem para `first_name`, `last_name`, `username` e `photo_url`.
+  - `web/src/pages/Profile.tsx`:
+    - Resgata os dados do usuário autenticado no Telegram.
+    - Se a privacidade estiver desativada (`anonymous: false`): exibe o nome real completo, username `@username` (ou fallback) e a foto de perfil do Telegram em tag `<img>` dentro da caixa de avatar (com fallback para iniciais caso não tenha foto ou falhe no carregamento).
+    - Se a privacidade for ativada (`anonymous: true`): converte imediatamente o nome para `"Anônimo"`, o subtítulo para `"Modo anônimo ativado • Oculto no ranking"` e o avatar para a silhueta neutra (`.avatar-anonymous` com `.icon-anonymous`), removendo a renderização de foto e iniciais.
+    - O botão switch continua salvando a preferência via `PUT /api/v1/me/privacy` e revalidando TanStack Query.
+- **Estilos CSS**:
+  - `web/src/styles.css`: adicionada estilização para `.profile-header-info`, `.profile-avatar-box`, `.profile-status-text` com suporte a truncate responsivo e alinhamento centralizado dos metadados.
+- **Validação e Testes**:
+  - `web/src/pages/Profile.test.tsx`: testes unitários e de integração de frontend cobrindo:
+    1. Renderização do nome real, username e imagem de perfil do usuário.
+    2. Conversão imediata para nome `"Anônimo"` e ícone neutro de silhueta ao ativar o toggle switch.
+    3. Restauração do nome real e da imagem ao desativar o modo anônimo.
+    4. Fallback de iniciais quando o usuário não possui `photo_url`.
+    5. Tratamento de erro na API de persistência.
+  - Validação completa aprovada: `make check` (100% de testes unitários do Go e Vitest, testes de integração PostgreSQL, lints, typecheck, builds e git diff).
+- Regras de isolamento: zero commit, zero push, mantido no working tree da dev.
+
+---
+
+# Correção de posicionamento do footer no Perfil e sessão de privacidade no /config — 2026-10-02 (somente dev; pronto para homologação)
+
+- Pedido do usuário aprovado no plano: `corrigir-footer-perfil-e-config-privacidade_2026-10-02_13-28.md`.
+- **Correção do Footer no Perfil (Mini App)**:
+  - Causa raiz: `--bottom-nav-gap`, `--bottom-nav-safe` e `--bottom-nav-height` estavam restritos a `.global-view`. Na aba de perfil (`.profile-view`), a expressão `bottom: calc(var(--bottom-nav-gap) + var(--bottom-nav-safe))` tornava-se inválida sem fallbacks, fazendo com que o WebKit/Safari descartasse a propriedade para `bottom: auto; top: auto;`, renderizando a barra no topo/cabeçalho.
+  - Correção:
+    - Declarados valores padrão com fallbacks em `:root` para `--bottom-nav-height: 60px;`, `--bottom-nav-gap: 12px;`, `--bottom-nav-safe: max(env(safe-area-inset-bottom, 0px), var(--telegram-bottom, 0px));`, `--bottom-nav-frame: 10px;`.
+    - Estendido o seletor para `.global-view, .profile-view`, aplicando a reserva de `padding-bottom` e altura segura em ambas as telas.
+    - Incorporados fallbacks embutidos em `.bottom-navigation` (`bottom: calc(var(--bottom-nav-gap, 12px) + var(--bottom-nav-safe, 0px));`) e `.bottom-nav-item` (`height: var(--bottom-nav-height, 60px);`).
+    - Adicionada a classe `global-view` ao contêiner raiz de `ProfilePage` (`<main className="app-shell global-view profile-view">`) e reset de scroll via `window.scrollTo(0, 0)` no mount.
+- **Sessão de Privacidade no Menu `/config` do Grupo (Telegram)**:
+  - Renderização textual (`RenderGroupConfig`): adicionada a linha `<b>Privacidade no ranking:</b> %s` (`Público` / `Anônimo`) e um 3º bloco explicativo (`<blockquote><b>🌐 Público</b>...</blockquote>` ou `<blockquote><b>🔒 Anônimo</b>...</blockquote>`), mantendo a separação padronizada por `────────────`.
+  - Teclado inline (`makeGroupConfigButtons`): adicionada a 3ª linha de botões `[ Público ]  [ Anônimo ]` com indicação `✅` no estado ativo, associados aos callbacks `cfg_privacy_public_<chatID>` e `cfg_privacy_anon_<chatID>`.
+  - Tratamento de Callbacks (`handleConfigCallback`): adicionado o caso `"privacy"` no switch de ações para alternar entre `public` e `anon`, invocando `svc.SetRankingPrivate`, respeitando a autorização restrita (`groups.CanConfigureUser`), atualizando a mensagem dinamicamente via `EditMessageText` e respondendo com toast explicativo.
+- **Testes e Validações**:
+  - `internal/telegram/renderer_test.go`: atualizada a suíte com verificação dos 3 cabeçalhos, 3 blockquotes e 2 separadores para estados público e anônimo.
+  - `internal/telegram/config_test.go`: validadas as 3 linhas de botões, alternância dinâmica de privacidade via callbacks e bloqueio de usuários não autorizados.
+  - Validação completa aprovada: `make check` (100% de testes unitários, testes de integração PostgreSQL, vitest, lints, typecheck, builds e git diff).
+- Regras de isolamento: zero commit, zero push, mantido no working tree da dev.
+
+---
+
+# Privacidade e Modo Anônimo no Ranking Global — 2026-10-02 (somente dev; pronto para homologação)
+
+- Pedido do usuário aprovado no plano: `privacidade-modo-anonimo-ranking_2026-10-02_12-52.md`.
+- Camada pura de apresentação/privacidade:
+  - Não remove dados do banco de dados.
+  - Não altera identidade interna (`user_id`, `chat_id`, nomes e fotos originais persistem inalterados).
+  - Não interfere no gameplay das partidas.
+  - Não altera fórmulas, pontuações, somas de `score_units`, buckets mensais ou critérios de ordenação e desempate.
+- Arquitetura de persistência e Migration 0009 (`0009_ranking_privacy.up.sql`):
+  - `group_configs.ranking_private` boolean NOT NULL DEFAULT false.
+  - Tabela `user_privacy_settings (user_id bigint PRIMARY KEY CHECK (user_id > 0), ranking_private boolean NOT NULL DEFAULT false)`.
+  - Toggle atômico implementado no PostgreSQL para grupos e usuários (`NOT ranking_private`).
+  - Preservação estrita das colunas de migrações anteriores: `groupColumns` mantido nos 7 campos históricos da 0001, mantendo compatibilidade total com testes de migração histórica.
+- Comando `/privacidade`:
+  - No privado do bot: altera a privacidade global do usuário remetente (`msg.From.ID`).
+  - Em grupos: altera a privacidade do grupo (`chat_id`), exigindo autorização restrita de configuração via `groups.CanConfigureUser` (administradores ou instalador do bot que ainda seja membro ativo) e menção obrigatória `@bot`.
+- Regras de projeção e anonimização server-side:
+  - Global de Grupos: grupo anônimo projeta `Name: "Grupo anônimo"`, `MaskedID: ""`, `Avatar: ""` e `Anonymous: true`. Preserva `GroupRef` opaco para permitir visualização de detalhes.
+  - Global de Players: usuário anônimo projeta `Name: "Anônimo"`, `MaskedID: ""`, `Avatar: ""` e `Anonymous: true`.
+  - Detalhe do Grupo: se o grupo for anônimo, tanto o cabeçalho quanto todos os jogadores naquele grupo detalhado são projetados como `"Anônimo"`. Se o grupo for público, cada jogador respeita individualmente sua própria privacidade de usuário.
+  - Proteção de Mídia: `/api/v1/media/{ref}` verifica anonimato do grupo ou usuário via `PrivacyChecker` e retorna imediatamente HTTP 204 No Content se anônimo, sem realizar chamadas upstream ao Telegram ou expor bytes no cache.
+- Mini App Telegram e 3ª aba Perfil:
+  - Navegação inferior estendida para 3 abas: `Grupos | Players | Perfil`.
+  - Preservado o design de vidro líquido deslizante (`liquid glass`) da barra de navegação com transições fluidas (0%, 100%, 200%).
+  - Tela `/profile` com toggle switch acessível (`role="switch"`), feedback dinâmico de salvamento e mutação TanStack Query com invalidação de cache.
+  - Componentes de ranking atualizados com ícone neutro estilizado de anônimo para evitar requisições de imagem ou iniciais quando anônimo.
+- Todas as validações aprovadas: `make check` (100% de testes unitários e de integração PostgreSQL, vitest, lints, typechecks, build e diff check).
+- Regras de isolamento: zero commit, zero push, mantido no working tree da dev.
+
+---
+
 # Refinamento de navegação e cabeçalho do Telegram Mini App — 2026-10-02 (somente dev)
 
 - Pedido do usuário aprovado no plano: `refinar-navegacao-header-telegram_2026-10-02_13-35.md`.

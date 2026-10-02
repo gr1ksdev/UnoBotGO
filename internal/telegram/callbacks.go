@@ -284,7 +284,7 @@ func (h *CallbackHandler) handleConfigCallback(ctx context.Context, cq *telego.C
 			return
 		}
 		chatIDStr = parts[2]
-	case "mode", "rank":
+	case "mode", "rank", "privacy":
 		if len(parts) != 4 {
 			_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 				CallbackQueryID: cq.ID,
@@ -473,6 +473,57 @@ func (h *CallbackHandler) handleConfigCallback(ctx context.Context, cq *telego.C
 		_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 			CallbackQueryID: cq.ID,
 			Text:            fmt.Sprintf("Sistema de ranking alterado para %s.", rankName),
+		})
+
+	case "privacy":
+		var targetPrivate bool
+		var privacyName string
+		switch actionArg {
+		case "public":
+			targetPrivate = false
+			privacyName = "Público"
+		case "anon":
+			targetPrivate = true
+			privacyName = "Anônimo"
+		default:
+			_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+				CallbackQueryID: cq.ID,
+				Text:            "⚠️ Opção de privacidade inválida.",
+				ShowAlert:       true,
+			})
+			return
+		}
+
+		cfg, err := svc.SetRankingPrivate(ctx, targetChatID, actorID, targetPrivate)
+		if errors.Is(err, groups.ErrForbidden) {
+			_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+				CallbackQueryID: cq.ID,
+				Text:            "⚠️ Somente administradores ou quem adicionou o bot pode alterar esta configuração.",
+				ShowAlert:       true,
+			})
+			return
+		}
+		if err != nil {
+			_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+				CallbackQueryID: cq.ID,
+				Text:            "❌ Não foi possível alterar a configuração.",
+				ShowAlert:       true,
+			})
+			return
+		}
+
+		text := h.renderer.RenderGroupConfig(cfg)
+		buttons := makeGroupConfigButtons(cfg)
+		_, _ = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
+			ChatID:      telego.ChatID{ID: targetChatID},
+			MessageID:   messageID,
+			Text:        text,
+			ParseMode:   telego.ModeHTML,
+			ReplyMarkup: buttons,
+		})
+		_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: cq.ID,
+			Text:            fmt.Sprintf("Privacidade do grupo alterada para %s.", privacyName),
 		})
 	}
 }

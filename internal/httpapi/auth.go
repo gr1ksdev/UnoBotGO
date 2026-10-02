@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -60,4 +61,17 @@ func ValidateInitData(raw, token string, now time.Time, maxAge time.Duration) (i
 		return 0, ErrAuth
 	}
 	return user.ID, nil
+}
+
+type authKey int
+
+const userIDKey authKey = 1
+
+func WithUserID(ctx context.Context, id int64) context.Context {
+	return context.WithValue(ctx, userIDKey, id)
+}
+
+func UserIDFromContext(ctx context.Context) (int64, bool) {
+	id, ok := ctx.Value(userIDKey).(int64)
+	return id, ok && id > 0
 }

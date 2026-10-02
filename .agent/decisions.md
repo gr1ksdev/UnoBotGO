@@ -1,3 +1,104 @@
+# Decisão: exibição de nome e avatar na aba Perfil com conversão dinâmica para Anônimo
+
+## Data
+2026-10-02
+
+## Contexto
+Na aba de Perfil do Telegram Mini App, o usuário visualizava apenas as opções de privacidade genéricas. Solicitou-se que a tela apresentasse o nome real e o avatar do usuário conectado, e que, ao ativar o modo anônimo, tanto a foto quanto o nome fossem convertidos dinamicamente para o padrão anônimo ("Anônimo" e ícone neutro de silhueta), refletindo imediatamente o visual que o usuário terá no Ranking Global.
+
+## Decisão tomada
+1. Identidade no Perfil via Telegram WebApp:
+   - Extração segura dos dados do usuário logado via `window.Telegram.WebApp.initDataUnsafe.user` (`first_name`, `last_name`, `username`, `photo_url`).
+   - Geração de nome completo formatado e iniciais caso a foto de perfil não esteja disponível ou falhe ao carregar (`onError`).
+2. Comportamento visual reativo:
+   - **Modo Público (`anonymous: false`)**:
+     - Exibe o nome real do usuário em `<h2>`.
+     - Exibe o `@username` (ou fallback de status) em `<p>`.
+     - Exibe a foto do perfil do usuário em `<img>` dentro do círculo de avatar (ou as iniciais se não houver foto).
+   - **Modo Anônimo (`anonymous: true`)**:
+     - Converte o nome exibido em `<h2>` para `"Anônimo"`.
+     - Exibe status informativo: `"Modo anônimo ativado • Oculto no ranking"`.
+     - Converte o avatar para a silhueta neutra (`.avatar-anonymous` com `.icon-anonymous`), suprimindo qualquer elemento de imagem ou iniciais reais.
+3. Acessibilidade e Semântica:
+   - Mantida semântica acessível: o contêiner do avatar do usuário não oculta imagens do leitor de tela quando público, permitindo descrição acessível e testes padronizados.
+4. Cobertura de Testes:
+   - Adicionada suíte abrangente em `web/src/pages/Profile.test.tsx` cobrindo exibição inicial de nome/foto, conversão imediata para anônimo, fallback para iniciais e restauração do estado ao alternar novamente para público.
+
+## Motivo
+Proporcionar transparência visual imediata ao usuário para que ele comprove exatamente como sua identidade é exposta ou anonimizada no sistema.
+
+## Impacto
+O usuário visualiza instantaneamente sua identidade real ou seu avatar e nome anônimos ao manipular o botão switch de privacidade, com feedback em tempo real.
+
+---
+
+# Decisão: estabilização do footer na aba Perfil e integração de privacidade no menu /config do Telegram
+
+## Data
+2026-10-02
+
+## Contexto
+1. Ao acessar a aba de Perfil (`/profile`) no Mini App, a barra inferior de navegação (`.bottom-navigation`) deslocava-se incorretamente para o cabeçalho no topo da viewport. A causa foi a dependência exclusiva das variáveis CSS `--bottom-nav-*` dentro da classe `.global-view`, que não estava aplicada ao contêiner raiz de `ProfilePage`. Sem fallbacks, expressões como `bottom: calc(var(--bottom-nav-gap) + var(--bottom-nav-safe))` tornavam-se inválidas no WebKit/Safari, fazendo com que o `bottom` fosse tratado como `auto` e posicionasse o footer no topo.
+2. A configuração de privacidade do grupo só podia ser alternada por comando de texto (`/privacidade@bot`), faltando sua presença visual no menu oficial de configurações do grupo (`/config`).
+
+## Decisão tomada
+1. Estabilização do Footer no Mini App:
+   - Declarados fallbacks canônicos para `--bottom-nav-height: 60px;`, `--bottom-nav-gap: 12px;`, `--bottom-nav-safe: max(env(safe-area-inset-bottom, 0px), var(--telegram-bottom, 0px));`, `--bottom-nav-frame: 10px;` no escopo `:root`.
+   - Estendido o seletor `.global-view, .profile-view` para garantir que ambas as páginas reservem o mesmo espaçamento inferior (`padding-bottom`).
+   - Adicionados fallbacks inline defensivos em `.bottom-navigation` e `.bottom-nav-item`.
+   - Adicionada a classe `global-view` ao contêiner de `ProfilePage` e acionado `window.scrollTo(0, 0)` no mount.
+2. Integração de Privacidade no Menu `/config`:
+   - Enriquecida a mensagem formatada por `RenderGroupConfig`: adicionada linha de cabeçalho `Privacidade no ranking:` e um 3º bloco de citação `<blockquote>` com as regras de visibilidade pública (`🌐 Público` ou `🔒 Anônimo`), mantendo o separador `────────────`.
+   - Enriquecido o teclado inline em `makeGroupConfigButtons`: adicionada a 3ª linha com botões `[ Público ]  [ Anônimo ]` com indicativo `✅` no item ativo.
+   - Expandido o dispatcher `handleConfigCallback`: adicionado suporte à ação `"privacy"` com argumentos `"public"` e `"anon"`, invocando `svc.SetRankingPrivate`, respeitando a autorização `groups.CanConfigureUser` e editando a mensagem dinamicamente em conformidade com as demais opções.
+
+## Motivo
+Garantir estabilidade visual sem artefatos de layout em clientes móveis Telegram (iOS/Android/Web) e proporcionar paridade total de controle administrativo dentro do menu `/config`.
+
+## Impacto
+O rodapé permanece fixo na base da tela em todas as abas. Administradores e instaladores podem alternar a privacidade do grupo com 1 clique direto pelo menu `/config`.
+
+---
+
+# Decisão: funcionalidade de privacidade e modo anônimo no Ranking Global
+
+## Data
+2026-10-02
+
+## Contexto
+Usuários e administradores de grupos solicitaram a possibilidade de aparecer anonimamente nas superfícies públicas do Ranking Global (listas de grupos, listas de jogadores, detalhe do grupo e proxy de mídia do Mini App), sem perder dados, sem desvincular seu histórico ou pontuação interna, sem afetar o gameplay no chat do Telegram e sem alterar os cálculos estatísticos e de desempate.
+
+## Decisão tomada
+1. Camada estrita de apresentação/projeção:
+   - Os dados brutos (`user_id`, `chat_id`, nomes e fotos) continuam existindo integralmente no PostgreSQL.
+   - Nenhuma partida, histórico, fórmula de ranking ou desempate é alterado.
+   - A anonimização é executada server-side na projeção SQL/API, impedindo vazamento de dados confidenciais para o frontend.
+2. Persistência e Migration 0009:
+   - Adicionada coluna `ranking_private boolean NOT NULL DEFAULT false` em `group_configs`.
+   - Criada tabela `user_privacy_settings (user_id bigint PRIMARY KEY CHECK (user_id > 0), ranking_private boolean NOT NULL DEFAULT false)`.
+   - Operações atômicas de toggle via `RETURNING` no PostgreSQL.
+   - Compatibilidade retroativa de migração: queries que dependem de snapshots históricos de colunas (como `groupColumns` do 0001) mantêm seus campos históricos para que testes de migrações anteriores não quebrem.
+3. Comando `/privacidade`:
+   - No privado: altera a privacidade global do usuário sem exigir permissões especiais.
+   - Em grupos: altera a privacidade do grupo (`chat_id`), exigindo autorização restrita (`groups.CanConfigureUser`: administradores atuais ou o instalador do bot caso ainda seja membro ativo) e menção obrigatória `@bot`.
+4. Regras de composição no Ranking Global:
+   - Global de Grupos: se o grupo for anônimo, renderiza `"Grupo anônimo"`, sem foto e sem ID mascarado; preserva `GroupRef` opaco para permitir inspeção do detalhe.
+   - Global de Players: se o usuário for anônimo, renderiza `"Anônimo"`, sem foto e sem ID mascarado. A privacidade dos grupos do jogador não afeta sua entrada no ranking global individual.
+   - Detalhe de Grupo: se o grupo for anônimo, tanto o grupo quanto todos os seus membros detalhados aparecem anonimizados como `"Anônimo"`. Se o grupo for público, cada membro segue sua própria privacidade individual.
+   - Proxy de Mídia: `/api/v1/media/{ref}` valida o estado de anonimato da entidade através de `PrivacyChecker` e retorna HTTP 204 No Content se anônima, sem buscar imagens no Telegram ou mantê-las em cache.
+5. Mini App e Perfil:
+   - Adicionada a terceira aba `Perfil` na barra de navegação inferior (`Grupos | Players | Perfil`), preservando integralmente o efeito de vidro líquido deslizante (`liquid glass`) existente sem redesigns não solicitados.
+   - Rota `/profile` permite ao usuário alternar instantaneamente seu modo anônimo via `GET /api/v1/me/privacy` e `PUT /api/v1/me/privacy` com feedback de salvamento imediato e revalidação do TanStack Query.
+   - No ranking, entidades anônimas exibem um ícone neutro estilizado de silhueta, sem renderizar iniciais e sem disparar requisições HTTP de avatar.
+
+## Motivo
+Garantir controle de privacidade seguro, transparente e de alta usabilidade, respeitando o princípio de menor privilégio e blindagem contra vazamento de identidade, sem criar inconsistências lógicas nos dados ou na engine do bot.
+
+## Impacto
+Usuários e grupos podem escolher livremente sua visibilidade pública no Ranking Global a qualquer momento, seja pelo bot no Telegram ou pelo Mini App, com garantia técnica total de que suas identidades estão protegidas nas superfícies públicas.
+
+---
+
 # Decisão: integração contínua do cabeçalho do Telegram Mini App e remoção de navegação duplicada
 
 ## Data

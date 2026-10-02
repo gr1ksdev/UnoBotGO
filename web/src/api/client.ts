@@ -7,6 +7,7 @@ export interface RankingItem {
  masked_id: string
  score_units: string
  avatar_url: string
+ anonymous?: boolean
 }
 export interface RankingPage {
  month_start: string
@@ -18,6 +19,9 @@ export interface RankingPage {
  items: RankingItem[]
  group?: RankingItem
  next_cursor?: string
+}
+export interface UserPrivacy {
+ anonymous: boolean
 }
 export class APIError extends Error {
  constructor(public status: number) { super('Não foi possível carregar o ranking.') }
@@ -31,4 +35,18 @@ export async function rankingPage(path: string, system: System, cursor: string, 
  const response = await fetch(`/api/v1/rankings/${path}?${query}`, { headers: authHeaders(), signal })
  if (!response.ok) throw new APIError(response.status)
  return response.json() as Promise<RankingPage>
+}
+export async function getUserPrivacy(signal?: AbortSignal): Promise<UserPrivacy> {
+ const response = await fetch('/api/v1/me/privacy', { headers: authHeaders(), signal })
+ if (!response.ok) throw new APIError(response.status)
+ return response.json() as Promise<UserPrivacy>
+}
+export async function setUserPrivacy(anonymous: boolean): Promise<UserPrivacy> {
+ const response = await fetch('/api/v1/me/privacy', {
+  method: 'PUT',
+  headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+  body: JSON.stringify({ anonymous }),
+ })
+ if (!response.ok) throw new APIError(response.status)
+ return response.json() as Promise<UserPrivacy>
 }
