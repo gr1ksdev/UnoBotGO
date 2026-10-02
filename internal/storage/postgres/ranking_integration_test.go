@@ -48,6 +48,9 @@ func TestListGroupRankingAccumulationIsolationAndHistory(t *testing.T) {
 	if _, err := s.GetOrCreateGroupConfig(ctx, 43); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.SetRankingSystem(ctx, 43, groups.Legacy); err != nil {
+		t.Fatal(err)
+	}
 	other := eligibleResult(t, groups.Legacy, 2, 0, "completed")
 	other.GameID = "other-chat"
 	other.ChatID = 43

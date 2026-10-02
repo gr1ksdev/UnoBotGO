@@ -76,7 +76,7 @@ func TestUpdatedDefaultMigrationPreservesExistingGroups(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `CREATE TABLE schema_migrations(version text PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())`); err != nil {
 		t.Fatal(err)
 	}
-	// Reproduce the prior schema and ledger, then create a historical Legacy group.
+	// Reproduce schema and ledger prior to migration 0008.
 	for _, m := range list {
 		if m.name == "migrations/0008_default_ranking_updated.up.sql" {
 			break
@@ -88,20 +88,40 @@ func TestUpdatedDefaultMigrationPreservesExistingGroups(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	before, err := s.GetOrCreateGroupConfig(ctx, 100)
-	if err != nil || before.RankingSystem != groups.Legacy {
-		t.Fatal("historical group fixture", err)
+
+	// Caso B (pré-0008): grupo histórico criado com o default anterior (Legacy).
+	beforeLegacy, err := s.GetOrCreateGroupConfig(ctx, 100)
+	if err != nil || beforeLegacy.RankingSystem != groups.Legacy {
+		t.Fatal("historical legacy group fixture", err)
 	}
+
+	// Caso C (pré-0008): grupo histórico configurado explicitamente com Updated.
+	beforeUpdated, err := s.SetRankingSystem(ctx, 200, groups.Updated)
+	if err != nil || beforeUpdated.RankingSystem != groups.Updated {
+		t.Fatal("historical updated group fixture", err)
+	}
+
+	// Aplicar migration 0008.
 	if err := s.Migrate(ctx); err != nil {
-		t.Fatal(err)
+		t.Fatal("migrate 0008", err)
 	}
-	after, err := s.GetOrCreateGroupConfig(ctx, 100)
-	if err != nil || after.RankingSystem != groups.Legacy || after.Revision != before.Revision {
-		t.Fatal("existing group was converted", err)
+
+	// Caso B pós-0008: grupo Legacy existente DEVE permanecer Legacy com mesma revisão e modo.
+	afterLegacy, err := s.GetOrCreateGroupConfig(ctx, 100)
+	if err != nil || afterLegacy.RankingSystem != groups.Legacy || afterLegacy.Revision != beforeLegacy.Revision || afterLegacy.DefaultGameMode != beforeLegacy.DefaultGameMode {
+		t.Fatalf("existing legacy group was converted or altered: before=%+v after=%+v", beforeLegacy, afterLegacy)
 	}
+
+	// Caso C pós-0008: grupo Updated existente DEVE permanecer Updated com mesma revisão e modo.
+	afterUpdated, err := s.GetOrCreateGroupConfig(ctx, 200)
+	if err != nil || afterUpdated.RankingSystem != groups.Updated || afterUpdated.Revision != beforeUpdated.Revision || afterUpdated.DefaultGameMode != beforeUpdated.DefaultGameMode {
+		t.Fatalf("existing updated group was altered: before=%+v after=%+v", beforeUpdated, afterUpdated)
+	}
+
+	// Caso A pós-0008: novos grupos criados DEVEM assumir Updated por padrão em todas as vias.
 	created, err := s.GetOrCreateGroupConfig(ctx, 101)
-	if err != nil || created.RankingSystem != groups.Updated {
-		t.Fatal("new default", err)
+	if err != nil || created.RankingSystem != groups.Updated || created.Revision != 1 {
+		t.Fatalf("new group default: %+v", created)
 	}
 	if _, err := s.SetInstalledBy(ctx, 102, 123); err != nil {
 		t.Fatal(err)
@@ -118,7 +138,21 @@ func TestUpdatedDefaultMigrationPreservesExistingGroups(t *testing.T) {
 			t.Fatalf("creation path %d: %v", id, err)
 		}
 	}
+
+	// Idempotência: rodar Migrate novamente não altera nada e novos grupos continuam Updated.
 	if err := s.Migrate(ctx); err != nil {
-		t.Fatal(err)
+		t.Fatal("re-migrate error", err)
+	}
+	stableLegacy, err := s.GetOrCreateGroupConfig(ctx, 100)
+	if err != nil || stableLegacy.RankingSystem != groups.Legacy || stableLegacy.Revision != beforeLegacy.Revision {
+		t.Fatalf("re-migrate altered legacy group: %+v", stableLegacy)
+	}
+	stableUpdated, err := s.GetOrCreateGroupConfig(ctx, 200)
+	if err != nil || stableUpdated.RankingSystem != groups.Updated || stableUpdated.Revision != beforeUpdated.Revision {
+		t.Fatalf("re-migrate altered updated group: %+v", stableUpdated)
+	}
+	postRemigrate, err := s.GetOrCreateGroupConfig(ctx, 105)
+	if err != nil || postRemigrate.RankingSystem != groups.Updated {
+		t.Fatalf("group created after re-migrate: %+v", postRemigrate)
 	}
 }

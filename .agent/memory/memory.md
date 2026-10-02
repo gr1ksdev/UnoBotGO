@@ -1,3 +1,21 @@
+# Correção do CI PostgreSQL após migration 0008 — 2026-10-01 (branch dev)
+
+- Causa da falha no CI:
+  - O teste `TestListGroupRankingAccumulationIsolationAndHistory` em `internal/storage/postgres/ranking_integration_test.go` criava o grupo 43 via `s.GetOrCreateGroupConfig(ctx, 43)` sem configurar explicitamente o sistema para `Legacy`.
+  - Com a introdução da migration `0008_default_ranking_updated.up.sql`, novos grupos são criados por padrão com `ranking_system = 'updated'`.
+  - Como o teste gravava uma partida de sistema `Legacy` no grupo 43, `RecordCompletedGame` detectava a incompatibilidade entre o sistema do grupo (`Updated`) e o do resultado (`Legacy`), retornando `ranking.ErrNeedsProductDecision`.
+  - O teste foi ajustado para chamar `s.SetRankingSystem(ctx, 43, groups.Legacy)` logo após a criação do grupo 43, expressando formalmente a intenção do teste de testar isolamento multissistema com grupos em sistemas distintos.
+- Cobertura adicional da migration 0008 em `internal/storage/postgres/groups_integration_test.go`:
+  - **Caso A (novos grupos)**: assume `Updated` por padrão em todas as vias de criação.
+  - **Caso B (grupo Legacy existente pré-0008)**: permanece rigorosamente `Legacy` e com mesma revisão após a migration 0008.
+  - **Caso C (grupo Updated existente pré-0008)**: permanece rigorosamente `Updated` e com mesma revisão após a migration 0008.
+  - **Idempotência**: reaplicação de `Migrate` preserva todos os dados e revisão inalterados.
+- Auditoria da migration 0008: confirmada alteração exclusiva de default (`ALTER COLUMN ranking_system SET DEFAULT 'updated'`), sem qualquer `UPDATE` em linhas existentes.
+- O alias `/join` não tem qualquer relação com o PostgreSQL e permaneceu inalterado.
+- Todas as validações aprovadas: `go test -race -tags integration ./...`, `go test ./...`, `go test -race ./...`, `go vet ./...`, `make check` e `git diff --check`.
+
+---
+
 # Massa fictícia de homologação para o Mini App de Ranking Global — 2026-09-30 (somente dev; pronto para homologação)
 
 - Pedido do usuário aprovado no plano: `massa-ficticia-homologacao-miniapp_2026-09-30_22-40.md`.

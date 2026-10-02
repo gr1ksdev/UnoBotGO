@@ -1,3 +1,33 @@
+# Decisão: explicitação de ranking Legado em testes de isolamento e blindagem da migration 0008
+
+## Data
+2026-10-01
+
+## Contexto
+Após a introdução da migration `0008_default_ranking_updated.up.sql` (que define o ranking padrão de novos grupos como `Updated`), o teste de integração `TestListGroupRankingAccumulationIsolationAndHistory` falhava no CI do PostgreSQL com `ranking: scoring policy requires product decision`. O teste cria o grupo 42 (`Updated`) e o grupo 43 (`Legacy`) para validar isolamento multissistema de ranking, mas criava o grupo 43 sem configurar explicitamente o sistema, dependendo do default antigo que era `Legacy`.
+
+## Decisão tomada
+1. Explicitação de configuração de sistema em testes multissistema:
+   - No teste `TestListGroupRankingAccumulationIsolationAndHistory`, invocar `s.SetRankingSystem(ctx, 43, groups.Legacy)` logo após a criação do grupo 43.
+   - Testes que pretendem testar comportamento Legado ou isolamento entre sistemas distintos não devem depender do default implícito de novos grupos.
+2. Blindagem e cobertura completa da migration 0008:
+   - Em `groups_integration_test.go`, expandir o teste `TestUpdatedDefaultMigrationPreservesExistingGroups` cobrindo formalmente:
+     - **Caso A (novo grupo pós-0008)**: recebe `Updated` por padrão em todas as vias de criação (`GetOrCreateGroupConfig`, `SetInstalledBy`, `ObserveGroupTitle`, `SetDefaultGameMode`).
+     - **Caso B (grupo Legacy existente pré-0008)**: permanece rigorosamente `Legacy` com mesma `config_revision` e modo após a migration 0008.
+     - **Caso C (grupo Updated existente pré-0008)**: permanece rigorosamente `Updated` com mesma `config_revision` e modo após a migration 0008.
+     - **Idempotência**: nova chamada a `Migrate` preserva todos os estados sem mutação de linhas existentes.
+3. Preservação integral do migrator e da migration 0008:
+   - A migration `0008_default_ranking_updated.up.sql` altera exclusivamente o default da coluna (`ALTER COLUMN ranking_system SET DEFAULT 'updated'`), sem qualquer instrução de `UPDATE`.
+   - O migrator e a lógica de `/join` permaneceram 100% inalterados.
+
+## Motivo
+Garantir fidelidade aos contratos de negócio (novos grupos iniciam em Updated, grupos existentes preservam sua configuração e histórico, e o sistema Legado continua plenamente funcional quando configurado explicitamente), mantendo todos os gates de CI e suites de integração verdes.
+
+## Impacto
+O job de PostgreSQL no GitHub Actions volta a passar com sucesso. O comportamento da migration 0008 fica blindado contra regressões sem qualquer alteração destrutiva ou mutação silenciosa de dados.
+
+---
+
 # Decisão: massa fictícia e ferramenta de devseed para homologação do Mini App de Ranking Global
 
 ## Data
