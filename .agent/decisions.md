@@ -1,3 +1,25 @@
+# Decisão: modo Caseiro como padrão para novos grupos
+
+## Data
+2026-10-02
+
+## Contexto
+Solicitou-se que o modo de jogo Caseiro seja o modo padrão para novos canais/grupos no início da configuração.
+
+## Decisão tomada
+1. Atualizar `groups.Defaults(chatID int64)` em `internal/groups/groups.go` para inicializar `DefaultGameMode: Caseiro` e `RankingSystem: Updated`.
+2. Criar a migration `0010_default_mode_caseiro.up.sql` com `ALTER TABLE group_configs ALTER COLUMN default_game_mode SET DEFAULT 'caseiro'`, alterando estritamente a cláusula DEFAULT para inserções futuras sem modificar nenhuma linha preexistente de grupos já cadastrados.
+3. Atualizar `RenderGroupWelcome` em `internal/telegram/renderer.go` para formatar dinamicamente o modo padrão e o ranking a partir da configuração do grupo recebida.
+4. Adaptar testes de defaults e integração para validar o novo comportamento.
+
+## Motivo
+Alinhar as regras da casa (troca de mãos e empilhamento de cartas de compra) como experiência padrão preferida para novos grupos que instalam o bot.
+
+## Impacto
+Novos grupos iniciam diretamente no modo Caseiro ao executar `/novo`. O comando `/novo classico` ou o menu `/config` continuam disponíveis para alternar para o modo Clássico a qualquer momento.
+
+---
+
 # Decisão: promoção e publicação da versão V2 na branch main
 
 ## Data

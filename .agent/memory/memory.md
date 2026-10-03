@@ -1,3 +1,19 @@
+# Modo Caseiro como Padrão para Novos Grupos — 2026-10-02 (somente dev; pronto para homologação)
+
+- Pedido do usuário aprovado no plano: `modo-caseiro-default-novos-grupos_2026-10-02_23-02.md`.
+- **Alterações no Domínio de Grupos (`internal/groups`)**:
+  - `groups.Defaults(chatID int64)` atualizado para `DefaultGameMode: Caseiro`. Novos grupos iniciam automaticamente com o modo Caseiro ativado por padrão.
+- **Banco de Dados PostgreSQL (`internal/storage/postgres`)**:
+  - Nova migration `0010_default_mode_caseiro.up.sql`: `ALTER TABLE group_configs ALTER COLUMN default_game_mode SET DEFAULT 'caseiro';`.
+  - Altera exclusivamente o default para novas linhas; configurações e pontuações de grupos existentes são preservadas intactas.
+- **Apresentação Telegram (`internal/telegram`)**:
+  - `RenderGroupWelcome` atualizado para formatar dinamicamente o modo padrão e o ranking a partir da configuração do grupo (`modo <b>Caseiro</b> e o ranking <b>Atualizado</b>`).
+- **Validação e Testes**:
+  - Suítes de testes unitários e de integração (`groups_test.go`, `groups_integration_test.go`, `migrations_integration_test.go` e `config_test.go`) atualizadas e aprovadas com 100% de sucesso.
+- Regras de isolamento: mantido no working tree da dev, sem commit e sem push até solicitação explícita.
+
+---
+
 # Promoção e Publicação da Versão V2 na Branch Main — 2026-10-02
 
 - Pedido do usuário aprovado no plano: `promover-publicar-main_2026-10-02_20-45.md`.
