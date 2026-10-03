@@ -1,6 +1,6 @@
-# Modo Caseiro como Padrão para Novos Grupos — 2026-10-02 (somente dev; pronto para homologação)
+# Modo Caseiro como Padrão para Novos Grupos — 2026-10-02 (publicado em dev e main)
 
-- Pedido do usuário aprovado no plano: `modo-caseiro-default-novos-grupos_2026-10-02_23-02.md`.
+- Pedido do usuário aprovado nos planos: `modo-caseiro-default-novos-grupos_2026-10-02_23-02.md` e `promover-publicar-main_2026-10-02_23-10.md`.
 - **Alterações no Domínio de Grupos (`internal/groups`)**:
   - `groups.Defaults(chatID int64)` atualizado para `DefaultGameMode: Caseiro`. Novos grupos iniciam automaticamente com o modo Caseiro ativado por padrão.
 - **Banco de Dados PostgreSQL (`internal/storage/postgres`)**:
@@ -10,7 +10,9 @@
   - `RenderGroupWelcome` atualizado para formatar dinamicamente o modo padrão e o ranking a partir da configuração do grupo (`modo <b>Caseiro</b> e o ranking <b>Atualizado</b>`).
 - **Validação e Testes**:
   - Suítes de testes unitários e de integração (`groups_test.go`, `groups_integration_test.go`, `migrations_integration_test.go` e `config_test.go`) atualizadas e aprovadas com 100% de sucesso.
-- Regras de isolamento: mantido no working tree da dev, sem commit e sem push até solicitação explícita.
+- **Publicação na Branch `main`**:
+  - Commit limpo `cfcef3b`: `feat(v2): set caseiro as default mode for new groups`.
+  - Push realizado para `origin/main` (`57daf31..cfcef3b`), disparando os workflows de segurança `public-tree.yml` e compilação do container OCI multi-arquitetura no GHCR via `main-container.yml`.
 
 ---
 

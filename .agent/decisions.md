@@ -1,3 +1,25 @@
+# Decisão: promoção da release com modo Caseiro padrão para a branch main
+
+## Data
+2026-10-02
+
+## Contexto
+Após a implementação e homologação do modo Caseiro como default na branch `dev`, o usuário aprovou o plano de publicação limpa da release para a branch pública `main`.
+
+## Decisão tomada
+1. Utilizar worktree temporário isolado a partir de `origin/main` para sincronizar os arquivos permitidos do V2.
+2. Executar auditoria de segurança da árvore pública contra a regex do workflow `public-tree.yml`.
+3. Executar validação de compilação, testes unitários, testes de race e integração PostgreSQL com a nova migration `0010_default_mode_caseiro.up.sql`.
+4. Criar commit descritivo linear na `main` (`feat(v2): set caseiro as default mode for new groups` - commit `cfcef3b`) e fazer push para `origin/main`.
+
+## Motivo
+Manter a `main` como a fonte oficial, limpa e auditável das releases em produção do UnoBotGO V2, disparando o build automático de containers OCI multi-arquitetura no GHCR.
+
+## Impacto
+Novos deploys a partir da imagem do GHCR passam a vir com o modo Caseiro configurado por padrão para novas instalações e novos chats.
+
+---
+
 # Decisão: modo Caseiro como padrão para novos grupos
 
 ## Data
