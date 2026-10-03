@@ -200,7 +200,7 @@ func newTestHarness() *testHarness {
 	}
 }
 
-// 1 & 20: Grupo sem config explícita -> Classic + Updated. Setup nunca bloqueia /novo.
+// 1 & 20: Grupo sem config explícita -> Caseiro + Updated. Setup nunca bloqueia /novo.
 func TestConfig_DefaultsAndNeverBlocked(t *testing.T) {
 	h := newTestHarness()
 	ctx := t.Context()
@@ -221,8 +221,8 @@ func TestConfig_DefaultsAndNeverBlocked(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if view.Rules.AllowSwapHands {
-		t.Error("expected Classic mode by default (AllowSwapHands = false)")
+	if !view.Rules.AllowSwapHands {
+		t.Error("expected Caseiro mode by default (AllowSwapHands = true)")
 	}
 	if view.GroupConfig.RankingSystem != groups.Updated {
 		t.Errorf("expected Updated ranking by default, got %v", view.GroupConfig.RankingSystem)
@@ -310,7 +310,7 @@ func TestConfig_ActiveGamePreservesSnapshotOnConfigChange(t *testing.T) {
 	ctx := t.Context()
 	chatID := int64(-1005)
 
-	// Admin creates a Classic game
+	// Admin creates a game with defaults (Caseiro + Updated)
 	h.api.ChatMembers[10] = &telego.ChatMemberAdministrator{Status: telego.MemberStatusAdministrator}
 	h.cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
@@ -319,12 +319,12 @@ func TestConfig_ActiveGamePreservesSnapshotOnConfigChange(t *testing.T) {
 	})
 	summary, _ := h.svc.FindChatGame(ctx, game.ChatID(chatID))
 
-	// While game is active in lobby or running, admin switches default mode to Caseiro and ranking to Updated
+	// While game is active in lobby or running, admin switches default mode to Classic and ranking to Legacy
 	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
 		ID:      "cb1",
 		From:    telego.User{ID: 10, FirstName: "Admin"},
 		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 99},
-		Data:    fmt.Sprintf("cfg_mode_caseiro_%d", chatID),
+		Data:    fmt.Sprintf("cfg_mode_classic_%d", chatID),
 	})
 	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
 		ID:      "cb2",
@@ -335,13 +335,13 @@ func TestConfig_ActiveGamePreservesSnapshotOnConfigChange(t *testing.T) {
 
 	// Check that GroupConfig was updated in storage
 	cfg, _ := h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if cfg.DefaultGameMode != groups.Caseiro || cfg.RankingSystem != groups.Legacy {
+	if cfg.DefaultGameMode != groups.Classic || cfg.RankingSystem != groups.Legacy {
 		t.Fatalf("expected updated config in repo, got %+v", cfg)
 	}
 
-	// But the active game still retains Classic rules and Legacy ranking snapshot!
+	// But the active game still retains Caseiro rules and Updated ranking snapshot!
 	view, _ := h.svc.PublicView(ctx, summary.GameID)
-	if view.Rules.AllowSwapHands {
+	if !view.Rules.AllowSwapHands {
 		t.Error("active game AllowSwapHands was mutated by config change!")
 	}
 	if view.GroupConfig.RankingSystem != groups.Updated {
@@ -454,7 +454,7 @@ func TestConfig_NonAdminCannotModify(t *testing.T) {
 		ID:      "cb_unauth",
 		From:    telego.User{ID: regularUserID, FirstName: "Bob"},
 		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
-		Data:    fmt.Sprintf("cfg_mode_caseiro_%d", chatID),
+		Data:    fmt.Sprintf("cfg_mode_classic_%d", chatID),
 	})
 
 	lastAnswer := h.api.AnsweredCallbacks[len(h.api.AnsweredCallbacks)-1]
@@ -463,7 +463,7 @@ func TestConfig_NonAdminCannotModify(t *testing.T) {
 	}
 
 	cfg, _ := h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if cfg.DefaultGameMode != groups.Classic {
+	if cfg.DefaultGameMode != groups.Caseiro {
 		t.Errorf("unauthorized user altered config: %+v", cfg)
 	}
 
@@ -948,15 +948,15 @@ func TestConfig_FirstConfigInGroupWithoutExistingConfig_ObservesUser(t *testing.
 		Text: "/config@unobot",
 	})
 
-	// 1. Group config deve existir com os defaults (Classic + Updated)
+	// 1. Group config deve existir com os defaults (Caseiro + Updated)
 	h.groupRepo.mu.Lock()
 	cfg, exists := h.groupRepo.configs[chatID]
 	h.groupRepo.mu.Unlock()
 	if !exists {
 		t.Fatal("expected group config to be created")
 	}
-	if cfg.DefaultGameMode != groups.Classic || cfg.RankingSystem != groups.Updated {
-		t.Fatalf("expected defaults Classic + Updated, got mode=%v rank=%v", cfg.DefaultGameMode, cfg.RankingSystem)
+	if cfg.DefaultGameMode != groups.Caseiro || cfg.RankingSystem != groups.Updated {
+		t.Fatalf("expected defaults Caseiro + Updated, got mode=%v rank=%v", cfg.DefaultGameMode, cfg.RankingSystem)
 	}
 
 	// 2. Usuário deve ter sido observado com sucesso (sem erro de foreign key)
@@ -1011,8 +1011,8 @@ func TestConfig_FirstConfigInGroupWithoutExistingConfig_NonAdmin_ObservesUserAnd
 	if !exists {
 		t.Fatal("expected group config to be created")
 	}
-	if cfg.DefaultGameMode != groups.Classic || cfg.RankingSystem != groups.Updated {
-		t.Fatalf("expected defaults Classic + Updated, got mode=%v rank=%v", cfg.DefaultGameMode, cfg.RankingSystem)
+	if cfg.DefaultGameMode != groups.Caseiro || cfg.RankingSystem != groups.Updated {
+		t.Fatalf("expected defaults Caseiro + Updated, got mode=%v rank=%v", cfg.DefaultGameMode, cfg.RankingSystem)
 	}
 
 	// 2. Usuário comum deve ter sido observado com sucesso

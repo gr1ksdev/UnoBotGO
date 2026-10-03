@@ -97,7 +97,7 @@ func TestRecordInstallation(t *testing.T) {
 
 func TestNewGroupsDefaultToUpdated(t *testing.T) {
 	c := Defaults(123)
-	if c.RankingSystem != Updated || c.DefaultGameMode != Classic || c.Revision != 1 || c.RankingPrivate != false {
+	if c.RankingSystem != Updated || c.DefaultGameMode != Caseiro || c.Revision != 1 || c.RankingPrivate != false {
 		t.Fatalf("incorrect new group defaults: %+v", c)
 	}
 }

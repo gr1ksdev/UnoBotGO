@@ -17,10 +17,10 @@ func TestGroupDefaultsAndPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.DefaultGameMode != groups.Classic || c.RankingSystem != groups.Updated || c.Revision != 1 {
+	if c.DefaultGameMode != groups.Caseiro || c.RankingSystem != groups.Updated || c.Revision != 1 {
 		t.Fatalf("wrong defaults %+v", c)
 	}
-	changed, err := s.SetDefaultGameMode(ctx, 42, groups.Caseiro)
+	changed, err := s.SetDefaultGameMode(ctx, 42, groups.Classic)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,10 +28,10 @@ func TestGroupDefaultsAndPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.DefaultGameMode != groups.Caseiro || c.RankingSystem != groups.Updated || c.Revision != 2 {
+	if c.DefaultGameMode != groups.Classic || c.RankingSystem != groups.Updated || c.Revision != 2 {
 		t.Fatalf("not persisted %+v", c)
 	}
-	again, err := s.SetDefaultGameMode(ctx, 42, groups.Caseiro)
+	again, err := s.SetDefaultGameMode(ctx, 42, groups.Classic)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -511,9 +511,17 @@ func (r *Renderer) RenderGroupConfig(config groups.Config) string {
 
 // RenderGroupWelcome formats the introductory message when the bot joins a group.
 func (r *Renderer) RenderGroupWelcome(config groups.Config) string {
-	return "👋 <b>Olá! Obrigado por adicionar o UnoBotGO ao grupo!</b>\n\n" +
-		"O bot já está pronto para jogar. Por padrão, as partidas usam o modo <b>Clássico</b> e o ranking <b>Legado</b>.\n\n" +
-		"Use /novo para iniciar uma partida ou clique no botão abaixo para personalizar as opções do grupo."
+	modeLabel := "Clássico"
+	if config.DefaultGameMode == groups.Caseiro {
+		modeLabel = "Caseiro"
+	}
+	rankLabel := "Legado"
+	if config.RankingSystem == groups.Updated {
+		rankLabel = "Atualizado"
+	}
+	return fmt.Sprintf("👋 <b>Olá! Obrigado por adicionar o UnoBotGO ao grupo!</b>\n\n"+
+		"O bot já está pronto para jogar. Por padrão, as partidas usam o modo <b>%s</b> e o ranking <b>%s</b>.\n\n"+
+		"Use /novo para iniciar uma partida ou clique no botão abaixo para personalizar as opções do grupo.", modeLabel, rankLabel)
 }
 
 func (r *Renderer) RenderUserPrivacy(enabled bool) string {
