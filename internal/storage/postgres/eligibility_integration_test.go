@@ -212,8 +212,23 @@ func TestEligibilityMigrationPreservesHistoricalPending(t *testing.T) {
 	for i := range raw.Players {
 		raw.Players[i].Score = 0
 	}
-	if _, err = s.RecordCompletedGame(ctx, raw); err != nil {
+	// Seed a historical pre-0005 record with its original schema. The current
+	// repository correctly requires the startup migrations (including origin).
+	historicalHash, hashErr := raw.Hash()
+	if hashErr != nil {
+		t.Fatal(hashErr)
+	}
+	if _, err = s.pool.Exec(ctx, `INSERT INTO completed_games(game_id,chat_id,game_mode,ranking_system,config_revision,started_at,finished_at,final_revision,finish_reason,payload_hash,participant_count,scoring_status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'needs_product_decision')`, raw.GameID, raw.ChatID, raw.GameMode, raw.RankingSystem, raw.ConfigRevision, raw.StartedAt, raw.FinishedAt, raw.FinalRevision, raw.FinishReason, historicalHash, len(raw.Players)); err != nil {
 		t.Fatal(err)
+	}
+	for _, p := range raw.Players {
+		var historicalPosition any
+		if p.Position > 0 {
+			historicalPosition = p.Position
+		}
+		if _, err = s.pool.Exec(ctx, `INSERT INTO completed_game_players(game_id,user_id,observed_name,final_status,position,went_out,joined_after_start,leave_count,reentry_count) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, raw.GameID, p.UserID, p.DisplayName, p.FinalStatus, historicalPosition, p.WentOut, p.JoinedAfterStart, p.LeaveCount, p.ReentryCount); err != nil {
+			t.Fatal(err)
+		}
 	}
 	before, err := raw.Hash()
 	if err != nil {

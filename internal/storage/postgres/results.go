@@ -58,8 +58,8 @@ func (s *Store) RecordCompletedGame(ctx context.Context, result ranking.Result) 
 		scoredAt = r.FinishedAt
 	}
 	// ON CONFLICT also covers accidental reuse of a GameID in different chats.
-	tag, err := tx.Exec(ctx, `INSERT INTO completed_games(game_id,chat_id,game_mode,ranking_system,config_revision,started_at,finished_at,final_revision,finish_reason,payload_hash,participant_count,scoring_status,policy_version,scored_at)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT(game_id) DO NOTHING`, r.GameID, r.ChatID, r.GameMode, r.RankingSystem, r.ConfigRevision, r.StartedAt, r.FinishedAt, int64(r.FinalRevision), r.FinishReason, hash, len(r.Players), status, policy, scoredAt)
+	tag, err := tx.Exec(ctx, `INSERT INTO completed_games(game_id,chat_id,game_mode,ranking_system,config_revision,started_at,finished_at,final_revision,finish_reason,payload_hash,participant_count,scoring_status,policy_version,scored_at,origin)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT(game_id) DO NOTHING`, r.GameID, r.ChatID, r.GameMode, r.RankingSystem, r.ConfigRevision, r.StartedAt, r.FinishedAt, int64(r.FinalRevision), r.FinishReason, hash, len(r.Players), status, policy, scoredAt, resultOrigin(r.Origin))
 	if err != nil {
 		return ranking.Commit{}, operationError(ctx, "insert completed game")
 	}
@@ -132,4 +132,11 @@ func (s *Store) RecordCompletedGame(ctx context.Context, result ranking.Result) 
 		return ranking.Commit{}, operationError(ctx, "commit result")
 	}
 	return ranking.Commit{Scored: scored}, nil
+}
+
+func resultOrigin(origin string) string {
+	if origin == "webapp" {
+		return origin
+	}
+	return "inline"
 }

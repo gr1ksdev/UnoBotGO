@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sync/atomic"
 	"time"
 
 	"github.com/malbs/UnoGoBot/internal/config"
@@ -30,6 +31,7 @@ var (
 var allowedUpdates = []string{"message", "inline_query", "chosen_inline_result", "callback_query", "my_chat_member"}
 
 type Bot struct {
+	finalizer        *game.Finalizer
 	resultRepository ranking.Repository
 	groupConfigs     groups.Repository
 	knownUsers       groups.UserRepository
@@ -44,6 +46,7 @@ type Bot struct {
 	cbHandler        *CallbackHandler
 	inlineHandler    *InlineHandler
 	logger           *slog.Logger
+	usernamePublic   atomic.Value
 	username         string
 	turnTimeout      time.Duration
 	transport        TransportConfig
@@ -123,6 +126,7 @@ func (b *Bot) Run(ctx context.Context) error {
 		return ErrMissingBotUsername
 	}
 	b.username = me.Username
+	b.usernamePublic.Store(me.Username)
 	b.renderer.SetBotID(me.ID)
 	b.cmdHandler.botUsername = me.Username
 	b.cmdHandler.miniAppURL = miniAppLaunchURL(me.Username)

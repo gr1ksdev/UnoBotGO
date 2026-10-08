@@ -1,0 +1,260 @@
+{
+  "kind": "visual-prototype-only",
+  "checks": [
+    "24 screen/viewport combinations",
+    "all assets resolve offline",
+    "no horizontal page overflow",
+    "game controls stay within viewport",
+    "ranking states",
+    "navigation",
+    "selection and feedback",
+    "no JavaScript errors"
+  ],
+  "backendTests": false,
+  "results": [
+    {
+      "screen": "home",
+      "viewport": [
+        320,
+        568
+      ],
+      "width": 320,
+      "height": 1007,
+      "images": true
+    },
+    {
+      "screen": "ranking",
+      "viewport": [
+        320,
+        568
+      ],
+      "width": 320,
+      "height": 1036,
+      "images": true
+    },
+    {
+      "screen": "groups",
+      "viewport": [
+        320,
+        568
+      ],
+      "width": 320,
+      "height": 1057,
+      "images": true
+    },
+    {
+      "screen": "profile",
+      "viewport": [
+        320,
+        568
+      ],
+      "width": 320,
+      "height": 1013,
+      "images": true
+    },
+    {
+      "screen": "game",
+      "viewport": [
+        320,
+        568
+      ],
+      "width": 320,
+      "height": 568,
+      "images": true,
+      "localBottom": 568
+    },
+    {
+      "screen": "result",
+      "viewport": [
+        320,
+        568
+      ],
+      "width": 320,
+      "height": 753,
+      "images": true
+    },
+    {
+      "screen": "home",
+      "viewport": [
+        360,
+        800
+      ],
+      "width": 360,
+      "height": 1057,
+      "images": true
+    },
+    {
+      "screen": "ranking",
+      "viewport": [
+        360,
+        800
+      ],
+      "width": 360,
+      "height": 1037,
+      "images": true
+    },
+    {
+      "screen": "groups",
+      "viewport": [
+        360,
+        800
+      ],
+      "width": 360,
+      "height": 1058,
+      "images": true
+    },
+    {
+      "screen": "profile",
+      "viewport": [
+        360,
+        800
+      ],
+      "width": 360,
+      "height": 999,
+      "images": true
+    },
+    {
+      "screen": "game",
+      "viewport": [
+        360,
+        800
+      ],
+      "width": 360,
+      "height": 800,
+      "images": true,
+      "localBottom": 800
+    },
+    {
+      "screen": "result",
+      "viewport": [
+        360,
+        800
+      ],
+      "width": 360,
+      "height": 800,
+      "images": true
+    },
+    {
+      "screen": "home",
+      "viewport": [
+        390,
+        844
+      ],
+      "width": 390,
+      "height": 1057,
+      "images": true
+    },
+    {
+      "screen": "ranking",
+      "viewport": [
+        390,
+        844
+      ],
+      "width": 390,
+      "height": 1037,
+      "images": true
+    },
+    {
+      "screen": "groups",
+      "viewport": [
+        390,
+        844
+      ],
+      "width": 390,
+      "height": 1041,
+      "images": true
+    },
+    {
+      "screen": "profile",
+      "viewport": [
+        390,
+        844
+      ],
+      "width": 390,
+      "height": 999,
+      "images": true
+    },
+    {
+      "screen": "game",
+      "viewport": [
+        390,
+        844
+      ],
+      "width": 390,
+      "height": 844,
+      "images": true,
+      "localBottom": 844
+    },
+    {
+      "screen": "result",
+      "viewport": [
+        390,
+        844
+      ],
+      "width": 390,
+      "height": 844,
+      "images": true
+    },
+    {
+      "screen": "home",
+      "viewport": [
+        430,
+        932
+      ],
+      "width": 430,
+      "height": 1057,
+      "images": true
+    },
+    {
+      "screen": "ranking",
+      "viewport": [
+        430,
+        932
+      ],
+      "width": 430,
+      "height": 1037,
+      "images": true
+    },
+    {
+      "screen": "groups",
+      "viewport": [
+        430,
+        932
+      ],
+      "width": 430,
+      "height": 1041,
+      "images": true
+    },
+    {
+      "screen": "profile",
+      "viewport": [
+        430,
+        932
+      ],
+      "width": 430,
+      "height": 999,
+      "images": true
+    },
+    {
+      "screen": "game",
+      "viewport": [
+        430,
+        932
+      ],
+      "width": 430,
+      "height": 932,
+      "images": true,
+      "localBottom": 932
+    },
+    {
+      "screen": "result",
+      "viewport": [
+        430,
+        932
+      ],
+      "width": 430,
+      "height": 932,
+      "images": true
+    }
+  ]
+}

@@ -1,164 +1,111 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router'
 import { ProfilePage } from './Profile'
-
-function wrap(ui: React.ReactElement) {
-  const testClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  })
-  return render(
-    <QueryClientProvider client={testClient}>
-      <MemoryRouter initialEntries={['/profile']}>{ui}</MemoryRouter>
-    </QueryClientProvider>
-  )
+function wrap() {
+ return render(
+  <QueryClientProvider
+   client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+  >
+   <MemoryRouter>
+    <ProfilePage />
+   </MemoryRouter>
+  </QueryClientProvider>,
+ )
 }
-
-describe('ProfilePage', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks()
-    window.scrollTo = vi.fn()
-    window.Telegram = {
-      WebApp: {
-        initData: 'query_id=123',
-        initDataUnsafe: {
-          user: {
-            id: 12345,
-            first_name: 'Gabriel',
-            last_name: 'Silva',
-            username: 'gabrielsilva',
-            photo_url: 'https://example.com/avatar.jpg',
-          },
-        },
-        ready: vi.fn(),
-        expand: vi.fn(),
-        close: vi.fn(),
-        setHeaderColor: vi.fn(),
-        BackButton: { show: vi.fn(), hide: vi.fn(), onClick: vi.fn(), offClick: vi.fn() },
-      },
-    } as unknown as typeof window.Telegram
-  })
-
-  it('renders user name and photo, and converts them to anonymous when toggled', async () => {
-    let isAnon = false
-
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
-      const u = typeof url === 'string' ? url : url.toString()
-      if (u.includes('/api/v1/me/privacy')) {
-        if (init?.method === 'PUT') {
-          const body = JSON.parse(init.body as string)
-          isAnon = body.anonymous
-          return new Response(JSON.stringify({ anonymous: isAnon }), { status: 200 })
-        }
-        return new Response(JSON.stringify({ anonymous: isAnon }), { status: 200 })
-      }
-      return new Response('{}', { status: 404 })
-    })
-
-    wrap(<ProfilePage />)
-
-    // Check header
-    expect(screen.getByRole('heading', { level: 1, name: 'Meu Perfil' })).toBeInTheDocument()
-
-    // Initially public: shows user's real name, username and photo
-    await waitFor(() => {
-      const btn = screen.getByRole('switch')
-      expect(btn).toBeEnabled()
-      expect(btn).toHaveAttribute('aria-checked', 'false')
-    })
-    expect(screen.getByRole('heading', { level: 2, name: 'Gabriel Silva' })).toBeInTheDocument()
-    expect(screen.getByText('@gabrielsilva')).toBeInTheDocument()
-    const img = screen.getByRole('img')
-    expect(img).toHaveAttribute('src', 'https://example.com/avatar.jpg')
-    expect(document.querySelector('.icon-anonymous')).not.toBeInTheDocument()
-
-    // Click toggle to enable anonymous mode
-    const switchBtn = screen.getByRole('switch')
-    fireEvent.click(switchBtn)
-
-    // Should convert name and photo to anonymous
-    await waitFor(() => {
-      expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true')
-    })
-    expect(screen.getByRole('heading', { level: 2, name: 'Anônimo' })).toBeInTheDocument()
-    expect(screen.getByText('Modo anônimo ativado • Oculto no ranking')).toBeInTheDocument()
-    expect(screen.queryByRole('img')).not.toBeInTheDocument()
-    expect(document.querySelector('.icon-anonymous')).toBeInTheDocument()
-    expect(screen.getByText('✓ Salvo com sucesso')).toBeInTheDocument()
-
-    // Toggle back to public: restores user's real name and photo
-    fireEvent.click(switchBtn)
-    await waitFor(() => {
-      expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'false')
-    })
-    expect(screen.getByRole('heading', { level: 2, name: 'Gabriel Silva' })).toBeInTheDocument()
-    expect(screen.getByRole('img')).toHaveAttribute('src', 'https://example.com/avatar.jpg')
-
-    // Bottom navigation should have Perfil active
-    const nav = screen.getByRole('navigation', { name: 'Navegação principal' })
-    expect(nav).toHaveAttribute('data-tab', 'profile')
-  })
-
-  it('renders initials when user has no photo', async () => {
-    window.Telegram = {
-      WebApp: {
-        initData: 'query_id=123',
-        initDataUnsafe: {
-          user: {
-            first_name: 'Lucas',
-            last_name: 'Pereira',
-          },
-        },
-        ready: vi.fn(),
-        expand: vi.fn(),
-        close: vi.fn(),
-        setHeaderColor: vi.fn(),
-        BackButton: { show: vi.fn(), hide: vi.fn(), onClick: vi.fn(), offClick: vi.fn() },
-      },
-    } as unknown as typeof window.Telegram
-
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      const u = typeof url === 'string' ? url : url.toString()
-      if (u.includes('/api/v1/me/privacy')) {
-        return new Response(JSON.stringify({ anonymous: false }), { status: 200 })
-      }
-      return new Response('{}', { status: 404 })
-    })
-
-    wrap(<ProfilePage />)
-
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { level: 2, name: 'Lucas Pereira' })).toBeInTheDocument()
-    })
-    expect(screen.getByText('LP')).toBeInTheDocument()
-    expect(screen.queryByRole('img')).not.toBeInTheDocument()
-  })
-
-  it('handles error when saving privacy fails', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
-      const u = typeof url === 'string' ? url : url.toString()
-      if (u.includes('/api/v1/me/privacy')) {
-        if (init?.method === 'PUT') {
-          return new Response('{"error":"busy"}', { status: 500 })
-        }
-        return new Response(JSON.stringify({ anonymous: false }), { status: 200 })
-      }
-      return new Response('{}', { status: 404 })
-    })
-
-    wrap(<ProfilePage />)
-
-    await waitFor(() => {
-      const btn = screen.getByRole('switch')
-      expect(btn).toBeEnabled()
-      expect(btn).toHaveAttribute('aria-checked', 'false')
-    })
-
-    fireEvent.click(screen.getByRole('switch'))
-
-    await waitFor(() => {
-      expect(screen.getByText('Não foi possível salvar a alteração.')).toBeInTheDocument()
-    })
-  })
+beforeEach(() => {
+ window.Telegram = {
+  WebApp: {
+   initData: 'test',
+   initDataUnsafe: {
+    user: { first_name: 'Lucas', last_name: 'Pereira', username: 'lucas' },
+   },
+   ready: vi.fn(),
+   expand: vi.fn(),
+  },
+ }
+ vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, options) => {
+  const url = String(input)
+  const data = url.endsWith('/privacy')
+   ? { anonymous: options?.method === 'PUT' }
+   : url.includes('/position')
+     ? { entry: null, month_name: 'Outubro' }
+     : {
+        stats: [
+         { system: 'updated', score_units: '1000', games: 2, wins: 1 },
+         { system: 'legacy', score_units: '100', games: 1, wins: 1 },
+        ],
+        history: [
+         {
+          id: 'one',
+          group: 'Grupo anônimo',
+          origin: 'inline',
+          system: 'updated',
+          position: 1,
+          score_units: '1000',
+          finished_at: '2026-10-08',
+         },
+         {
+          id: 'two',
+          group: 'Mesa',
+          origin: 'webapp',
+          system: 'legacy',
+          position: 2,
+          score_units: '0',
+          finished_at: '2026-10-08',
+         },
+        ],
+       }
+  return { ok: true, json: async () => data } as Response
+ })
+})
+describe('Real profile', () => {
+ it('uses the Telegram identity and combined eligible statistics', async () => {
+  wrap()
+  await screen.findByText('10,00')
+  expect(
+   screen.getByRole('heading', { name: 'Lucas Pereira' }),
+  ).toBeInTheDocument()
+  expect(screen.getByText('3')).toBeInTheDocument()
+  expect(screen.getByText('67%')).toBeInTheDocument()
+ })
+ it('identifies Inline and Mini App history once each', async () => {
+  wrap()
+  await screen.findByText('Grupo anônimo')
+  expect(screen.getAllByText('Inline')).toHaveLength(1)
+  expect(screen.getAllByText('Mini App')).toHaveLength(1)
+ })
+ it('changes privacy through the authenticated API', async () => {
+  wrap()
+  const toggle = await screen.findByRole('switch')
+  await waitFor(() => expect(toggle).not.toBeDisabled())
+  fireEvent.click(toggle)
+  await screen.findByText('Salvo com sucesso')
+  expect(toggle).toHaveAttribute('aria-checked', 'true')
+  expect(screen.getByRole('heading', { name: 'Anônimo' })).toBeInTheDocument()
+ })
+ it('does not add scores from incompatible policies', async () => {
+  wrap()
+  await screen.findByText('10,00')
+  fireEvent.click(screen.getByRole('button', { name: 'Legado' }))
+  await screen.findByText('Pontuação total · Legado')
+  expect(screen.queryByText('11,00')).not.toBeInTheDocument()
+ })
+ it('reports a failed privacy write', async () => {
+  const base = vi.mocked(fetch).getMockImplementation()!
+  vi
+   .mocked(fetch)
+   .mockImplementation((input, options) =>
+    options?.method === 'PUT'
+     ? Promise.resolve({ ok: false, status: 500 } as Response)
+     : base(input, options),
+   )
+  wrap()
+  const toggle = await screen.findByRole('switch')
+  await waitFor(() => expect(toggle).not.toBeDisabled())
+  fireEvent.click(toggle)
+  await screen.findByText('Não foi possível salvar a alteração.')
+  expect(toggle).toHaveAttribute('aria-checked', 'false')
+ })
 })

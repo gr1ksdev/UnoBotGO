@@ -484,3 +484,14 @@ Trabalhos paralelos conciliados por merge de origin/dev: fullscreen do Mini App 
 
 - Grupos/supergrupos aceitam somente comandos endereçados ao username deste bot; privado aceita comandos sem sufixo. /join é alias de /entrar. Reset aplica o mesmo filtro antes da recovery lane.
 - Novos grupos: Classic + Updated. Migration 0008 altera somente DEFAULT; grupos persistidos preservam sistema, revisão e pontos.
+
+
+# Mini App mobile e partidas WebApp — 2026-10-08 (dev, sem publicação)
+
+- Seis telas integradas à stack existente: início, ranking, perfil, lobby, partida e resultado; identidade visual do pacote unobotgo-v1 preservado.
+- WebSocket autenticado por initData e autorizado pela participação na sala; snapshots personalizados, receipts idempotentes e revision canônica. HTTP para consultas/recuperação, sem polling de turnos.
+- Finalizer compartilhado Inline/WebApp: persistir → confirmar commit → reconhecer pendência → notificar commit novo. Retry automático 1–30s; falhas mantêm resultado pendente.
+- Ranking mensal identifica período, mantém Legacy/Updated separados e combina modalidades. Perfil/histórico reais com privacidade e cursores vinculados ao usuário; migration aditiva 0011 identifica origem pelo transporte de início.
+- Salas criadas/admitidas pelo fluxo existente do bot no grupo. Partidas, receipts e resultados pendentes continuam em memória; restart não fornece recuperação durável. Notificações sem outbox preservam tentativa após commit.
+- Validação: make check completo com PostgreSQL 17 isolado; Go race normal e integração; 60 testes frontend; screenshots nas quatro dimensões, 120 combinações de mão/jogadores, 20 estados de ranking e quatro casos de safe areas. Comparações corrigidas, inclusive 320×568/dez jogadores.
+- Relatório: docs/miniapp-webapp.md. Artefatos com dados exclusivos de teste: .reports/redesign-mobile/. Sem homologação Telegram real, commit, push ou deploy.

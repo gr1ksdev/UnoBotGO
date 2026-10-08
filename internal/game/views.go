@@ -2,6 +2,7 @@ package game
 
 import (
 	"slices"
+	"time"
 
 	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/uno"
@@ -10,6 +11,7 @@ import (
 type ChatID int64
 
 type PublicPlayer struct {
+	Name      string
 	ID        uno.PlayerID
 	Status    uno.PlayerStatus
 	CardCount int
@@ -27,6 +29,7 @@ const (
 // PublicGameView has no hands, draw pile or full inventory. OwnerID is metadata,
 // not a participant; Players contains only users explicitly registered via Join.
 type PublicGameView struct {
+	TurnStarted     time.Time
 	GroupConfig     groups.Snapshot
 	GameID          uno.GameID
 	ChatID          ChatID
@@ -92,7 +95,7 @@ func (v PublicGameView) summary() GameSummary {
 }
 
 func publicView(entry *managedGame, state uno.State) PublicGameView {
-	v := PublicGameView{GroupConfig: entry.groupConfig,
+	v := PublicGameView{TurnStarted: entry.turnStarted, GroupConfig: entry.groupConfig,
 		GameID: state.ID, ChatID: entry.chatID, ChatName: entry.chatName,
 		CreatorID: entry.creatorID, OwnerID: entry.ownerID, Locked: entry.locked, Revision: state.Revision,
 		Phase: state.Phase, Rules: state.Rules, CurrentTurn: state.CurrentPlayerID,
@@ -103,7 +106,7 @@ func publicView(entry *managedGame, state uno.State) PublicGameView {
 		Players: make([]PublicPlayer, 0, len(state.Players)),
 	}
 	for _, p := range state.Players {
-		v.Players = append(v.Players, PublicPlayer{ID: p.ID, Status: p.Status, CardCount: len(p.Hand), Active: !v.Closed && p.Status == uno.Playing})
+		v.Players = append(v.Players, PublicPlayer{Name: entry.participants[p.ID].DisplayName, ID: p.ID, Status: p.Status, CardCount: len(p.Hand), Active: !v.Closed && p.Status == uno.Playing})
 	}
 	if len(state.DiscardPile) > 0 {
 		top := state.DiscardPile[len(state.DiscardPile)-1]

@@ -87,6 +87,17 @@ func (s *Service) Create(ctx context.Context, actor Actor, req CreateRequest) (O
 }
 
 func (s *Service) Apply(ctx context.Context, actor Actor, id uno.GameID, action uno.Action) (Outcome, error) {
+	return s.apply(ctx, actor, id, action, "")
+}
+
+// ApplyWeb is the authenticated adapter entry. Receipts are checked under the game lock.
+func (s *Service) ApplyWeb(ctx context.Context, actor Actor, id uno.GameID, action uno.Action, requestID string) (Outcome, error) {
+	if len(requestID) < 8 || len(requestID) > 128 {
+		return Outcome{}, ErrInvalidArgument
+	}
+	return s.apply(ctx, actor, id, action, requestID)
+}
+func (s *Service) apply(ctx context.Context, actor Actor, id uno.GameID, action uno.Action, requestID string) (Outcome, error) {
 	if err := checkContext(ctx); err != nil {
 		return Outcome{}, err
 	}
@@ -101,6 +112,19 @@ func (s *Service) Apply(ctx context.Context, actor Actor, id uno.GameID, action 
 		return Outcome{}, err
 	}
 	defer entry.mu.Unlock()
+	requested := action
+	if requestID != "" {
+		key := receiptKey{actor.PlayerID, requestID}
+		if receipt, ok := entry.receipts[key]; ok {
+			if receipt.action != action {
+				return Outcome{}, ErrInvalidArgument
+			}
+			return Outcome{View: receipt.view.clone()}, nil
+		}
+		if len(entry.receipts) >= 8192 {
+			return Outcome{}, ErrInvalidArgument
+		}
+	}
 	if entry.final != nil {
 		return Outcome{}, ErrGameClosed
 	}
@@ -141,7 +165,17 @@ func (s *Service) Apply(ctx context.Context, actor Actor, id uno.GameID, action 
 	if err != nil {
 		return Outcome{}, err
 	}
-	return s.manager.publish(entry, before, entry.engine.Snapshot(), result), nil
+	if requestID != "" && action.Type == uno.StartGame {
+		entry.origin = "webapp"
+	}
+	outcome := s.manager.publish(entry, before, entry.engine.Snapshot(), result)
+	if requestID != "" {
+		if entry.receipts == nil {
+			entry.receipts = make(map[receiptKey]actionReceipt)
+		}
+		entry.receipts[receiptKey{actor.PlayerID, requestID}] = actionReceipt{requested, outcome.View.clone()}
+	}
+	return outcome, nil
 }
 
 // Pure application checks, executed while the entry is locked. No role lookup I/O.

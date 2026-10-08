@@ -30,12 +30,13 @@ type PageKey struct {
 }
 
 type GlobalRequest struct {
-	Kind    string
-	System  groups.RankingSystem
-	GroupID int64
-	Month   time.Time
-	Limit   int
-	After   *PageKey
+	LookupID int64
+	Kind     string
+	System   groups.RankingSystem
+	GroupID  int64
+	Month    time.Time
+	Limit    int
+	After    *PageKey
 }
 
 type GlobalPage struct {

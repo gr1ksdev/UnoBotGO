@@ -68,6 +68,7 @@ type Player struct {
 // Result contains result/audit metadata only, with no cards or private snapshots.
 // Finalization callers must Clone at boundaries and treat the value as immutable.
 type Result struct {
+	Origin                string `json:",omitempty"`
 	GameID                string
 	ChatID                int64
 	GameMode              groups.Mode
@@ -107,6 +108,9 @@ func (r Result) Hash() (string, error) {
 // Placements are engine facts: gaps, duplicates or placements on Left players
 // are errors, never repaired by inventing/reordering ranking positions.
 func (r Result) Validate() error {
+	if r.Origin != "" && r.Origin != "inline" && r.Origin != "webapp" {
+		return ErrInvalid
+	}
 	if r.GameID == "" || r.ChatID == 0 || !r.GameMode.Valid() || !r.RankingSystem.Valid() || r.ConfigRevision <= 0 || r.StartedAt.IsZero() || r.FinishedAt.Before(r.StartedAt) || r.FinalRevision == 0 || r.FinalRevision > 1<<63-1 || len(r.Players) == 0 {
 		return ErrInvalid
 	}

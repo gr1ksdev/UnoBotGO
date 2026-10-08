@@ -65,7 +65,7 @@ func TestRankingEligibilityThroughLifecycle(t *testing.T) {
 		change       func(*testing.T, *Service, PublicGameView)
 		wantN, users int
 	}{
-		{"normal_two", 2, nil, 2, 2}, {"normal_three", 3, nil, 3, 3}, {"normal_eight", 8, nil, 8, 8},
+		{"normal_two", 2, nil, 2, 2}, {"normal_three", 3, nil, 3, 3}, {"normal_eight", 8, nil, 8, 8}, {"normal_ten", 10, nil, 10, 10},
 		{"one_abandonment", 8, func(t *testing.T, s *Service, v PublicGameView) {
 			act(t, s, v.GameID, Actor{ChatID: 42, PlayerID: 8}, uno.Action{Type: uno.LeaveGame})
 		}, 7, 8},

@@ -18,6 +18,7 @@ import (
 // for entry.mu. No engine operation, ID generation, factory or I/O under indexMu.
 type manager struct {
 	indexMu        sync.RWMutex
+	subscribers    map[chan struct{}]struct{}
 	pendingResults map[uno.GameID]ranking.Result
 	byID           map[uno.GameID]indexRecord
 	byChat         map[ChatID]uno.GameID
@@ -33,7 +34,17 @@ type indexRecord struct {
 	summary GameSummary // accessed only under indexMu
 }
 
+type receiptKey struct {
+	player  uno.PlayerID
+	request string
+}
+type actionReceipt struct {
+	action uno.Action
+	view   PublicGameView
+}
 type managedGame struct {
+	origin       string
+	receipts     map[receiptKey]actionReceipt
 	mu           sync.Mutex
 	startedAt    time.Time
 	participants map[uno.PlayerID]participantHistory
@@ -51,7 +62,7 @@ type managedGame struct {
 
 func newManager(limit int) *manager {
 	return &manager{
-		pendingResults: make(map[uno.GameID]ranking.Result), byID: make(map[uno.GameID]indexRecord), byChat: make(map[ChatID]uno.GameID),
+		subscribers: make(map[chan struct{}]struct{}), pendingResults: make(map[uno.GameID]ranking.Result), byID: make(map[uno.GameID]indexRecord), byChat: make(map[ChatID]uno.GameID),
 		byPlayer: make(map[uno.PlayerID]map[uno.GameID]struct{}), historyLimit: limit,
 		newID:   randomID,
 		newGame: func(id uno.GameID, rules uno.Rules) (*uno.Game, error) { return uno.NewGame(id, rules) },
@@ -168,6 +179,12 @@ func (m *manager) publish(entry *managedGame, before, after uno.State, result un
 		if len(m.history) > m.historyLimit {
 			delete(m.byID, m.history[0])
 			m.history = slices.Delete(m.history, 0, 1)
+		}
+	}
+	for ch := range m.subscribers {
+		select {
+		case ch <- struct{}{}:
+		default:
 		}
 	}
 	return Outcome{View: view, Events: slices.Clone(result.Events), Completed: completed}

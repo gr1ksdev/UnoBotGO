@@ -95,7 +95,7 @@ func Run(ctx context.Context, cfg *config.Config, dev bool, logger *slog.Logger)
 		return err
 	}
 	photos := media.New(ctx, telegram.AvatarSource{Bot: client})
-	api := &httpapi.API{Rankings: &ranking.GlobalService{Repository: store}, References: refs, Media: photos, Privacy: store, UserPrivacy: store, Token: cfg.Token, MaxAge: config.InitDataMaxAge}
+	api := &httpapi.API{Rankings: &ranking.GlobalService{Repository: store}, References: refs, Media: photos, Privacy: store, UserPrivacy: store, Token: cfg.Token, MaxAge: config.InitDataMaxAge, Games: svc, Profiles: store, TurnTimeout: cfg.TurnTimeout, Lifecycle: ctx}
 	mux := http.NewServeMux()
 	mux.Handle("/api/", api.Handler())
 	mux.Handle("/", httpapi.Static(web.Files()))
@@ -124,13 +124,20 @@ func Run(ctx context.Context, cfg *config.Config, dev bool, logger *slog.Logger)
 		return errors.New("cannot start HTTP listener")
 	}
 	httpDone := make(chan error, 1)
-	go func() { httpDone <- server.Serve(listener) }()
+
 	// Constructing the bot starts its dispatcher, only after HTTP and migrations.
 	bot := telegram.New(client, svc, telegram.NewTokenStore(config.InlineTokenLimit, config.InlineTokenUserLimit, time.Now, nil), telegram.NewRenderer(nil), config.InlineTokenTTL, logger)
 	bot.SetGroupConfigs(store)
 	bot.SetKnownUsers(store)
 	bot.SetUserPrivacy(store)
 	bot.SetResultRepository(store)
+	finalizer := &game.Finalizer{Service: svc, Repository: store, Notify: bot.NotifyCommitted, OnFailure: func(id string, err error) {
+		logger.Warn("completed result pending; retry scheduled", "game_id", id, "error", err)
+	}}
+	bot.SetFinalizer(finalizer)
+	api.Finalizer = finalizer
+	api.BotUsername = bot.Username
+	go finalizer.Run(ctx)
 	bot.SetRankingService(&ranking.Service{Repository: store})
 	bot.SetTurnTimeout(cfg.TurnTimeout)
 	bot.SetTransport(telegram.TransportConfig{Mode: telegram.TransportMode(cfg.TelegramMode), WebhookURL: cfg.WebhookURL, WebhookSecret: webhookSecret})
@@ -139,6 +146,7 @@ func Run(ctx context.Context, cfg *config.Config, dev bool, logger *slog.Logger)
 		hook.Store(bot.WebhookHandler())
 	}
 	botDone := make(chan error, 1)
+	go func() { httpDone <- server.Serve(listener) }()
 	go func() { botDone <- bot.Run(ctx) }()
 	var outcome error
 	botExited := false

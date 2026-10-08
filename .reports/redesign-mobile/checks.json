@@ -1,0 +1,867 @@
+{
+  "generated_at": "2026-10-08T17:13:52.367Z",
+  "browser": "156.0.8078.4",
+  "device_scale_factor": 2,
+  "dimensions": [
+    [
+      320,
+      568
+    ],
+    [
+      360,
+      800
+    ],
+    [
+      390,
+      844
+    ],
+    [
+      430,
+      932
+    ]
+  ],
+  "game_cases": [
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 1,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 1,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 1,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 1,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 1,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 1,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 2,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 2,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 2,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 2,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 2,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 2,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 7,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 7,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 7,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 7,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 7,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 7,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 15,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 15,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 15,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 15,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 15,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 15,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 30,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 30,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 30,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 30,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 30,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 30,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 1,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 1,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 1,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 1,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 1,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 1,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 2,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 2,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 2,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 2,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 2,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 2,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 7,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 7,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 7,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 7,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 7,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 7,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 15,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 15,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 15,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 15,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 15,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 15,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 30,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 30,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 30,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 30,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 30,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 30,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 1,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 1,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 1,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 1,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 1,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 1,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 2,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 2,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 2,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 2,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 2,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 2,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 7,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 7,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 7,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 7,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 7,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 7,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 15,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 15,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 15,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 15,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 15,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 15,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 30,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 30,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 30,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 30,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 30,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 30,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 1,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 1,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 1,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 1,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 1,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 1,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 2,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 2,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 2,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 2,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 2,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 2,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 7,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 7,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 7,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 7,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 7,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 7,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 15,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 15,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 15,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 15,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 15,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 15,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 30,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 30,
+      "players": 3,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 30,
+      "players": 4,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 30,
+      "players": 5,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 30,
+      "players": 6,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 30,
+      "players": 10,
+      "passed": true
+    }
+  ],
+  "ranking_state_cases": 20,
+  "safe_area_cases": 4
+}

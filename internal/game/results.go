@@ -75,7 +75,7 @@ func finalResult(entry *managedGame, state uno.State) *ranking.Result {
 	if state.Rules.AllowSwapHands || state.Rules.StackWildDrawFourOnTwo || state.Rules.StackDrawTwoOnWildFour {
 		mode = groups.Caseiro
 	}
-	r := ranking.Result{GameID: string(state.ID), ChatID: int64(entry.chatID), GameMode: mode, RankingSystem: entry.groupConfig.RankingSystem, ConfigRevision: entry.groupConfig.ConfigRevision, StartedAt: entry.startedAt, FinishedAt: time.Now().UTC(), FinalRevision: state.Revision, FinishReason: string(state.FinishReason)}
+	r := ranking.Result{Origin: entry.origin, GameID: string(state.ID), ChatID: int64(entry.chatID), GameMode: mode, RankingSystem: entry.groupConfig.RankingSystem, ConfigRevision: entry.groupConfig.ConfigRevision, StartedAt: entry.startedAt, FinishedAt: time.Now().UTC(), FinalRevision: state.Revision, FinishReason: string(state.FinishReason)}
 	for _, player := range state.Players {
 		h := entry.participants[player.ID]
 		name := h.DisplayName

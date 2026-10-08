@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/malbs/UnoGoBot/internal/game"
 	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/ranking"
 )
@@ -28,6 +29,14 @@ type UserPrivacyStore interface {
 }
 
 type API struct {
+	Games       *game.Service
+	Finalizer   *game.Finalizer
+	Profiles    ranking.ProfileRepository
+	BotUsername func() string
+	TurnTimeout time.Duration
+	Lifecycle   context.Context
+	wsMu        sync.Mutex
+	wsUsers     map[int64]int
 	Rankings    *ranking.GlobalService
 	References  *References
 	Media       Media
@@ -55,16 +64,26 @@ func (a *API) now() time.Time {
 // Handler owns its limiter state; requests never receive upstream errors or IDs.
 func (a *API) Handler() http.Handler {
 	a.clients = make(map[int64]bucket)
+	a.wsUsers = make(map[int64]int)
 	a.slots = make(chan struct{}, 32)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/rankings/groups", func(w http.ResponseWriter, r *http.Request) { a.list(w, r, "groups") })
 	mux.HandleFunc("GET /api/v1/rankings/players", func(w http.ResponseWriter, r *http.Request) { a.list(w, r, "players") })
 	mux.HandleFunc("GET /api/v1/rankings/groups/{ref}", func(w http.ResponseWriter, r *http.Request) { a.list(w, r, "detail") })
 	mux.HandleFunc("GET /api/v1/media/{ref}", a.avatar)
+	mux.HandleFunc("GET /api/v1/me", a.profile)
+	mux.HandleFunc("GET /api/v1/me/position", a.position)
+	mux.HandleFunc("GET /api/v1/rooms", a.rooms)
+	mux.HandleFunc("GET /api/v1/rooms/{id}", a.snapshot)
+	mux.HandleFunc("GET /api/v1/config", a.configuration)
 	mux.HandleFunc("GET /api/v1/me/privacy", a.getMyPrivacy)
 	mux.HandleFunc("PUT /api/v1/me/privacy", a.putMyPrivacy)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
+		if r.URL.Path == "/api/v1/live" {
+			a.live(w, r)
+			return
+		}
 		raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "tma ")
 		id, err := ValidateInitData(raw, a.Token, a.now(), a.MaxAge)
 		if !ok || err != nil {

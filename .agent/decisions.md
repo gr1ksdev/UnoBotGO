@@ -1550,3 +1550,21 @@ Filtro antecipado evita respostas e operações de recuperação a comandos não
 
 ## Impacto
 Privado, callbacks e inline preservados. Grupos existentes mantêm ranking; grupos novos nascem Updated. Sem commit/push/deploy nesta tarefa.
+
+
+# Decisão: transporte WebSocket e finalização canônica da Mini App
+
+## Data
+2026-10-08
+
+## Contexto
+Redesign e integração aprovados pelo usuário, incluindo WebSocket principal, ranking mensal combinado e retry de resultados pendentes; sem commit/push/deploy.
+
+## Decisão tomada
+Reutilizar engine, manager, revision, timers e transação existente. Autenticar WebSocket no primeiro frame e autorizar sala pelo servidor, enviando snapshots completos personalizados por eventos. Compartilhar game.Finalizer entre Telegram e HTTP, reconhecer pendências apenas após commit e tentar novamente com backoff. Preservar políticas Legacy/Updated, privacidade e fluxo de criação/entrada pelo bot; registrar modalidade no início da partida.
+
+## Motivo
+Evitar regras/pontuação duplicadas, chat IDs confiados ao cliente, exposição de mãos e resultados fictícios. Snapshots completos tornam gaps recuperáveis; receipts impedem reaplicação durante reconexão.
+
+## Impacto
+Migration aditiva 0011, endpoints de perfil/salas/socket e frontend convertido do pacote visual. Resultados pendentes permanecem em memória como arquitetura atual; durabilidade após restart e outbox de notificações exigem trabalho adicional. Verificação completa passou, sem homologação Telegram real ou publicação.

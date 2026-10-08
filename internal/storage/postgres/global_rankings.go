@@ -59,6 +59,10 @@ func (s *Store) ReadGlobalRanking(ctx context.Context, req ranking.GlobalRequest
 			condition += ` AND $10::integer IS NOT NULL`
 		}
 	}
+	if req.LookupID != 0 {
+		args = append(args, req.LookupID)
+		condition = fmt.Sprintf("id=$%d", len(args))
+	}
 	args = append(args, req.Limit+1)
 	// A single statement supplies metadata and page in the same PostgreSQL snapshot.
 	query := `WITH latest AS (` + eligibleMonthlyLatest + `), base AS (` + base + `), ranked AS (

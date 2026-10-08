@@ -1,0 +1,10 @@
+/* UnoBotGO • proposta visual v1 */
+:root {
+ --bg:#10292F; --surface:#19383F; --surface-raised:#24464D; --surface-soft:#1D3E45;
+ --text:#F4F6ED; --muted:#ADC3C2; --accent:#C6EF83; --accent-ink:#19312D;
+ --red:#FF655F; --yellow:#FFD25B; --green:#A7E367; --blue:#63B8FF;
+ --stroke:rgba(204,230,218,.12); --r-sm:12px; --r-md:20px; --r-lg:28px;
+ --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:20px; --space-6:24px; --space-8:32px;
+ --font:ui-rounded,'Trebuchet MS','DejaVu Sans',sans-serif;
+ --shadow:0 12px 28px rgba(3,15,19,.22); --ease:cubic-bezier(.22,1,.36,1);
+}
