@@ -1,0 +1,159 @@
+{
+  "generated_at": "2026-10-09T04:41:46.200Z",
+  "browser": "156.0.8078.4",
+  "device_scale_factor": 2,
+  "dimensions": [
+    [
+      320,
+      568
+    ],
+    [
+      360,
+      800
+    ],
+    [
+      390,
+      844
+    ],
+    [
+      430,
+      932
+    ]
+  ],
+  "game_cases": [
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 7,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 7,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 30,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "cards": 30,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 7,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 7,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 30,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "cards": 30,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 7,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 7,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 30,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "cards": 30,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 7,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 7,
+      "players": 10,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 30,
+      "players": 2,
+      "passed": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "cards": 30,
+      "players": 10,
+      "passed": true
+    }
+  ],
+  "ranking_state_cases": 20,
+  "safe_area_cases": 4,
+  "states_per_viewport": [
+    "my-turn",
+    "other-turn",
+    "selection",
+    "picker",
+    "picker-chosen",
+    "wild-server-confirmed",
+    "result",
+    "one-vote",
+    "all-votes",
+    "reconnection"
+  ],
+  "narrow_touch_card_selections": 37,
+  "result_list_cases": 36,
+  "loss_states": 4,
+  "local_fonts": [
+    "MatchoNunito 550",
+    "MatchoLexend 900"
+  ],
+  "integration": "Presentation snapshots through the fixture socket; real transport, engine, PostgreSQL and production CSP checked separately in production/browser.json"
+}

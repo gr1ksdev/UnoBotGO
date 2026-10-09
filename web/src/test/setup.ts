@@ -5,3 +5,5 @@ afterEach(cleanup)
 
 HTMLDialogElement.prototype.showModal = function () { this.open = true }
 HTMLDialogElement.prototype.close = function () { this.open = false }
+
+if (!window.matchMedia) window.matchMedia = (query: string) => ({ matches: false, media: query, onchange: null, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return false } })

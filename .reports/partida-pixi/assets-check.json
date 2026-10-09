@@ -1,0 +1,309 @@
+{
+  "all_match": true,
+  "files": [
+    {
+      "path": "web/public/assets/cards/blue_0.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/blue_1.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/blue_2.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/blue_3.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/blue_4.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/blue_5.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/blue_6.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/blue_7.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/blue_8.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/blue_9.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/blue_draw2.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/blue_reverse.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/blue_skip.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/blue_wild.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/blue_wild_draw4.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/card_overlay.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/green_0.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/green_1.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/green_2.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/green_3.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/green_4.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/green_5.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/green_6.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/green_7.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/green_8.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/green_9.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/green_draw2.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/green_reverse.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/green_skip.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/green_wild.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/green_wild_draw4.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/red_0.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/red_1.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/red_2.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/red_3.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/red_4.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/red_5.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/red_6.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/red_7.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/red_8.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/red_9.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/red_draw2.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/red_reverse.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/red_skip.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/red_wild.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/red_wild_draw4.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/wild.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/wild_draw4.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/yellow_0.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/yellow_1.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/yellow_2.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/yellow_3.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/yellow_4.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/yellow_5.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/yellow_6.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/yellow_7.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/yellow_8.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/yellow_9.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/yellow_draw2.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/yellow_reverse.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/yellow_skip.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/yellow_wild.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/cards/yellow_wild_draw4.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/backs/default.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/effects/bg_pattern-CjiR0IfL.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/effects/bg_pattern-mNiFKQ@2x.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/effects/card_shadow-ZiLvNA@2x.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/effects/card_shadow_pile-yPF2eQ@2x.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/effects/direction_arrow-ohEFIQ@2x.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/effects/player_highlight-6TgerA@2x.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/effects/skip_highlight-IGDjwA@2x.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/effects/turn_highlight-kZiSfQ@2x.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/effects/winner_glow-A_NCp9cn.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/effects/winner_glow-eNGCJQ@2x.png",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/fonts/LexendDeca-Black.woff2",
+      "matches_original": true
+    },
+    {
+      "path": "web/public/assets/fonts/Nunito.woff2",
+      "matches_original": true
+    }
+  ]
+}

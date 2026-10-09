@@ -28,7 +28,23 @@ const (
 
 // PublicGameView has no hands, draw pile or full inventory. OwnerID is metadata,
 // not a participant; Players contains only users explicitly registered via Join.
+type ConfirmedEvent struct {
+	ID       string
+	Revision uint64
+	Event    uno.Event
+}
+
+type RematchView struct {
+	Revision   uint64
+	Required   []uno.PlayerID
+	Accepted   []uno.PlayerID
+	NextGameID uno.GameID
+	Ready      bool
+}
+
 type PublicGameView struct {
+	Rematch         *RematchView
+	Events          []ConfirmedEvent
 	TurnStarted     time.Time
 	GroupConfig     groups.Snapshot
 	GameID          uno.GameID
@@ -80,6 +96,13 @@ type GameSummary struct {
 }
 
 func (v PublicGameView) clone() PublicGameView {
+	if v.Rematch != nil {
+		r := *v.Rematch
+		r.Required = slices.Clone(r.Required)
+		r.Accepted = slices.Clone(r.Accepted)
+		v.Rematch = &r
+	}
+	v.Events = slices.Clone(v.Events)
 	v.Players = slices.Clone(v.Players)
 	v.Order = slices.Clone(v.Order)
 	v.Placements = slices.Clone(v.Placements)
@@ -95,7 +118,7 @@ func (v PublicGameView) summary() GameSummary {
 }
 
 func publicView(entry *managedGame, state uno.State) PublicGameView {
-	v := PublicGameView{TurnStarted: entry.turnStarted, GroupConfig: entry.groupConfig,
+	v := PublicGameView{Events: slices.Clone(entry.events), TurnStarted: entry.turnStarted, GroupConfig: entry.groupConfig,
 		GameID: state.ID, ChatID: entry.chatID, ChatName: entry.chatName,
 		CreatorID: entry.creatorID, OwnerID: entry.ownerID, Locked: entry.locked, Revision: state.Revision,
 		Phase: state.Phase, Rules: state.Rules, CurrentTurn: state.CurrentPlayerID,

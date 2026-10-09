@@ -1,0 +1,5 @@
+
+> unobotgo-miniapp@0.1.0 test:visual
+> node scripts/visual-check.mjs
+
+Screenshots captured; 16 card/player/viewport cases passed. Test fixtures only.

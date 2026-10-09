@@ -26,6 +26,7 @@ type liveCommand struct {
 	Target    string     `json:"target"`
 }
 type seat struct {
+	Avatar   string `json:"avatar_url,omitempty"`
 	Key      string `json:"key"`
 	Name     string `json:"name"`
 	Count    int    `json:"count"`
@@ -39,7 +40,28 @@ type publicAward struct {
 	Score    *string `json:"score_units"`
 	Position int     `json:"position"`
 }
+type publicEvent struct {
+	ID       string        `json:"id"`
+	Revision uint64        `json:"revision"`
+	Type     uno.EventType `json:"type"`
+	Player   string        `json:"player"`
+	Target   string        `json:"target,omitempty"`
+	CardID   uno.CardID    `json:"card_id,omitempty"`
+	Count    int           `json:"count,omitempty"`
+}
+type rematchState struct {
+	Revision   uint64     `json:"revision"`
+	Required   []string   `json:"required"`
+	Accepted   []string   `json:"accepted"`
+	NextGameID uno.GameID `json:"next_game_id"`
+	Ready      bool       `json:"ready"`
+}
 type liveView struct {
+	Rematch     *rematchState    `json:"rematch,omitempty"`
+	CanStart    bool             `json:"can_start"`
+	Events      []publicEvent    `json:"events"`
+	OwnerKey    string           `json:"owner_key"`
+	Capacity    int              `json:"capacity"`
 	Awards      []publicAward    `json:"awards"`
 	ID          uno.GameID       `json:"game_id"`
 	Revision    uint64           `json:"revision"`
@@ -83,7 +105,28 @@ func (a *API) project(ctx context.Context, id uno.GameID, user int64) (liveView,
 	if err != nil {
 		return liveView{}, err
 	}
-	out := liveView{ID: id, Revision: v.Revision, Phase: v.Phase, Group: v.ChatName, Mode: "classic", System: string(v.GroupConfig.RankingSystem), Players: []seat{}, Hand: []game.CardView{}, Top: v.TopCard, ActiveColor: v.ActiveColor, Direction: v.Direction, CloseReason: v.CloseReason, Closed: v.Closed, Owner: int64(v.OwnerID) == user, MyTurn: int64(v.CurrentTurn) == user, CanBluff: v.CanCallBluff && int64(v.CurrentTurn) == user, ServerTime: a.now()}
+	out := liveView{Capacity: 10, OwnerKey: a.References.key("seat", int64(v.OwnerID)), ID: id, Revision: v.Revision, Phase: v.Phase, Group: v.ChatName, Mode: "classic", System: string(v.GroupConfig.RankingSystem), Players: []seat{}, Hand: []game.CardView{}, Top: v.TopCard, ActiveColor: v.ActiveColor, Direction: v.Direction, CloseReason: v.CloseReason, Closed: v.Closed, Owner: int64(v.OwnerID) == user, MyTurn: int64(v.CurrentTurn) == user, CanBluff: v.CanCallBluff && int64(v.CurrentTurn) == user, ServerTime: a.now()}
+	if v.Rematch != nil {
+		r := v.Rematch
+		out.Rematch = &rematchState{Revision: r.Revision, Required: []string{}, Accepted: []string{}, NextGameID: r.NextGameID, Ready: r.Ready}
+		for _, player := range r.Required {
+			out.Rematch.Required = append(out.Rematch.Required, a.References.key("seat", int64(player)))
+		}
+		for _, player := range r.Accepted {
+			out.Rematch.Accepted = append(out.Rematch.Accepted, a.References.key("seat", int64(player)))
+		}
+	}
+	for _, e := range v.Events {
+		pe := publicEvent{ID: e.ID, Revision: e.Revision, Type: e.Event.Type, Player: a.References.key("seat", int64(e.Event.PlayerID)), Count: e.Event.Count}
+		if e.Event.TargetID != 0 {
+			pe.Target = a.References.key("seat", int64(e.Event.TargetID))
+		}
+		// Only cards made public by an accepted play may carry a physical ID.
+		if e.Event.Type == uno.CardPlayed {
+			pe.CardID = e.Event.CardID
+		}
+		out.Events = append(out.Events, pe)
+	}
 	if v.Rules.AllowSwapHands {
 		out.Mode = "caseiro"
 	}
@@ -97,12 +140,22 @@ func (a *API) project(ctx context.Context, id uno.GameID, user int64) (liveView,
 			name = "Jogador"
 		}
 		s := seat{Key: a.References.key("seat", int64(p.ID)), Name: name, Count: p.CardCount, Me: int64(p.ID) == user, Current: p.ID == v.CurrentTurn, Active: p.Active}
+		if a.Media != nil {
+			ref, err := a.References.seal(reference{Kind: "user", ID: int64(p.ID), Expires: a.now().Add(time.Hour).Unix()})
+			if err != nil {
+				return out, err
+			}
+			s.Avatar = "/api/v1/media/" + ref
+		}
 		for _, pl := range v.Placements {
 			if pl.PlayerID == p.ID {
 				s.Position = pl.Position
 			}
 		}
 		out.Players = append(out.Players, s)
+		if s.Me && s.Active && v.Phase == uno.Lobby && !v.Closed {
+			out.CanStart = true
+		}
 	}
 	if !v.Closed {
 		pv, e := a.Games.PlayerView(ctx, game.Actor{PlayerID: uno.PlayerID(user)}, id)
@@ -155,6 +208,13 @@ func (a *API) snapshot(w http.ResponseWriter, r *http.Request) {
 func (a *API) command(ctx context.Context, user int64, c liveCommand) error {
 	v, err := a.member(ctx, c.GameID, user)
 	if err != nil {
+		return err
+	}
+	if c.Type == "rematch" || c.Type == "rematch_leave" {
+		if len(c.RequestID) < 8 || len(c.RequestID) > 128 {
+			return game.ErrInvalidArgument
+		}
+		_, err := a.Games.VoteRematch(ctx, game.Actor{PlayerID: uno.PlayerID(user), ChatID: v.ChatID}, c.GameID, c.Revision, c.Type == "rematch", c.RequestID)
 		return err
 	}
 	kinds := map[string]uno.ActionType{"start": uno.StartGame, "play": uno.PlayCard, "draw": uno.DrawCard, "pass": uno.PassTurn, "color": uno.ChooseColor, "target": uno.ChoosePlayer, "keep": uno.KeepHand, "bluff": uno.CallBluff, "leave": uno.LeaveGame, "cancel": uno.CancelGame}
@@ -263,6 +323,7 @@ func (a *API) live(w http.ResponseWriter, r *http.Request) {
 	heartbeat := time.NewTicker(25 * time.Second)
 	defer heartbeat.Stop()
 	terminalUnconfirmed := false
+	recovery := true
 	send := func(kind, request, reason string) bool {
 		v, e := a.project(ctx, auth.GameID, user)
 		if e != nil {
@@ -271,7 +332,9 @@ func (a *API) live(w http.ResponseWriter, r *http.Request) {
 		terminalUnconfirmed = v.Closed && v.Result == nil && v.CloseReason != game.Cancelled
 		writeCtx, stop := context.WithTimeout(ctx, 5*time.Second)
 		defer stop()
-		return wsjson.Write(writeCtx, conn, map[string]any{"type": kind, "request_id": request, "reason": reason, "view": v}) == nil
+		ok := wsjson.Write(writeCtx, conn, map[string]any{"type": kind, "request_id": request, "reason": reason, "recovery": recovery, "view": v}) == nil
+		recovery = false
+		return ok
 	}
 	if !send("snapshot", "", "") {
 		return
@@ -308,6 +371,9 @@ func (a *API) live(w http.ResponseWriter, r *http.Request) {
 				reason = "invalid_request"
 			} else if e := a.command(ctx, user, c); e != nil {
 				reason = "action_rejected"
+				if errors.Is(e, game.ErrResultPending) {
+					reason = "result_pending"
+				}
 				if errors.Is(e, uno.ErrStaleRevision) {
 					reason = "stale_revision"
 				}

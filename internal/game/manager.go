@@ -43,21 +43,24 @@ type actionReceipt struct {
 	view   PublicGameView
 }
 type managedGame struct {
-	origin       string
-	receipts     map[receiptKey]actionReceipt
-	mu           sync.Mutex
-	startedAt    time.Time
-	participants map[uno.PlayerID]participantHistory
-	engine       *uno.Game // unique runtime owner; nil once closed
-	chatID       ChatID
-	chatName     string
-	creatorID    uno.PlayerID
-	ownerID      uno.PlayerID
-	groupConfig  groups.Snapshot
-	locked       bool // session admission policy, guarded by mu
-	turnStarted  time.Time
-	final        *PublicGameView // public projection only, accessed under mu
-	reset        bool
+	rematchVotes    map[uno.PlayerID]bool
+	rematchReceipts map[receiptKey]bool
+	events          []ConfirmedEvent
+	origin          string
+	receipts        map[receiptKey]actionReceipt
+	mu              sync.Mutex
+	startedAt       time.Time
+	participants    map[uno.PlayerID]participantHistory
+	engine          *uno.Game // unique runtime owner; nil once closed
+	chatID          ChatID
+	chatName        string
+	creatorID       uno.PlayerID
+	ownerID         uno.PlayerID
+	groupConfig     groups.Snapshot
+	locked          bool // session admission policy, guarded by mu
+	turnStarted     time.Time
+	final           *PublicGameView // public projection only, accessed under mu
+	reset           bool
 }
 
 func newManager(limit int) *manager {
@@ -139,10 +142,22 @@ func (m *manager) publish(entry *managedGame, before, after uno.State, result un
 	} else if before.CurrentPlayerID != after.CurrentPlayerID || before.Phase != after.Phase {
 		entry.turnStarted = time.Now()
 	}
+	for i, event := range result.Events {
+		entry.events = append(entry.events, ConfirmedEvent{ID: fmt.Sprintf("%d:%d", result.Revision, i), Revision: result.Revision, Event: event})
+	}
+	if len(entry.events) > 128 {
+		entry.events = slices.Clone(entry.events[len(entry.events)-128:])
+	}
 	transferOwner(entry, before, after)
 	view := publicView(entry, after)
 	completed := finalResult(entry, after)
 	if view.Closed {
+		if view.CloseReason != Cancelled && len(view.Players) >= 2 {
+			view.Rematch = &RematchView{}
+			for _, p := range view.Players {
+				view.Rematch.Required = append(view.Rematch.Required, p.ID)
+			}
+		}
 		final := view.clone()
 		entry.final = &final
 		entry.engine = nil // discard hands and full runtime on closure

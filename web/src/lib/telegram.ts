@@ -11,6 +11,7 @@ interface Insets { top: number; bottom: number; left: number; right: number }
 interface TelegramApp {
  initData: string
  initDataUnsafe?: {
+  start_param?: string
   user?: TelegramUser
  }
  ready(): void
@@ -73,4 +74,15 @@ export function useTelegram(back?: () => void, options: { manageBackButton?: boo
      }
    }
  }, [back, manageBackButton, initialize, headerColor])
+}
+
+// The launch parameter selects a route only. Room membership is verified by Go.
+export function launchGamePath(): string | undefined {
+ const value = window.Telegram?.WebApp.initDataUnsafe?.start_param
+ if (!value) return
+ if (value.startsWith('join_') && /^[a-zA-Z0-9_-]{1,480}$/.test(value.slice(5))) return `/invite/${value.slice(5)}`
+ if (!value.startsWith('game_')) return
+ const id = value.slice(5)
+ if (!/^[a-zA-Z0-9_-]{1,128}$/.test(id)) return
+ return `/game/${encodeURIComponent(id)}`
 }

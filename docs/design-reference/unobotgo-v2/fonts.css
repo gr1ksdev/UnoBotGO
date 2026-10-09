@@ -1,0 +1,4 @@
+/* Arquivos originais extraídos do HAR; nomes locais sem CDN. */
+@font-face{font-family:MatchoNunito;src:url('./assets/fonts/Nunito.woff2') format('woff2');font-style:normal;font-weight:200 1000;font-display:swap}
+@font-face{font-family:MatchoLexend;src:url('./assets/fonts/LexendDeca-Black.woff2') format('woff2');font-style:normal;font-weight:900;font-display:swap}
+:root{--font-interface:MatchoNunito,sans-serif;--font-titulo:MatchoLexend,sans-serif;--turn-blue:#0789c6;--cyan:#00bcc4;--table-bg:#14262b;--red:#fb3045;--yellow:#ffbd10;--green:#60c400;--blue:#1b71f6}

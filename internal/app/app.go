@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -95,7 +96,9 @@ func Run(ctx context.Context, cfg *config.Config, dev bool, logger *slog.Logger)
 		return err
 	}
 	photos := media.New(ctx, telegram.AvatarSource{Bot: client})
-	api := &httpapi.API{Rankings: &ranking.GlobalService{Repository: store}, References: refs, Media: photos, Privacy: store, UserPrivacy: store, Token: cfg.Token, MaxAge: config.InitDataMaxAge, Games: svc, Profiles: store, TurnTimeout: cfg.TurnTimeout, Lifecycle: ctx}
+	botID, _ := strconv.ParseInt(strings.SplitN(cfg.Token, ":", 2)[0], 10, 64)
+	directory := telegram.RoomDirectory{Bot: client, BotID: botID}
+	api := &httpapi.API{RoomGroups: store, VerifyRoomGroup: directory.Verify, ResolveRoomGroup: directory.Resolve, Rankings: &ranking.GlobalService{Repository: store}, References: refs, Media: photos, Privacy: store, UserPrivacy: store, Token: cfg.Token, MaxAge: config.InitDataMaxAge, Games: svc, Profiles: store, TurnTimeout: cfg.TurnTimeout, Lifecycle: ctx}
 	mux := http.NewServeMux()
 	mux.Handle("/api/", api.Handler())
 	mux.Handle("/", httpapi.Static(web.Files()))

@@ -116,6 +116,7 @@ export interface Card {
  Rank: number
 }
 export interface Seat {
+ avatar_url?: string
  key: string
  name: string
  count: number
@@ -125,6 +126,12 @@ export interface Seat {
  position?: number
 }
 export interface GameView {
+ rematch?: { revision: number; required: string[]; accepted: string[]; next_game_id: string; ready: boolean }
+ can_start?: boolean
+ events?: ConfirmedEvent[]
+ recovery?: boolean
+ capacity?: number
+ owner_key?: string
  awards?: { key: string; score_units: string | null; position: number }[]
  game_id: string
  revision: number
@@ -156,3 +163,12 @@ export interface GameCommand {
  color?: number
  target?: string
 }
+
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+ const response = await fetch(`/api/v1/${path}`, { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+ if (!response.ok) throw new APIError(response.status)
+ return response.json() as Promise<T>
+}
+export interface RoomGroup { ref: string; title: string; system: System }
+export interface InvitePreview { game_id: string; revision: number; group: string; mode: string; system: System; players: Seat[]; owner_key: string; capacity: number; joined: boolean; can_join: boolean; closed: boolean }
+export interface ConfirmedEvent { id: string; revision: number; type: string; player: string; target?: string; card_id?: string; count?: number }

@@ -3,6 +3,7 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"github.com/malbs/UnoGoBot/internal/game"
 	"html"
 	"strconv"
 	"strings"
@@ -219,4 +220,19 @@ func (h *CommandHandler) handlePrivateRanking(ctx context.Context, chatID int64,
 		return
 	}
 	h.reply(sendCtx, chatID, RenderUserMonthlyRankings(rankings), h.rankingMarkup())
+}
+
+// Direct links may be shared, but never grant admission or private-hand access.
+func (h *CommandHandler) gameMarkup(view game.PublicGameView) *telego.InlineKeyboardMarkup {
+	markup := makeGameButtons(view)
+	if h.miniAppURL == "" || view.GameID == "" || view.Closed {
+		return markup
+	}
+	if markup == nil {
+		markup = &telego.InlineKeyboardMarkup{}
+	}
+	markup.InlineKeyboard = append(markup.InlineKeyboard, []telego.InlineKeyboardButton{{
+		Text: "Abrir partida na Mini App", URL: h.miniAppURL + "?startapp=game_" + string(view.GameID),
+	}})
+	return markup
 }

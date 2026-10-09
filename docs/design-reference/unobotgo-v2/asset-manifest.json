@@ -1,0 +1,1210 @@
+{
+  "source": "User-supplied Matcho HAR",
+  "cardsAtlasFrameCount": 63,
+  "separateBackCount": 1,
+  "staticFiles": [
+    {
+      "path": "assets/effects/winner_glow-A_NCp9cn.png",
+      "sourcePath": "/assets/winner_glow-A_NCp9cn.png",
+      "sizeBytes": 5390,
+      "sha256": "a9dd28d5529032c1eb900a88b63aef34d2d41df3cfde3857f1aa28ef543abc1b",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/ui_rematch-FQ1XIA.mp3",
+      "sourcePath": "/assets/audio/ui_rematch-FQ1XIA.mp3",
+      "sizeBytes": 10774,
+      "sha256": "4630833c85e08da00bf3b4cc1fc988e4b01b583bdfc8c618a6fcbf1b21a8db60",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/ui_open-zvvJvQ.mp3",
+      "sourcePath": "/assets/audio/ui_open-zvvJvQ.mp3",
+      "sizeBytes": 6669,
+      "sha256": "4be30030cf6f0951854bbc5674a5c05ab4f1e0fb0adc14b679c9e13427c1cae6",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/ui_confetti-XaUphA.mp3",
+      "sourcePath": "/assets/audio/ui_confetti-XaUphA.mp3",
+      "sizeBytes": 15021,
+      "sha256": "0e93614d9ab81c4f4c49db1a85ca8ddbe857e6d9e07c288d06588a8cd26ef9cc",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/ui_close-uObbOA.ogg",
+      "sourcePath": "/assets/audio/ui_close-uObbOA.ogg",
+      "sizeBytes": 4730,
+      "sha256": "ac4bcbe15b36f362b0b7a30996b9fbbf3d55073bd8aa3da5a188ca0add9d4404",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/ui_click_start-yuLDSg.mp3",
+      "sourcePath": "/assets/audio/ui_click_start-yuLDSg.mp3",
+      "sizeBytes": 2035,
+      "sha256": "d79a85ce1aafafeb32b1e0059e7e6e9cd3044b7a453a28ac10e8779a0b2efdfa",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/ui_click_end-UTEOaQ.ogg",
+      "sourcePath": "/assets/audio/ui_click_end-UTEOaQ.ogg",
+      "sizeBytes": 4269,
+      "sha256": "fcdac833abbd4b911a369cb7c5516f4a9679f06b26e404b26b19f6f28b77261b",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/player_won-SVCulg.ogg",
+      "sourcePath": "/assets/audio/player_won-SVCulg.ogg",
+      "sizeBytes": 18854,
+      "sha256": "c1f7095d73ce3ade209641da379b8e279c5bd43069c275d6e191d64530b585db",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/player_reaction-zD0dnw.mp3",
+      "sourcePath": "/assets/audio/player_reaction-zD0dnw.mp3",
+      "sizeBytes": 4941,
+      "sha256": "762b6a7657ff730acfeb616934f08aec7bf18a139ae64418a0a5ec3995f29cfb",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/player_lost-IRBd-Q.ogg",
+      "sourcePath": "/assets/audio/player_lost-IRBd-Q.ogg",
+      "sizeBytes": 19208,
+      "sha256": "a725a8344f9dbe90d3360033089aa0351403a65a6b014710c12ae0aab4dfc3eb",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/player_join-qvrCyw.mp3",
+      "sourcePath": "/assets/audio/player_join-qvrCyw.mp3",
+      "sizeBytes": 10774,
+      "sha256": "f4084e5df74085a90a2ecb140b9b5029f674f72104739db2a83975ed83daa94e",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/picker_show-sBRNWA.mp3",
+      "sourcePath": "/assets/audio/picker_show-sBRNWA.mp3",
+      "sizeBytes": 78178,
+      "sha256": "597c25704c929d6a62071a4ee969a94772ec58e4cb743360485b90dfdca8898e",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/picker_select-VEXBcw.mp3",
+      "sourcePath": "/assets/audio/picker_select-VEXBcw.mp3",
+      "sizeBytes": 18765,
+      "sha256": "46a5164a201078e03f9119194a0d742d5d90529eba5189c829fa37b5b7d7c390",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/picker_hover-sE_ecQ.mp3",
+      "sourcePath": "/assets/audio/picker_hover-sE_ecQ.mp3",
+      "sizeBytes": 10774,
+      "sha256": "30111e8897f8ba5fab197f6d7f600a88b31ce3efd365a157877a445908d296b4",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/picker_hide-XVhM-Q.ogg",
+      "sourcePath": "/assets/audio/picker_hide-XVhM-Q.ogg",
+      "sizeBytes": 7506,
+      "sha256": "e65f18ebdbcf9097655be1e5d065a7a39443fe7ec8d7fba46d75a9df27821d82",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_shuffle_4-VK_i_Q.mp3",
+      "sourcePath": "/assets/audio/card_shuffle_4-VK_i_Q.mp3",
+      "sizeBytes": 11903,
+      "sha256": "0b222e409358793e8e79f38e99328153d4885b24d096d79e24f735c33d3028d2",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_shuffle_3-PiEIbg.mp3",
+      "sourcePath": "/assets/audio/card_shuffle_3-PiEIbg.mp3",
+      "sizeBytes": 9311,
+      "sha256": "d8d65ee1bcabc410a99468b0e9da3a8ee71df525088a3b54309853c6efd49b79",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_shuffle_2-zYhKjA.mp3",
+      "sourcePath": "/assets/audio/card_shuffle_2-zYhKjA.mp3",
+      "sizeBytes": 8447,
+      "sha256": "87878748cef413b11f224991d06be362813503e3cdc13337972034548ae9d862",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_shuffle_1-sVDJ7g.mp3",
+      "sourcePath": "/assets/audio/card_shuffle_1-sVDJ7g.mp3",
+      "sizeBytes": 7295,
+      "sha256": "5d11f077d6b6b8ec55501271a84fae4235f0345c21d84e6deeca8282aca027dc",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_shuffle_0-rzJcgg.mp3",
+      "sourcePath": "/assets/audio/card_shuffle_0-rzJcgg.mp3",
+      "sizeBytes": 8735,
+      "sha256": "257f8eb48739f0daf1cabb0859fded24be7989edc70934985a2e8cd20d30586d",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_select-YPFdVw.mp3",
+      "sourcePath": "/assets/audio/card_select-YPFdVw.mp3",
+      "sizeBytes": 2000,
+      "sha256": "e33c4df9e11e5822ab90004a53147e55db62de2aa6cbbe0b1d81fc0bd34ae2f8",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_return-i9dqNQ.mp3",
+      "sourcePath": "/assets/audio/card_return-i9dqNQ.mp3",
+      "sizeBytes": 78191,
+      "sha256": "1d34cad6db7ca2ae029c9c7c6c395d533f2e855dc774d3fa375d7c323a0b2993",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_play_6-uP5ROw.ogg",
+      "sourcePath": "/assets/audio/card_play_6-uP5ROw.ogg",
+      "sizeBytes": 4235,
+      "sha256": "4e39dafb4d96b1d81eab9174b109c96bd1f5147f20066df54c0c421bd2b9f627",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_play_5-LBfkwA.mp3",
+      "sourcePath": "/assets/audio/card_play_5-LBfkwA.mp3",
+      "sizeBytes": 2925,
+      "sha256": "058dfe34e84f31678413e82bcaf2489c490416d3365bdd038294c209f60d6c74",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_play_4-YwARhg.ogg",
+      "sourcePath": "/assets/audio/card_play_4-YwARhg.ogg",
+      "sizeBytes": 4412,
+      "sha256": "668a4dc8f6e7ba43b1300180125573e193b1a08f6857c652ad529fb380a6fb0e",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_play_3-RiZDnQ.mp3",
+      "sourcePath": "/assets/audio/card_play_3-RiZDnQ.mp3",
+      "sizeBytes": 2637,
+      "sha256": "3edc6c98e1b98dabbfb19ac84809733aee85841ea9ad9aa3818cd68cbe41d981",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_play_2-mzGwjA.ogg",
+      "sourcePath": "/assets/audio/card_play_2-mzGwjA.ogg",
+      "sizeBytes": 4180,
+      "sha256": "ff1c3eacbdd6b13cf7f5acf6f1715df73ad762c8d93e95f1b35e3bbd92762c06",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_play_1-nJ4MXQ.mp3",
+      "sourcePath": "/assets/audio/card_play_1-nJ4MXQ.mp3",
+      "sizeBytes": 2349,
+      "sha256": "1f36a2e939ec4da3887e5546f246c241078ff877b944a14b52fbdb2f17759e71",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_play_0-kGOSnw.ogg",
+      "sourcePath": "/assets/audio/card_play_0-kGOSnw.ogg",
+      "sizeBytes": 4276,
+      "sha256": "6795156c890ca5b14f707091340a3d7c8fc0103f3ab950e6f7088cc18b24e9f6",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_hover-braxSA.ogg",
+      "sourcePath": "/assets/audio/card_hover-braxSA.ogg",
+      "sizeBytes": 4551,
+      "sha256": "128a772e6929e77ea471eaf68301c592db9c91a372940dfc0b78bbad9868c529",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_draw_6-ly3C1Q.ogg",
+      "sourcePath": "/assets/audio/card_draw_6-ly3C1Q.ogg",
+      "sizeBytes": 4518,
+      "sha256": "c8a2fb4ddc7dc8cd74b784701683095a3c3bd4fc18f6b2042af2d643b455cf9e",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_draw_5-V5aTDQ.mp3",
+      "sourcePath": "/assets/audio/card_draw_5-V5aTDQ.mp3",
+      "sizeBytes": 2925,
+      "sha256": "6ad6eaf682d5386ada68f91a550f72af91fe578383493e6a3096258c4b677e2b",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_draw_4-muL3.mp3",
+      "sourcePath": "/assets/audio/card_draw_4-muL3.mp3",
+      "sizeBytes": 3789,
+      "sha256": "6027b0fb7e002fc50a21a12b405e4e6958e1ea2429425dfc1e27bf6a667214ca",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_draw_3-oTSLjQ.mp3",
+      "sourcePath": "/assets/audio/card_draw_3-oTSLjQ.mp3",
+      "sizeBytes": 3213,
+      "sha256": "d4fee9dde7f7707db8ed8149c5db04f94b65ae09f6c35908ab1cba270fb98802",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_draw_1-zA4WDA.ogg",
+      "sourcePath": "/assets/audio/card_draw_1-zA4WDA.ogg",
+      "sizeBytes": 4620,
+      "sha256": "4c46d2b86a82a9495145f8ceb8e1681a4552a368a2dec2582936e4176529354b",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_draw_0-H3HCHg.ogg",
+      "sourcePath": "/assets/audio/card_draw_0-H3HCHg.ogg",
+      "sizeBytes": 4695,
+      "sha256": "ad090854f3d4db6d2c2a842a01b31e5634990b5ed312b429ca678fa0c6f5a8dd",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_deal_3-XpZgdA.mp3",
+      "sourcePath": "/assets/audio/card_deal_3-XpZgdA.mp3",
+      "sizeBytes": 2349,
+      "sha256": "8f1a8a9c453f4d8c568719071d913f4c7531ab2cdc68c61e5262029077536224",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_deal_2-H0AISA.mp3",
+      "sourcePath": "/assets/audio/card_deal_2-H0AISA.mp3",
+      "sizeBytes": 2349,
+      "sha256": "46cb3656f514b47d25bb7888d940741e862dc83af742c76c37b17db983e14351",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_deal_1-JkrG.mp3",
+      "sourcePath": "/assets/audio/card_deal_1-JkrG.mp3",
+      "sizeBytes": 2349,
+      "sha256": "f6b42959f14fcf3d585250dff67c95fb00c73f4a64b91f7fdf62968aa82f086e",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/card_deal_0-Ebf5wg.ogg",
+      "sourcePath": "/assets/audio/card_deal_0-Ebf5wg.ogg",
+      "sizeBytes": 4242,
+      "sha256": "ad965edf717d7116cfad9b47ff8f55fc5c8753dd30ce74ab5f0d48ba8d5dee2e",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/action_skip_other-xLyxTg.ogg",
+      "sourcePath": "/assets/audio/action_skip_other-xLyxTg.ogg",
+      "sizeBytes": 4957,
+      "sha256": "f8e5a2f06fd26b11012488fa774818f611f5905d3ded4df323cf9dba856de559",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/action_skip-LB_utg.ogg",
+      "sourcePath": "/assets/audio/action_skip-LB_utg.ogg",
+      "sizeBytes": 5002,
+      "sha256": "47e7e546f19591416a7d2444109f101108b0534e51243a2c4626f8163d9c7594",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/action_reverse-kqelcA.ogg",
+      "sourcePath": "/assets/audio/action_reverse-kqelcA.ogg",
+      "sizeBytes": 4684,
+      "sha256": "7d9dfd41f128e625fe71211000d48cc2f12d7c20652c5f5f148ac0da55133d05",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/audio/action_color-KzBo.mp3",
+      "sourcePath": "/assets/audio/action_color-KzBo.mp3",
+      "sizeBytes": 8973,
+      "sha256": "72628116af6d3f5ce1a99bad56eab46813fd909e4e382858eb7b7d3da1013237",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/atlases/decks-kZwt@2x.png",
+      "sourcePath": "/assets/decks/decks-kZwt@2x.png",
+      "sizeBytes": 8241,
+      "sha256": "b27ec7dd8673ddaef1e14f6d5904af3778300ac38c32bbca157e965fa12e325a",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/atlases/decks-zzTS@2x.png.json",
+      "sourcePath": "/assets/decks/decks-zzTS@2x.png.json",
+      "sizeBytes": 370,
+      "sha256": "3493751be50f34e9ba53d2627e6a31eaf0e54a8ef86fa839eef77b42ba9db237",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/atlases/cards-w8MlmQ@2x.png",
+      "sourcePath": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "sizeBytes": 177833,
+      "sha256": "7933759e792e9778bffaccf1c473cc85ca7328e8403c7e6e087bb7765640efb5",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/atlases/cards-cxSAsg@2x.png.json",
+      "sourcePath": "/assets/matcho/cards-cxSAsg@2x.png.json",
+      "sizeBytes": 11566,
+      "sha256": "b86f338b7f76e7c228672887e438d698febbb2be1434718acc210989d0f5b1c1",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/effects/winner_glow-eNGCJQ@2x.png",
+      "sourcePath": "/assets/ui/winner_glow-eNGCJQ@2x.png",
+      "sizeBytes": 37541,
+      "sha256": "a660a312850e004c5dd83950986abc2dfc4b1ac942ec1391f516bce26d058f15",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/effects/turn_highlight-kZiSfQ@2x.png",
+      "sourcePath": "/assets/ui/turn_highlight-kZiSfQ@2x.png",
+      "sizeBytes": 79367,
+      "sha256": "4cffd94ec824be126c8d2783d5ff85f0aa5e7c51a78cf1c478fcbcaaf9dbbe29",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/effects/direction_arrow-ohEFIQ@2x.png",
+      "sourcePath": "/assets/ui/direction_arrow-ohEFIQ@2x.png",
+      "sizeBytes": 7199,
+      "sha256": "f09c28becca1a20b07cd545b0447d1bf0d4c227373fb93f06956f4d55b24ec6e",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/effects/skip_highlight-IGDjwA@2x.png",
+      "sourcePath": "/assets/ui/skip_highlight-IGDjwA@2x.png",
+      "sizeBytes": 78650,
+      "sha256": "cebb5bfec945c82ae443fbfc89e62cb9081114ea84e32898b3aa202d925a51b8",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/effects/player_highlight-6TgerA@2x.png",
+      "sourcePath": "/assets/ui/player_highlight-6TgerA@2x.png",
+      "sizeBytes": 80007,
+      "sha256": "b52573ac4effccc3b9edd0cf3807bfc9d202639bc03ff701aacea88b254d82fc",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/effects/card_shadow_pile-yPF2eQ@2x.png",
+      "sourcePath": "/assets/ui/card_shadow_pile-yPF2eQ@2x.png",
+      "sizeBytes": 4522,
+      "sha256": "83cf10d11bdf5bcbd19e785a1275679e98fad710caa1a15ac2abfdca1a9ec26e",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/effects/card_shadow-ZiLvNA@2x.png",
+      "sourcePath": "/assets/ui/card_shadow-ZiLvNA@2x.png",
+      "sizeBytes": 26292,
+      "sha256": "8b22cefd1fd5bc319c3ca4789d21ad251969c2e7549387d02cdb0815e522ed06",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/effects/bg_pattern-mNiFKQ@2x.png",
+      "sourcePath": "/assets/ui/bg_pattern-mNiFKQ@2x.png",
+      "sizeBytes": 4344,
+      "sha256": "82d3bab97ab2a93b9deb0d0d36f70472b0a6cda90db8f6c361e572133de0d109",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/effects/bg_pattern-CjiR0IfL.png",
+      "sourcePath": "/assets/bg_pattern-CjiR0IfL.png",
+      "sizeBytes": 9739,
+      "sha256": "0e88bddd0052386f9bdca334d277569f652b6220a16c1ab0e68a202267b57b31",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/fonts/LexendDeca-Black.woff2",
+      "sourcePath": "/fonts/LexendDeca-Black.woff2",
+      "sizeBytes": 28384,
+      "sha256": "3353d2d9d7834775e846bb1eacb7b0d6047ce4881a160219c3d20bdd1928cc48",
+      "extraction": "exact response bytes"
+    },
+    {
+      "path": "assets/fonts/Nunito.woff2",
+      "sourcePath": "/fonts/Nunito.woff2",
+      "sizeBytes": 100444,
+      "sha256": "28167019dbc7cbb6e2c0cf7ffa6d899f0e55cc6d3eb6763a8a8863f8a5bc6a29",
+      "extraction": "exact response bytes"
+    }
+  ],
+  "frames": [
+    {
+      "name": "default.png",
+      "path": "assets/backs/default.png",
+      "sourceAtlas": "/assets/decks/decks-kZwt@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "b6b8dd2bd997f1bb77c67a6f45374c8a0582b0ff8c69fba70a21377f72194f85",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "yellow_wild_draw4.png",
+      "path": "assets/cards/yellow_wild_draw4.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "eb75fe23c8ebd9ebcfea2899c03cde74a2f005dafac1c9aef6269569f5921119",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "yellow_wild.png",
+      "path": "assets/cards/yellow_wild.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "7cc32ecaaef2ef7caa009d8dcd728090d0c34bdb45a5856958bb2625f1b22db6",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "yellow_skip.png",
+      "path": "assets/cards/yellow_skip.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "8d011d41ab7a33479fc2ecc6fdbda1b00f26a7dd2db7f142c071ca354425261f",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "yellow_reverse.png",
+      "path": "assets/cards/yellow_reverse.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "c9a4d5f47fe4ad096468dd346a678c127e2d4ca0aeb8a61c83ba10c07dccbaf2",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "yellow_draw2.png",
+      "path": "assets/cards/yellow_draw2.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "4bfe998ae749a0ef8915ce689f828fc2bf46e7cdf000ffbfd6f139bb365a0ddd",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "yellow_9.png",
+      "path": "assets/cards/yellow_9.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "04e413e13a544654018ebdf0cbdab9c3672472288342430512239e7eea66aa79",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "yellow_8.png",
+      "path": "assets/cards/yellow_8.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "337af9f0bf6ef5b2352eb3485510cc15b1c70ace6eb85ce918cc6c0257378fee",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "yellow_7.png",
+      "path": "assets/cards/yellow_7.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "26ee7d712afbfa86921c2ef6ae0b15f60acc5007edd027574c523923ea5f3ec5",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "yellow_6.png",
+      "path": "assets/cards/yellow_6.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "fdc2ab96b918efbd2a5657a722506218047e8085b1477b9d6e6e8d1032eb896f",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "yellow_5.png",
+      "path": "assets/cards/yellow_5.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "b6aa50267d7ed1f17f57c26df6d15c3668c87fa654a5a80eb4545dc6ba21762f",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "yellow_4.png",
+      "path": "assets/cards/yellow_4.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "8e2e269830bde3818f00b10277af9e226825fa51f6257add8c511b3023b94241",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "yellow_3.png",
+      "path": "assets/cards/yellow_3.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "f54a780b9074b20644325459e03ed5df65a5151e884c16b1a8a9a3dc96194618",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "yellow_2.png",
+      "path": "assets/cards/yellow_2.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "1d37548507eaa08817f1d2c88b2aeed6382733acdabff423fafe8b388d16e254",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "yellow_1.png",
+      "path": "assets/cards/yellow_1.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "eae192d5bfe1dd1d825985af67e2a5d8f8a6b7b5e3bafed921b7dd4a92268191",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "yellow_0.png",
+      "path": "assets/cards/yellow_0.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "5542b02d37eca6a9801b8c468e2c61061dcd5e20561d8c0ab6c7f73beb1b12ba",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "wild_draw4.png",
+      "path": "assets/cards/wild_draw4.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "95dc3c9630292f6835a27897985d44a21ac5e38b7961167f29b58206d741032f",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "wild.png",
+      "path": "assets/cards/wild.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "9a81f56ddee371990e3ff4bb48f115712fe319e23d235c69b1de4fefae170555",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "red_wild_draw4.png",
+      "path": "assets/cards/red_wild_draw4.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "9977c2d867f0ca2d16250d1d20e6372e62f63d7e3eb2b1dd503fe8ec90d1e00a",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "red_wild.png",
+      "path": "assets/cards/red_wild.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "a73748f7da48cb517217e4bb91ff1639798d3281b42d1b141e140e9f2f6eb2bd",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "red_skip.png",
+      "path": "assets/cards/red_skip.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "c13c953ba8cf2d7f1b588a4038087b93271c0fa5f68270b451bea648919d5e41",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "red_reverse.png",
+      "path": "assets/cards/red_reverse.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "c7c0a6b1585f4972a8647768c17c0e464acd1be738e9eef6aac8135b0df539c4",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "red_draw2.png",
+      "path": "assets/cards/red_draw2.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "de7cf176739e862970fa76d96130fcfa81505e4bf0a5194d3c69da2930b4a2ae",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "red_9.png",
+      "path": "assets/cards/red_9.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "883502faf2807bcaf5c28c6441972556383e4b81948c871a537dd7ad65c7f7b4",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "red_8.png",
+      "path": "assets/cards/red_8.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "53a7d8518e075fe66c3db987e9f7bd70ef916e727f442c2fb12bc220259741c6",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "red_7.png",
+      "path": "assets/cards/red_7.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "a5d5142b8ed6c1a5a8031045a8fc06aef76e6a802b71a31240936daf50577904",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "red_6.png",
+      "path": "assets/cards/red_6.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "ce00de159604b265c3461c5ddc9fc2ce88488db45019a1caa03f09bae4a241df",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "red_5.png",
+      "path": "assets/cards/red_5.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "8e1f549584fdebb362aa4c09f8219844b97cf07cdcfd63b7eb1875a75c935923",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "red_4.png",
+      "path": "assets/cards/red_4.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "2ccb9a4335fc08d5bea46cf74021c2f7b64e1562c79dca2316ca28c1471921c8",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "red_3.png",
+      "path": "assets/cards/red_3.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "23e9c9030e0ba91736527500c8db0c623b98ccc7ad0105e744fedea3e619ebe7",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "red_2.png",
+      "path": "assets/cards/red_2.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "11d0d7df98cc951721e0356deb2bec48502e2d1f4995241302b5a83a7201302e",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "red_1.png",
+      "path": "assets/cards/red_1.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "27b97f071e2360d199e139dcbaa80dea1acc71b415c0f6482c3ab14317bd31ae",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "red_0.png",
+      "path": "assets/cards/red_0.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "f139e4549859b1f523e1fc2225fb900cccdc6aa18666518626aa84ecff87041e",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "green_wild_draw4.png",
+      "path": "assets/cards/green_wild_draw4.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "7efd613ef949ee26a180a745f8176fd344ffd68dd93fab9b0db68c2265ff51db",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "green_wild.png",
+      "path": "assets/cards/green_wild.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "d64db10a1b4da1f1a1b5bf9e68a17b6d518ffe37cd3b8723dcfaffca612568fa",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "green_skip.png",
+      "path": "assets/cards/green_skip.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "4a6bb8d6423d58ce77bc6ea21bb80b60ebce23e569595ba73c8a1ab8f0039889",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "green_reverse.png",
+      "path": "assets/cards/green_reverse.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "f9188740051df6ce388864504e08b829e5592964200ed09b305636a8d1a50ab9",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "green_draw2.png",
+      "path": "assets/cards/green_draw2.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "1ba6f4bf6bb2d225092fb9911cd5dc1d03c7fd4325967f52aea18f812b0ae288",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "green_9.png",
+      "path": "assets/cards/green_9.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "5335286290a75fb57bac74a8695ebe815459999a8122e230746249e22d14170c",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "green_8.png",
+      "path": "assets/cards/green_8.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "9c9f19bf38a20e982535e6d5a1146c78e01a3c23f6df3949646109ac2739c9f6",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "green_7.png",
+      "path": "assets/cards/green_7.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "7d7cfc796630cbf42fed847eb8008daed750fa4fdccd43b1f29b2476ae83084c",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "green_6.png",
+      "path": "assets/cards/green_6.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "0b88b72616bf05ad1cbc0612e65df39f618f2fe48ff9681c64d7463452a1b79d",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "green_5.png",
+      "path": "assets/cards/green_5.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "99326f00cca8f695de690c25e2e3324b80aa420b2a94e9fa2280ae13fd5468f2",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "green_4.png",
+      "path": "assets/cards/green_4.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "f6244519674dc96851740e564140c67b62e0f6739c68dcb05dd9686292df39a9",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "green_3.png",
+      "path": "assets/cards/green_3.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "068c1b6f726e9650d5f0615de734770ec2128266677c946032d1982aa7fb4930",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "green_2.png",
+      "path": "assets/cards/green_2.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "9cb8cb29251f088d5fc8ed216f1415412d7f0dc3565423bdb636ca91aaa55dac",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "green_1.png",
+      "path": "assets/cards/green_1.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "2d3872281f74377bb8dd2d809e247292b26b1f1d2f54d6a8c6dd1cbbdb784921",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "green_0.png",
+      "path": "assets/cards/green_0.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "cdd7400aeeda67185afbe2fdb169dd9a8318aaeb2f661cc47f8ca2e6cc08c269",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "card_overlay.png",
+      "path": "assets/cards/card_overlay.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "3005d9f671c7483b5873ba6c6b3fe24d211003abccde0dba87a0f0397beaaa3b",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "blue_wild_draw4.png",
+      "path": "assets/cards/blue_wild_draw4.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "0543f337ca254bc1bedf21661c3ba565e44716bec0097129127d7fc48be23eff",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "blue_wild.png",
+      "path": "assets/cards/blue_wild.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "52144575c7c5e7ce81e9e86c5e71ae4d05a69c4d105990d6f3110f3610b58c4c",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "blue_skip.png",
+      "path": "assets/cards/blue_skip.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "b9151b3903fe62eec05b2b9895387f8181fbd397eb10a95592a7ddc670ca1d2c",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "blue_reverse.png",
+      "path": "assets/cards/blue_reverse.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "f7d2c995764c188c97ede3d6e3c458351d8a7f337bc1a5eed5e16d393b68a413",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "blue_draw2.png",
+      "path": "assets/cards/blue_draw2.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "eeb8983a1c36c0ee4346093f598d9bf3662d89e54d565443324014e2040297da",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "blue_9.png",
+      "path": "assets/cards/blue_9.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "49ffc5e714eccaac9434875f43404b07ae9153ee182b5b6757c5b428e2f2ad8f",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "blue_8.png",
+      "path": "assets/cards/blue_8.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "3d9026c250ff7ebd96d15cf18f971961a4b73ff5430376927d2b83eb0b48f3e5",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "blue_7.png",
+      "path": "assets/cards/blue_7.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "48302d48fca6bdfc64629aa2b949f001bcf749025c12c7296ce5c5321dcb62bc",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "blue_6.png",
+      "path": "assets/cards/blue_6.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "f53943140ff0625428a3e3ce7fe7bdeca212dd79d5557cd128e4eb34b58d4a1a",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "blue_5.png",
+      "path": "assets/cards/blue_5.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "f35bfe8c62ebc01a625c825e554da7be98484b166a6ce2041e324932b370bf4f",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "blue_4.png",
+      "path": "assets/cards/blue_4.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "3e1b693bef7b5642bbdeda8db8d7a59465d09a7a6ff20f6c11a39c997f93916b",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "blue_3.png",
+      "path": "assets/cards/blue_3.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "12461fe70f8f26ab4e994adfd799bb629ecb1c1b02f7037ad6193e405770fae2",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "blue_2.png",
+      "path": "assets/cards/blue_2.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "099b5acd76993fae4c23a8f57efd7b6148c06e2083ae0e817cacf402d2d35361",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "blue_1.png",
+      "path": "assets/cards/blue_1.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": false,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "bad39392f27ab21459984a41fce9844dc867228cf4812b37ccdecbd1cdf51c41",
+      "extraction": "lossless frame crop, rotation restored"
+    },
+    {
+      "name": "blue_0.png",
+      "path": "assets/cards/blue_0.png",
+      "sourceAtlas": "/assets/matcho/cards-w8MlmQ@2x.png",
+      "rotatedInAtlas": true,
+      "size": [
+        256,
+        344
+      ],
+      "sha256RGBA": "7ae2661a5ece2896db66152116f2999c4c132460e0f07dec0c2deb921e6909bb",
+      "extraction": "lossless frame crop, rotation restored"
+    }
+  ],
+  "fonts": [
+    {
+      "file": "LexendDeca-Black.woff2",
+      "family": "Lexend Deca Black",
+      "weight": 900,
+      "axes": {}
+    },
+    {
+      "file": "Nunito.woff2",
+      "family": "Nunito ExtraLight",
+      "weight": 200,
+      "axes": {
+        "wght": [
+          200.0,
+          1000.0
+        ]
+      }
+    }
+  ],
+  "scope": "Only public static resources; original HAR, messages, cookies, auth and user pictures excluded."
+}

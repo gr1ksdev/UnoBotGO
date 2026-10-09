@@ -1568,3 +1568,91 @@ Evitar regras/pontuação duplicadas, chat IDs confiados ao cliente, exposição
 
 ## Impacto
 Migration aditiva 0011, endpoints de perfil/salas/socket e frontend convertido do pacote visual. Resultados pendentes permanecem em memória como arquitetura atual; durabilidade após restart e outbox de notificações exigem trabalho adicional. Verificação completa passou, sem homologação Telegram real ou publicação.
+
+
+# Decisão: completar descoberta e lançamento da sala WebApp
+
+## Data
+2026-10-08
+
+## Contexto
+Usuário relatou ausência de acesso à partida apesar da implementação anterior de engine/socket. Continuação explicitamente autorizada, sem commit/push/deploy.
+
+## Decisão tomada
+Ação principal interna, lista de uma ou várias salas e atualização em retomada/foco/visibilidade/manualmente. Bot gera link da Mini App com parâmetro da sala; raiz encaminha lançamento independentemente da URL configurada. Backend mantém identidade e participação validadas. Criador não recebe inscrição automática. Acrescentar prova com dois navegadores e PostgreSQL real, usando SDK/identidades fictícios somente no harness.
+
+## Motivo
+Código de transporte isolado não comprova fluxo utilizável. Testar desde descoberta até ranking permite detectar navegação desconectada, cache e finalização duplicada sem alterar regras ou confiar no cliente.
+
+## Impacto
+Frontend e links do bot corrigidos; proxy Vite selecionável para servidor de teste. E2E confirma commit único/histórico/score e callback único após retry. Teste manual com Telegram real continua distinto da evidência local.
+
+
+# Decisão: criação direta com vínculo de grupo verificado e animação pública
+
+## Data
+2026-10-08
+
+## Contexto
+Score depende de grupo real e serviço autoritativo; comandos bot não devem ser etapa obrigatória. GSAP precisa eventos confirmados sem expor cartas privadas.
+
+## Decisão tomada
+Criar/admitir pela API existente com referências seladas e consulta atual Telegram; catálogo de grupos conhecidos + resolução pública por @username. Journal limitado no manager e recovery explícito no socket; GSAP consome journal com baseline e CardID estável.
+
+## Motivo
+Preservar políticas Legacy/Updated, engine, transação canônica, privacidade e funcionamento Inline, garantindo acesso direto e movimentos sem decidir regras na UI.
+
+## Impacto
+Sem pontuação de grupo arbitrário ou nova política privada. Sem recuperação durável além da arquitetura em memória. Dependência GSAP adicionada à stack React existente.
+
+
+# Decisão: revanche por consenso vinculado à partida encerrada
+
+## Data
+2026-10-08
+
+## Contexto
+Correção v2 explicitamente autorizada exige fidelidade de recursos e revanche multiplayer sem apagar finalização pendente.
+
+## Decisão tomada
+Manter votos no serviço, separados de ações da engine, com membership fixo de todos os participantes finais (inclusive saídas), receipts por request e versão pública de consenso. Desconexão mantém voto/grupo; retirada revoga somente voto. Bloquear antes de ACK transacional. Preparar nova engine com novo GameID e publicar índices/ponte em uma seção crítica. Após ponte, votos antigos são imutáveis.
+
+## Motivo
+Não alterar regras/timers/políticas de score para apresentação, impedir dupla criação em concorrência e preservar resultado anterior.
+
+## Impacto
+Clientes migram pelo next_game_id autorizado e recuperam mão privada da nova engine via socket existente. Quem não voltar impede consenso; criação normal de outra sala permanece disponível. Runtime/votos seguem em memória. Recursos reais v2 locais; rank15 usa PNG existente por ausência no pacote.
+
+# Decisão: cena PixiJS e organização da mão
+
+## Data
+2026-10-09
+
+## Contexto
+O usuário autorizou PixiJS/GSAP e substituiu a mão horizontal por fileiras de até oito, agrupadas por cor, conforme MOVIMENTOS.md e recursos v2. As 34 skills locais de ambas as bibliotecas foram lidas integralmente.
+
+## Decisão tomada
+PixiJS v8 renderiza sprites/camadas/mascara/voos; DOM conserva comandos e acessibilidade. Layout compartilhado ordena cópia da mão por vermelho/amarelo/verde/azul/coringas, rank e CardID. Fileiras têm margens de 16 px e rolagem vertical exclusiva da mão; gestos congelam posições, nunca a disponibilidade autorizada. GSAP/PixiPlugin anima snapshots aceitos sem enviar comandos. Nova rodada consensual distribui uma vez; recuperação não reproduz histórico. O seletor envia imediatamente e mantém feedback de 450+700+350 ms.
+
+## Motivo
+Preservar identidade física, privacidade, regras e processamento de eventos; aproximar a aparência e os movimentos do original sem transformar a referência em backend.
+
+## Impacto
+Cleanup mata tweens antes de destruir sprites; texturas compartilhadas ficam no cache. A primeira notificação de ResizeObserver é ignorada quando as dimensões não mudaram, para não cancelar a distribuição. Carregamento CSP usa o fallback oficial sem funções dinâmicas e sem workers blob; cabeçalhos permanecem intactos. Rank 15 mantém o PNG do bot, com dimensões nativas diferentes, acomodado ao quadro de mão. Bundle de produção e transações são validados pelo teste real de dois navegadores.
+
+# Decisão: preservar movimento aceito diante de recovery redundante
+
+## Data
+2026-10-09
+
+## Contexto
+HTTP inicial pode terminar depois de evento WebSocket aceito, na mesma revisão. Feedback de cor também pode continuar enquanto a engine solicita outro alvo.
+
+## Decisão tomada
+Recovery redundante na mesma revisão não cancela movimento já aceito. Escolha nova exigida pelo servidor encerra feedback anterior e libera o controle correspondente. Cleanup após falha de inicialização é idempotente. CardID acompanha sprite, voo e comando; adversários usam somente versos anônimos.
+
+## Motivo
+Separar estado autorizado e apresentação, sem ignorar novas regras nem bloquear ações durante feedback.
+
+## Impacto
+Checks de navegador cobrem os cenários. Recuperação com revisão nova continua recompondo o estado sem repetir histórico.

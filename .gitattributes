@@ -1,0 +1,2 @@
+# Preserve original third-party reference bundles, including upstream formatting.
+docs/design-reference/unobotgo-v2/assets/vendor/* -whitespace

@@ -29,25 +29,30 @@ type UserPrivacyStore interface {
 }
 
 type API struct {
-	Games       *game.Service
-	Finalizer   *game.Finalizer
-	Profiles    ranking.ProfileRepository
-	BotUsername func() string
-	TurnTimeout time.Duration
-	Lifecycle   context.Context
-	wsMu        sync.Mutex
-	wsUsers     map[int64]int
-	Rankings    *ranking.GlobalService
-	References  *References
-	Media       Media
-	Privacy     PrivacyChecker
-	UserPrivacy UserPrivacyStore
-	Token       string
-	MaxAge      time.Duration
-	Now         func() time.Time
-	mu          sync.Mutex
-	clients     map[int64]bucket
-	slots       chan struct{}
+	RoomGroups       RoomGroupRepository
+	VerifyRoomGroup  func(context.Context, int64, int64) (string, error)
+	ResolveRoomGroup func(context.Context, string, int64) (int64, string, error)
+	roomMu           sync.Mutex
+	createdRooms     map[roomReceiptKey]roomReceipt
+	Games            *game.Service
+	Finalizer        *game.Finalizer
+	Profiles         ranking.ProfileRepository
+	BotUsername      func() string
+	TurnTimeout      time.Duration
+	Lifecycle        context.Context
+	wsMu             sync.Mutex
+	wsUsers          map[int64]int
+	Rankings         *ranking.GlobalService
+	References       *References
+	Media            Media
+	Privacy          PrivacyChecker
+	UserPrivacy      UserPrivacyStore
+	Token            string
+	MaxAge           time.Duration
+	Now              func() time.Time
+	mu               sync.Mutex
+	clients          map[int64]bucket
+	slots            chan struct{}
 }
 type bucket struct {
 	count   int
@@ -64,6 +69,7 @@ func (a *API) now() time.Time {
 // Handler owns its limiter state; requests never receive upstream errors or IDs.
 func (a *API) Handler() http.Handler {
 	a.clients = make(map[int64]bucket)
+	a.createdRooms = make(map[roomReceiptKey]roomReceipt)
 	a.wsUsers = make(map[int64]int)
 	a.slots = make(chan struct{}, 32)
 	mux := http.NewServeMux()
@@ -74,6 +80,12 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/me", a.profile)
 	mux.HandleFunc("GET /api/v1/me/position", a.position)
 	mux.HandleFunc("GET /api/v1/rooms", a.rooms)
+	mux.HandleFunc("POST /api/v1/rooms", a.createRoom)
+	mux.HandleFunc("GET /api/v1/room-groups", a.roomGroups)
+	mux.HandleFunc("POST /api/v1/room-groups/resolve", a.resolveRoomGroup)
+	mux.HandleFunc("GET /api/v1/rooms/{id}/invite", a.roomInvite)
+	mux.HandleFunc("GET /api/v1/invites/{token}", a.previewInvite)
+	mux.HandleFunc("POST /api/v1/invites/{token}/join", a.joinInvite)
 	mux.HandleFunc("GET /api/v1/rooms/{id}", a.snapshot)
 	mux.HandleFunc("GET /api/v1/config", a.configuration)
 	mux.HandleFunc("GET /api/v1/me/privacy", a.getMyPrivacy)

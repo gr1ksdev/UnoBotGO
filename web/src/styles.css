@@ -2163,3 +2163,51 @@ a {
   padding-bottom: 4px;
  }
 }
+
+.rooms-section { scroll-margin-top: 16px; margin-top: 24px; }
+.room-link { gap: 10px; text-decoration: none; }
+.room-link > div { flex: 1; min-width: 0; }
+.room-link strong { display: block; }
+.room-link small { display: block; color: var(--muted); margin-top: 4px; font-size: 11px; }
+.room-action { display: flex; align-items: center; gap: 4px; color: var(--accent); font-size: 11px; flex-shrink: 0; }
+
+.section-head { gap: 10px; }
+.section-head > a { flex-shrink: 0; font-size: 12px; color: var(--accent); }
+
+/* Touch-sized, scrollable hand. No flex compression or selection-driven reflow. */
+.game .hand-area { min-width: 0; width: 100%; }
+.game .hand { width: 100%; min-width: 0; min-height: 159px; padding: 24px 20px 12px; gap: 0; overflow-x: auto; overflow-y: hidden; touch-action: pan-x; scroll-padding-inline: 20px; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+.game .hand button, .game .hand button img { width: 88px; height: 123.2px; }
+.game .hand button { flex: 0 0 88px; margin-right: -28px; transition: filter 180ms; animation: none; }
+.game .hand button.selected { margin-right: -28px; transform: none; z-index: 3; }
+.game .hand button:last-child, .game .hand button.selected:last-child { margin-right: 0; }
+.game .hand button img { pointer-events: none; }
+.game .hand:after { content: ''; flex: 0 0 20px; }
+.motion-card { position: fixed; z-index: 100; pointer-events: none; transform-origin: center; perspective: 700px; filter: drop-shadow(0 10px 12px #00101655); }
+.motion-card img { width: 100%; height: 100%; display: block; }
+.motion-feedback { position: absolute; z-index: 8; left: 50%; top: 38%; translate: -50% 0; padding: 9px 16px; border-radius: 16px; background: var(--accent); color: var(--accent-ink); font-weight: 800; font-size: 14px; pointer-events: none; }
+.choice-sheet { position: fixed; inset: 0; margin: auto; padding: 0; width: min(300px, calc(100vw - 32px)); border: 0; border-radius: 28px; background: transparent; overflow: visible; color: var(--text); }
+.choice-sheet::backdrop { background: #061a24a8; }
+.choice-surface { padding: 22px; border-radius: 28px; background: var(--surface); box-shadow: 0 12px 40px #00101655; }
+.choice-surface h2 { text-align: center; margin: 0 0 8px; font-size: 22px; }
+.choice-surface > .sub { text-align: center; font-size: 12px; margin-bottom: 18px; }
+.color-options { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.color-choice { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 94px; border-radius: 20px; color: #10292f; font-weight: 800; box-shadow: inset 0 -4px 0 #10292f22; transition: filter 150ms, scale 150ms; }
+.color-choice svg { width: 30px; height: 30px; fill: currentColor; }
+.color-choice:active { scale: .95; }
+.color-choice[aria-pressed=true] { outline: 3px solid var(--text); outline-offset: 2px; }
+.color-1 { background: var(--red); }.color-2 { background: var(--blue); }.color-3 { background: var(--green); }.color-4 { background: var(--yellow); }
+.room-sheet { position: fixed; border: 1px solid var(--stroke); border-radius: 28px; width: min(390px, calc(100vw - 24px)); max-height: calc(var(--viewport-height,100svh) - 32px); padding: 22px; background: var(--surface); color: var(--text); }
+.room-sheet::backdrop { background: #061a24b8; }
+.room-sheet header { display: flex; align-items: center; justify-content: space-between; }
+.room-sheet header h2 { font-size: 24px; }
+.room-sheet label, .share-room label { display: grid; gap: 8px; font-size: 13px; margin: 16px 0; }
+.room-sheet select, .room-sheet input, .share-room input { width: 100%; min-width: 0; color: var(--text); background: var(--bg); border: 1px solid var(--stroke); padding: 13px; border-radius: 14px; font: inherit; }
+.room-sheet .primary { margin-top: 20px; width: 100%; }
+.room-sheet details { margin-top: 20px; }.room-sheet details summary { color: var(--accent); cursor: pointer; }
+.room-policy, .seat-role { color: var(--muted); font-size: 11px; }.seat-role { display: block; text-align: center; margin-top: 6px; }
+.share-room { margin: 18px 0; }.share-room > button { width: 100%; display: flex; justify-content: center; gap: 10px; }
+.invite-page > .eyebrow { display: block; margin-top: 32px; }.invite-page h1 { overflow-wrap: anywhere; font-size: 30px; }
+@container uno-table (max-height:550px) { .game .opponents { min-height: 64px; } .many-opponents .seat .avatar { width: 20px; height: 20px; } .game .hand { min-height: 159px; } }
+@media (prefers-reduced-motion:reduce) { .color-choice { transition: none; } }
+@container uno-table (max-height:550px) { .game .opponents { margin-top: 0; } .game .many-opponents { gap: 2px; } }

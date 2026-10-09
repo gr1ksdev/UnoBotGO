@@ -484,7 +484,7 @@ func (h *CommandHandler) handleNovoObserved(ctx context.Context, actorID uno.Pla
 		return
 	}
 
-	h.reply(ctx, int64(chatID), h.renderer.RenderLobby(outcome.View), makeGameButtons(outcome.View))
+	h.reply(ctx, int64(chatID), h.renderer.RenderLobby(outcome.View), h.gameMarkup(outcome.View))
 }
 
 func (h *CommandHandler) handleEntrar(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID) {
@@ -535,13 +535,13 @@ func (h *CommandHandler) handleEntrar(ctx context.Context, actorID uno.PlayerID,
 	}
 
 	if outcome.View.Phase == uno.Lobby {
-		h.reply(ctx, int64(chatID), h.renderer.RenderLobby(outcome.View), makeGameButtons(outcome.View))
+		h.reply(ctx, int64(chatID), h.renderer.RenderLobby(outcome.View), h.gameMarkup(outcome.View))
 	} else {
 		msg := fmt.Sprintf("✅ %s entrou na partida em andamento!\n\n%s",
 			h.renderer.PlayerLink(actorID, outcome.View),
 			h.renderer.RenderPublicState(outcome.View),
 		)
-		h.reply(ctx, int64(chatID), msg, makeGameButtons(outcome.View))
+		h.reply(ctx, int64(chatID), msg, h.gameMarkup(outcome.View))
 	}
 }
 
@@ -596,7 +596,7 @@ func (h *CommandHandler) handleIniciar(ctx context.Context, actorID uno.PlayerID
 	}
 
 	msg := "🚀 <b>Partida iniciada!</b>\n\n" + h.renderer.RenderPublicState(outcome.View)
-	h.reply(ctx, int64(chatID), msg, makeGameButtons(outcome.View))
+	h.reply(ctx, int64(chatID), msg, h.gameMarkup(outcome.View))
 }
 
 func (h *CommandHandler) handleCancelar(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID) {
@@ -702,7 +702,7 @@ func (h *CommandHandler) handleSair(ctx context.Context, actorID uno.PlayerID, c
 			h.renderer.PlayerLink(actorID, outcome.View),
 			h.renderer.RenderPublicState(outcome.View),
 		)
-		h.reply(ctx, int64(chatID), msg, makeGameButtons(outcome.View))
+		h.reply(ctx, int64(chatID), msg, h.gameMarkup(outcome.View))
 	}
 }
 

@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiGet, type GameCommand, type GameView } from '../api/client'
 export interface LiveMessage {
+ recovery?: boolean
  type: string
  request_id?: string
  reason?: string
@@ -14,9 +15,20 @@ export function acceptSnapshot(
  if (
   previous &&
   (previous.game_id !== incoming.game_id ||
-   incoming.revision < previous.revision)
+   incoming.revision < previous.revision ||
+   (incoming.revision === previous.revision && (incoming.rematch?.revision ?? 0) < (previous.rematch?.revision ?? 0)))
  )
   return previous
+ // HTTP recovery may arrive after a socket event with the same revision.
+ // Keep its metadata from cancelling an already accepted presentation.
+ if(previous && incoming.revision===previous.revision && incoming.recovery && !previous.recovery)
+  incoming={...incoming,recovery:previous.recovery}
+ if (previous && incoming.closed) return {
+  ...incoming, hand: incoming.hand.length ? incoming.hand : previous.hand,
+  result: incoming.result ?? previous.result,
+  awards: incoming.result ? incoming.awards : previous.result ? previous.awards : incoming.awards,
+  rematch: incoming.rematch ? { ...incoming.rematch, ready: incoming.rematch.ready || !!previous.rematch?.ready } : incoming.rematch,
+ }
  return incoming
 }
 export function useGame(gameID: string) {
@@ -36,7 +48,7 @@ export function useGame(gameID: string) {
   const recover = async () => {
    try {
     const data = await apiGet<GameView>(`rooms/${encodeURIComponent(gameID)}`)
-    if (!disposed) setView((previous) => acceptSnapshot(previous, data))
+    if (!disposed) setView((previous) => acceptSnapshot(previous?.game_id === gameID ? previous : undefined, { ...data, recovery: true }))
    } catch {
     /* The socket reports connection/authentication failures. */
    }
@@ -57,8 +69,9 @@ export function useGame(gameID: string) {
    ws.onmessage = (event) => {
     const message = JSON.parse(String(event.data)) as LiveMessage
     if (message.view?.game_id !== gameID) return
-    setView((previous) => acceptSnapshot(previous, message.view))
+    setView((previous) => acceptSnapshot(previous?.game_id === gameID ? previous : undefined, { ...message.view, recovery: message.recovery }))
     setConnected(true)
+    if (!command.current) setPending(false)
     attempt = 0
     if (message.view.closed && message.view.result && !committed) {
      committed = true
@@ -73,7 +86,9 @@ export function useGame(gameID: string) {
      setPending(false)
      setError(
       message.type === 'rejected'
-       ? message.reason === 'stale_revision'
+       ? message.reason === 'result_pending'
+         ? 'Aguarde a confirmação do resultado antes da revanche.'
+         : message.reason === 'stale_revision'
          ? 'A mesa mudou. Confira sua mão e tente novamente.'
          : 'O servidor recusou esta ação. Confira o turno e as regras.'
        : '',
@@ -110,8 +125,8 @@ export function useGame(gameID: string) {
  const send = useCallback(
   (action: string, extra: Partial<GameCommand> = {}) => {
    if (
-    !view ||
-    view.closed ||
+    !view || view.game_id !== gameID ||
+    (view.closed && !['rematch', 'rematch_leave'].includes(action)) ||
     !connected ||
     command.current ||
     socket.current?.readyState !== WebSocket.OPEN

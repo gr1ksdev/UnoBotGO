@@ -1,0 +1,19 @@
+=== RUN   TestTwoBrowserWebAppGame
+2026/10/09 02:02:45 INFO migrations: checking
+2026/10/09 02:02:45 INFO migrations: applying migration=migrations/0001_groups.up.sql
+2026/10/09 02:02:45 INFO migrations: applying migration=migrations/0002_results.up.sql
+2026/10/09 02:02:45 INFO migrations: applying migration=migrations/0003_known_users.up.sql
+2026/10/09 02:02:45 INFO migrations: applying migration=migrations/0004_imports.up.sql
+2026/10/09 02:02:45 INFO migrations: applying migration=migrations/0005_insufficient_eligible_players.up.sql
+2026/10/09 02:02:45 INFO migrations: applying migration=migrations/0006_monthly_ranking.up.sql
+2026/10/09 02:02:45 INFO migrations: applying migration=migrations/0007_group_title.up.sql
+2026/10/09 02:02:45 INFO migrations: applying migration=migrations/0008_default_ranking_updated.up.sql
+2026/10/09 02:02:45 INFO migrations: applying migration=migrations/0009_ranking_privacy.up.sql
+2026/10/09 02:02:45 INFO migrations: applying migration=migrations/0010_default_mode_caseiro.up.sql
+2026/10/09 02:02:45 INFO migrations: applying migration=migrations/0011_game_origin.up.sql
+2026/10/09 02:02:45 INFO migrations: complete applied=11
+    browser_integration_test.go:119: {"transport":"real WebSocket","backend":"real Go engine and PostgreSQL","frontend":"Go embedded production bundle, unchanged strict CSP","identities":"two test identities; no live Telegram","commands":{"start":1,"play":39,"draw":23,"color":5,"pass":14},"steps":["Account A creates inside Mini App, shares a direct invite; account B opens it and joins via the UI; both reopen the same room","Start via WebSocket; each browser receives only its distinct seven-card private hand","Account B opens the room deep link from the ranking URL and reconnects to the same game","Buy, select and confirm play through UI; turns synchronized; normal two-player completion committed","Wild color choice exercised through the accessible UI","Retry of final request ID accepted without changing final revision","Both clients see committed results, updated player/group monthly ranking and one WebApp history entry","Real server vote synced to both clients, reconnect preserved vote, unanimous vote atomically opened the same new engine ID with private 7-card hands"],"game_id":"28fcf288f27166d74ec7dc32dbc0e47b","next_game_id":"60d94bbe0218e00faf3ff8666ff28486","motion_counts":{"deal":56,"draw":60,"play":78},"video_segments":[{"account":1,"kind":"deal","start":2.996,"seconds":4.5},{"account":1,"kind":"draw-and-flip","start":69.58,"seconds":2.5},{"account":1,"kind":"color","start":52.971,"seconds":3.5},{"account":2,"kind":"deal","start":2.522,"seconds":4.5},{"account":2,"kind":"draw-and-flip","start":8.079,"seconds":2.5},{"account":2,"kind":"color","start":17.606,"seconds":3.5}],"passed":true}
+
+--- PASS: TestTwoBrowserWebAppGame (289.34s)
+PASS
+ok  	github.com/malbs/UnoGoBot/internal/httpapi	290.361s

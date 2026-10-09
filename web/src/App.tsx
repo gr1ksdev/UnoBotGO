@@ -1,12 +1,22 @@
-import { Route, Routes } from 'react-router'
+import { Route, Routes, useNavigate } from 'react-router'
+import { useEffect, useRef } from 'react'
 import { RankingsPage } from './pages/Rankings'
 import { HomePage } from './pages/Home'
+import { InvitePage } from './pages/Invite'
 import { GamePage } from './pages/Game'
 import { ProfilePage } from './pages/Profile'
-import { useTelegram } from './lib/telegram'
+import { launchGamePath, useTelegram } from './lib/telegram'
 
 export default function App() {
  useTelegram(undefined, { manageBackButton: false, initialize: true })
+ const navigate = useNavigate()
+ const launched = useRef(false)
+ useEffect(() => {
+  if (launched.current) return
+  launched.current = true
+  const path = launchGamePath()
+  if (path && window.Telegram?.WebApp.initData) navigate(path, { replace: true })
+ }, [navigate])
  if (!window.Telegram?.WebApp.initData)
   return (
    <main className="app-shell">
@@ -24,6 +34,7 @@ export default function App() {
    <Route path="/groups/:groupRef" element={<RankingsPage />} />
    <Route path="/home" element={<HomePage />} />
    <Route path="/ranking" element={<RankingsPage />} />
+   <Route path="/invite/:token" element={<InvitePage />} />
    <Route path="/game/:gameID" element={<GamePage />} />
    <Route path="/profile" element={<ProfilePage />} />
    <Route

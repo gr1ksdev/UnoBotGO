@@ -217,7 +217,14 @@ func (s *Service) PublicView(ctx context.Context, id uno.GameID) (PublicGameView
 	}
 	defer entry.mu.Unlock()
 	if entry.final != nil {
-		return entry.final.clone(), nil
+		v := entry.final.clone()
+		if v.Rematch != nil {
+			s.manager.indexMu.RLock()
+			_, pending := s.manager.pendingResults[id]
+			s.manager.indexMu.RUnlock()
+			v.Rematch.Ready = !pending
+		}
+		return v, nil
 	}
 	return publicView(entry, entry.engine.Snapshot()), nil
 }

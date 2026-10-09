@@ -1,0 +1,128 @@
+npm --prefix web ci
+npm warn deprecated eslint@9.39.5: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+
+added 308 packages, and audited 309 packages in 5s
+
+73 packages are looking for funding
+  run `npm fund` for details
+
+4 vulnerabilities (1 moderate, 1 high, 2 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+npm warn install-scripts   esbuild@0.28.2 (postinstall: node install.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm --prefix web run lint
+
+> unobotgo-miniapp@0.1.0 lint
+> eslint .
+
+npm --prefix web run typecheck
+
+> unobotgo-miniapp@0.1.0 typecheck
+> tsc --noEmit
+
+npm --prefix web run test
+
+> unobotgo-miniapp@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /home/gabriel/Projetos/UnoBotGO/web
+
+ ✓ src/lib/score.test.ts (5 tests) 8ms
+ ✓ src/lib/handLayout.test.ts (37 tests) 46ms
+ ✓ src/components/ScrollingName.test.tsx (2 tests) 57ms
+ ✓ src/lib/telegram.test.tsx (9 tests) 56ms
+ ✓ src/components/Ranking.test.tsx (24 tests) 324ms
+ ✓ src/pages/Profile.test.tsx (5 tests) 466ms
+ ✓ src/pages/Home.test.tsx (4 tests) 591ms
+   ✓ Access to real WebApp rooms > keeps the primary empty-room action inside the app and offers direct creation without bot commands  319ms
+ ✓ src/App.test.tsx (10 tests) 641ms
+ ✓ src/pages/Game.test.tsx (12 tests) 672ms
+   ✓ Authoritative game UI > selection does not play until confirmation and sends the physical ID  301ms
+
+ Test Files  9 passed (9)
+      Tests  108 passed (108)
+   Start at  02:02:11
+   Duration  2.20s (transform 1.08s, setup 1.08s, collect 2.24s, tests 2.86s, environment 4.87s, prepare 941ms)
+
+npm --prefix web run build
+
+> unobotgo-miniapp@0.1.0 build
+> tsc --noEmit && node scripts/build.mjs
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 836 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                         0.50 kB │ gzip:   0.34 kB
+dist/assets/index-bx_L1noa.css         50.33 kB │ gzip:  10.63 kB
+dist/assets/webworkerAll-Bvaj_Wmr.js    0.11 kB │ gzip:   0.11 kB
+dist/assets/browserAll-CIll7war.js      0.20 kB │ gzip:   0.17 kB
+dist/assets/index-ZSHjGC1p.js         414.94 kB │ gzip: 137.24 kB
+dist/assets/TableScene-Csd5q_eU.js    930.70 kB │ gzip: 269.07 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 6.37s
+go test -count=1 ./...
+ok  	github.com/malbs/UnoGoBot	0.007s
+?   	github.com/malbs/UnoGoBot/cmd/bot	[no test files]
+?   	github.com/malbs/UnoGoBot/cmd/devseed	[no test files]
+ok  	github.com/malbs/UnoGoBot/cmd/simulator	0.004s
+ok  	github.com/malbs/UnoGoBot/internal/app	0.028s
+ok  	github.com/malbs/UnoGoBot/internal/config	0.010s
+ok  	github.com/malbs/UnoGoBot/internal/devseed	8.197s
+ok  	github.com/malbs/UnoGoBot/internal/game	3.163s
+ok  	github.com/malbs/UnoGoBot/internal/groups	0.010s
+ok  	github.com/malbs/UnoGoBot/internal/httpapi	0.028s
+ok  	github.com/malbs/UnoGoBot/internal/media	1.067s
+ok  	github.com/malbs/UnoGoBot/internal/ranking	0.014s
+ok  	github.com/malbs/UnoGoBot/internal/rankingimport	0.010s
+ok  	github.com/malbs/UnoGoBot/internal/simulation	0.239s
+ok  	github.com/malbs/UnoGoBot/internal/storage/postgres	0.014s
+ok  	github.com/malbs/UnoGoBot/internal/telegram	1.967s
+ok  	github.com/malbs/UnoGoBot/internal/uno	0.331s
+?   	github.com/malbs/UnoGoBot/web	[no test files]
+?   	github.com/malbs/UnoGoBot/web/node_modules/flatted/golang/pkg/flatted	[no test files]
+go vet ./...
+go build ./...
+go test -tags debugcards ./...
+ok  	github.com/malbs/UnoGoBot	(cached)
+?   	github.com/malbs/UnoGoBot/cmd/bot	[no test files]
+?   	github.com/malbs/UnoGoBot/cmd/devseed	[no test files]
+ok  	github.com/malbs/UnoGoBot/cmd/simulator	(cached)
+ok  	github.com/malbs/UnoGoBot/internal/app	(cached)
+ok  	github.com/malbs/UnoGoBot/internal/config	(cached)
+ok  	github.com/malbs/UnoGoBot/internal/devseed	(cached)
+ok  	github.com/malbs/UnoGoBot/internal/game	(cached)
+ok  	github.com/malbs/UnoGoBot/internal/groups	(cached)
+ok  	github.com/malbs/UnoGoBot/internal/httpapi	(cached)
+ok  	github.com/malbs/UnoGoBot/internal/media	(cached)
+ok  	github.com/malbs/UnoGoBot/internal/ranking	(cached)
+ok  	github.com/malbs/UnoGoBot/internal/rankingimport	(cached)
+ok  	github.com/malbs/UnoGoBot/internal/simulation	(cached)
+ok  	github.com/malbs/UnoGoBot/internal/storage/postgres	(cached)
+ok  	github.com/malbs/UnoGoBot/internal/telegram	(cached)
+ok  	github.com/malbs/UnoGoBot/internal/uno	(cached)
+?   	github.com/malbs/UnoGoBot/web	[no test files]
+?   	github.com/malbs/UnoGoBot/web/node_modules/flatted/golang/pkg/flatted	[no test files]
+go vet -tags debugcards ./...
+go build -tags debugcards ./...
+go test -count=1 -tags integration ./internal/storage/postgres/... ./internal/app/...
+ok  	github.com/malbs/UnoGoBot/internal/storage/postgres	11.029s
+ok  	github.com/malbs/UnoGoBot/internal/app	0.477s
+git diff --check
+mkdir -p bin
+go build -o bin/unobotgo ./cmd/bot

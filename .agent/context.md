@@ -495,3 +495,46 @@ Trabalhos paralelos conciliados por merge de origin/dev: fullscreen do Mini App 
 - Salas criadas/admitidas pelo fluxo existente do bot no grupo. Partidas, receipts e resultados pendentes continuam em memória; restart não fornece recuperação durável. Notificações sem outbox preservam tentativa após commit.
 - Validação: make check completo com PostgreSQL 17 isolado; Go race normal e integração; 60 testes frontend; screenshots nas quatro dimensões, 120 combinações de mão/jogadores, 20 estados de ranking e quatro casos de safe areas. Comparações corrigidas, inclusive 320×568/dez jogadores.
 - Relatório: docs/miniapp-webapp.md. Artefatos com dados exclusivos de teste: .reports/redesign-mobile/. Sem homologação Telegram real, commit, push ou deploy.
+
+
+# Continuação do fluxo WebApp — 2026-10-08 (sem commit/push/deploy)
+
+- Correção da entrega anterior: sala não era facilmente acessível; Home redirecionava ação principal vazia ao bot, lista omitida com uma sala, sem atualização ao retomar e sem interpretação de deep link.
+- Home agora lista sempre Suas salas, abre sala internamente, atualiza em activated/foco/visibilidade/manualmente. Somente ação secundária abre Telegram.
+- Bot oferece startapp=game_<gameID> em /novo e /entrar; App encaminha mesmo a partir de URL /ranking. Parâmetro seleciona endereço, nunca concede admissão. Criador observador também precisa /entrar, política preservada.
+- Teste real TestTwoBrowserWebAppGame opt-in: dois Chromium isolados, API/socket/engine/finalização/PostgreSQL reais. Bootstrap/identidades/SDK são exclusivos do teste, com token fictício. Percurso completo passou com -race: descobrir sala, lobby, iniciar, mãos privadas, comprar/jogar/escolher cor, turnos, deep link/reconexão, término normal, commit e rankings/histórico. Retry do comando final e duas novas finalizações não duplicam score/histórico/callback de notificação.
+- Evidências: .reports/webapp-flow/flow.png, browser.json, backend.json e capturas das duas contas. Dados de teste explicitamente identificados. Backend confirmou uma partida, dois jogadores, um grupo, um histórico por conta e uma chamada de notificação.
+- Checks: make check completo, go test -race ./..., 64 testes frontend, E2E com -race/PostgreSQL. Salas capturadas/revisadas nos quatro viewports e sem overflow horizontal.
+- Instruções detalhadas com duas contas em docs/miniapp-webapp.md. Homologação Telegram real pendente; Mini App deve servir bundle atual via HTTPS acessível aos clientes, com upgrade WebSocket. Memória de partidas/pendências e ausência de outbox continuam limites existentes. Nenhum processo de bot real foi iniciado nesta continuação.
+
+
+## Salas diretas e GSAP — 2026-10-08
+
+- Autorização explícita do usuário: implementação das correções, sem commit/push/deploy; alterações anteriores preservadas.
+- Home cria e inscreve via serviço; convite selado abre Mini App, preview/admissão/lobby/start reais. Grupo vem de catálogo conhecido ou @username validado por GetChat/GetChatMember para bot e usuário, nunca de chat_id livre. Bot continua opcional para iniciar fluxo.
+- Start segue permissão existente: participante inscrito, não apenas responsável. Capacidade total registrada dez, inclusive política existente de saídas/reentrada. Nenhuma política privada de score adicionada.
+- Journal público confirmado cap128 com IDs revision:index; drawn IDs não públicos. Primeiro socket snapshot marca recovery. GSAP baseline ignora histórico/recovery/duplicatas e limpa timelines; mão88px/advance60px rolável, seleção CardID, color2x2 com símbolos e nomes, reduced motion.
+- Checks: make check completo em banco exclusivo (banco local tinha dados incompatíveis com expectativa do seed antigo); 64 testes frontend; race game/httpapi/telegram e E2E integração com race. Testes admissão duplicada, identidade/grupo/convite forjados, revision antiga, lock, associação revogada, capacidade10/rejeição11, journal privado e recovery.
+- E2E real dois Chromium/API/WebSocket/engine/PostgreSQL: UI cria/share/join/start;39jogadas,23compras,5cores,14passes, reconexão sem replay, final normal commit, rankings/histórico e retries sem duplicatas. Identidades/SDK/consulta de membros são fixtures, sem contas Telegram reais.
+- Visual120 combinações,20estados ranking,4safeareas e gesto touch nos4viewports; first/last acessíveis e selection sem corte. Comparações lado a lado preservam composição/tokens e ampliam mão conforme pedido. Corrigido footer320568/10p/safeareas.
+- Evidências .reports/miniapp-immersive/: screenshots, JSON,comparisons,vídeos completos e two-clients-26s.mp4. Docs/miniapp-webapp.md contém passos atuais sem comandos obrigatórios.
+- Limites mantidos: grupos privados precisam cadastro conhecido/instalação; sala/receipts/resultados pendentes em memória; sem outbox Telegram. Homologação com contas reais/HTTPS permanece etapa do ambiente, não publicação automática. Processos reais do usuário não reiniciados.
+
+
+# Partida v2 e consenso de revanche — 2026-10-08
+
+- Pacote v2 encontrado em Downloads/unobotgo-v2 e copiado para docs/design-reference/unobotgo-v2; v1 histórica preservada. PNGs256×344/fontes locais/efeitos substituem apresentação v1 na partida.
+- Revanche no Service.VoteRematch: grupo final fixo (inclui saídas), pending bloqueia votos, receipts de voto, publicação atômica nova engine/ID e next_game_id. Desconexão mantém votos; retirada explícita não exclui participante.
+- WebSocket continua projetando apenas mão própria; cliente conserva a própria última mão sob resultado e descarta ao trocar GameID. Fotos passam pelo media autenticado existente com referências seladas e fallback.
+- Relatório .reports/partida-v2/README.md; nenhum commit/push/deploy ou Telegram real.
+
+# Cena PixiJS, fileiras e movimentos — 2026-10-09
+
+- A mão atual substitui o carrossel: até oito por fileira, agrupamento estável cliente por cor/rank/ID e rolagem vertical somente da mão. Seleção/controle acessível ficam no DOM; sprites originais ficam no PixiJS.
+- GSAP/PixiPlugin executa distribuição alternada, compra/virada, compras múltiplas, jogada, reflow e seleção. Seletor mantém 1,5 s de feedback com envio imediato. Resultados e consenso permanecem no serviço real.
+- Lifecycle async/StrictMode com cleanup de timelines, sprites, listeners e máscara. ResizeObserver inicial não cancela distribuição; resize real/recovery/reduced motion restauram estado coerente. Decodificação e renderização respeitam CSP existente.
+- Evidências desta revisão: .reports/partida-pixi/. Bundle embutido Go, WebSocket, engine e PostgreSQL reais no teste opt-in de dois navegadores; SDK/identidades de teste, sem Telegram real. Nenhum commit/push/deploy.
+
+- Verificação final desta correção: make check completo passou (108 testes frontend; lint/typecheck/build; Go/vet/debugcards; integração PostgreSQL). Matriz de 324 composições e 16 casos finais passou nas quatro dimensões; movimento em GPU passou com CardID estável, recovery atrasado, nova escolha durante feedback e falha de assets/unmount. Evidências em .reports/partida-pixi/. Telegram real e aparelho físico permanecem sem confirmação.
+
+- Teste final de dois navegadores passou no bundle Go de produção e race detector: 39 jogadas, 23 compras, cinco cores, resultado/COMMIT/ranking, dedup, reconexão e consenso para um novo GameID. Vídeo real local de 10,56 s conferido por frames (distribuição, compra/virada, cor). Relatório .reports/partida-pixi/README.md; Telegram real/aparelho físico não testados.
