@@ -39,6 +39,7 @@ export class TableScene {
  private discard?: Position
  private discardFace?: Sprite
  private pendingDiscard = ''
+ private discardHistory: {id:string; source:string}[] = []
  private players = new Map<string, Position>()
  private pendingArrivals = new Map<string, Card>()
  private controlledScroll = false
@@ -176,11 +177,18 @@ export class TableScene {
    for (let i=3;i>=0;i--) this.sprite(back, { ...this.deck, y: this.deck.y + i * 3 }, this.table)
   }
   if (view.top && this.discard) {
-   const card = this.sprite(this.asset(view.top, view.active_color), this.discard, this.table)
-   card.rotation = -.052
-   this.discardFace = card
-   card.visible = this.pendingDiscard !== view.top.ID
-   this.root.dataset.discardAsset = this.asset(view.top, view.active_color)
+   const pile=this.discard
+   this.sprite(shadow, { ...this.discard, y:this.discard.y+12, width:this.discard.width*1.25, height:this.discard.height*1.25 }, this.table)
+   this.discardHistory.forEach((entry,index) => {
+    const depth=this.discardHistory.length-1-index
+    const card=this.sprite(entry.source,{...pile,x:pile.x+(depth%2 ? -3 : 2)*depth,y:pile.y+depth*2},this.table)
+    card.label=entry.id
+    card.rotation=depth ? (depth%2 ? .045 : -.085) : -.052
+    if(!depth) { this.discardFace=card;card.visible=this.pendingDiscard!==entry.id }
+   })
+   this.root.dataset.discardAsset = this.discardHistory.at(-1)?.source ?? ''
+   this.root.dataset.discardLayers = String(this.discardHistory.length)
+   this.root.dataset.discardVisibleLayers = String(this.discardHistory.length-(this.pendingDiscard===view.top.ID ? 1 : 0))
   }
   this.root.querySelectorAll('.table-orbit .arrow').forEach((node, i) => {
    const p = this.rect(node)
@@ -295,6 +303,21 @@ export class TableScene {
   const oldPositions = new Map([...this.cards].map(([id, node]) => [id, { ...node.target, x: node.group.x, y: node.group.y + node.lift.y }]))
   const oldPlayers = new Map(this.players)
   if(view.recovery || (advanced && !contiguous) || this.reduced.matches) this.stop()
+  if(before?.game_id !== view.game_id) this.discardHistory=[]
+  const remember=(snapshot:GameView) => {
+   if(!snapshot.top)return
+   // A newly played wild still awaiting its owner's choice must remain neutral.
+   const source=this.asset(snapshot.top,snapshot.phase===2 ? undefined : snapshot.active_color)
+   const last=this.discardHistory.at(-1)
+   if(last?.id===snapshot.top.ID) last.source=source
+   else {
+    this.discardHistory=this.discardHistory.filter(c=>c.id!==snapshot.top!.ID)
+    this.discardHistory.push({id:snapshot.top.ID,source})
+    this.discardHistory=this.discardHistory.slice(-5)
+   }
+  }
+  if(!this.discardHistory.length && before?.game_id===view.game_id)remember(before)
+  remember(view)
   this.previous = view
   this.layout(view, motion)
   if(motion) {
@@ -310,7 +333,9 @@ export class TableScene {
       if(this.discardFace) this.discardFace.visible = false
       this.fly(player?.me ? oldPositions.get(event.card_id) : oldPlayers.get(event.player), this.discard, this.asset(view.top), 'play', 0, undefined, () => {
        if(this.pendingDiscard === event.card_id) { this.pendingDiscard = ''; if(this.discardFace && !this.discardFace.destroyed) this.discardFace.visible = true }
+       this.root.dataset.discardVisibleLayers=String(this.discardHistory.length-(this.pendingDiscard ? 1 : 0))
       },event.card_id)
+      this.root.dataset.discardVisibleLayers=String(this.discardHistory.length-1)
      }
      if(event.type === 'cards_drawn' && event.count) {
       if(player?.me) this.arrivals(incoming.splice(0,event.count).map(c=>c.Card))

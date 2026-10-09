@@ -2,7 +2,7 @@
 import { chromium } from 'playwright'
 import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
-const out = '.reports/partida-pixi'
+const out = process.env.UNO_MOTION_OUTPUT || '.reports/partida-pixi'
 const base = process.env.UNO_VISUAL_URL || 'http://127.0.0.1:5173'
 await mkdir(out, {recursive:true})
 const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_EXECUTABLE_PATH})
@@ -22,7 +22,7 @@ try {
  await page.locator('.hand button').last().waitFor()
  await page.locator('[data-scene-ready="true"]').waitFor()
  await page.locator('.hand button').first().tap()
- await page.getByRole('button',{name:'Jogar carta',exact:true}).tap()
+ await page.locator('.hand button').first().tap()
  assert.equal(commands.length,1)
  const old=view
  // Reject the physical play; selection and authorized hand remain usable.
@@ -90,7 +90,12 @@ try {
  await page.waitForTimeout(300)
  assert(await page.locator('.choice-surface').evaluate(n=>Number(getComputedStyle(n).opacity)>.9),'color hold was shortened')
  await page.locator('.v2-choice').waitFor({state:'hidden'})
- push({...view,revision:4,phase:2,my_turn:true})
+ push({...view,revision:4,phase:2,my_turn:true,top:{ID:'next-wild',Color:0,Rank:13}})
+ await page.getByRole('button',{name:'Azul',exact:true}).waitFor()
+ assert.deepEqual(await page.locator('.color-choice').evaluateAll(nodes=>nodes.map(n=>getComputedStyle(n).backgroundColor)),['rgb(251, 48, 69)','rgb(255, 189, 16)','rgb(96, 196, 0)','rgb(27, 113, 246)'],'next wild must reset every petal after previous feedback completed')
+ assert.equal(await page.locator('.game-v2').getAttribute('data-discard-asset'),'/assets/cards/wild.png','new unconfirmed wild must not inherit the previous active color')
+ await page.waitForTimeout(550)
+ await page.screenshot({path:`${out}/next-wild-four-colors-320.png`})
  await page.getByRole('button',{name:'Azul',exact:true}).tap()
  const rejected=commands.at(-1)
  socket.send(JSON.stringify({type:'rejected',request_id:rejected.request_id,reason:'stale_revision',view}))
@@ -109,6 +114,32 @@ try {
  push({...view,revision:7,phase:1,my_turn:true},'accepted',keep.request_id)
  await page.locator('.v2-choice').waitFor({state:'hidden'})
  await page.screenshot({path:`${out}/motion-new-game-320.png`})
+ // Physical play keeps the previous public face below its moving successor.
+ for(const [width,height] of [[320,568],[360,800],[390,844],[430,932]]) {
+  await page.setViewportSize({width,height})
+  const card={Card:{ID:`stack-${width}`,Color:1,Rank:7},Playable:true}
+  push({...view,revision:view.revision+1,phase:1,my_turn:true,hand:[card],events:[]})
+  const target=page.locator(`[data-card-id="${card.Card.ID}"]`)
+  await target.waitFor()
+  const beforeCount=commands.length
+  await target.tap();await page.waitForTimeout(420)
+  assert(Number(await target.getAttribute('data-visual-lift')) < -17,'first tap must visibly raise the card')
+  assert.equal(commands.length,beforeCount,'selection must not send play')
+  const raised=await target.boundingBox()
+  await page.touchscreen.tap(raised.x+5,raised.y-10)
+  const play=commands.at(-1)
+  assert.equal(play.card_id,card.Card.ID)
+  push({...view,revision:view.revision+1,hand:[],top:card.Card,events:[{id:`${view.revision+1}:0`,revision:view.revision+1,type:'card_played',player:'me',card_id:card.Card.ID}]},'accepted',play.request_id)
+  await page.locator('[data-motion-kind=play]').first().waitFor({state:'attached'})
+  assert(Number(await page.locator('.game-v2').getAttribute('data-discard-visible-layers'))>=1,'old face must remain rendered under the flight')
+  await page.waitForTimeout(200)
+  await page.screenshot({path:`${out}/discard-in-flight-${width}.png`})
+  await page.waitForFunction(()=>!document.querySelector('[data-motion-active]'))
+  assert(Number(await page.locator('.game-v2').getAttribute('data-discard-layers'))>=2)
+  await page.screenshot({path:`${out}/discard-pile-${width}.png`})
+ }
+ await page.setViewportSize({width:320,height:568})
+
  // The observer's initial notification must leave the first deal running.
  const dealHand=Array.from({length:7},(_,i)=>({Card:{ID:`deal-${i}`,Color:1,Rank:i},Playable:true}))
  view={...view,game_id:'deal-check',revision:1,phase:0,hand:[],owner:true,can_start:true,players:view.players.map(p=>({...p,count:0})),events:[]}
@@ -134,6 +165,6 @@ try {
  await page.getByRole('button',{name:'Voltar ao início',exact:true}).click()
  await page.locator('.game-v2').waitFor({state:'detached'})
  assert.deepEqual(errors, [], 'No errors on destroyed sprites or React unmount')
- await writeFile(`${out}/motion-checks.json`,JSON.stringify({passed:true,checks:['stable physical CardID during flight','opponent draws expose only anonymous backs','late same-revision recovery preserves accepted movement','fresh server choice supersedes old color feedback','failed asset initialization and unmount destroy renderer once','rejection restores physical hand','turn changes during draw','interrupted timeline restores opacity','delayed revision ignored','new-row purchase scrolls to its physical landing','arrival during gesture preserves touch ID and resumes after release','unmount removes ghosts','new game ID baseline','animation sends no commands','450ms color tween/700ms hold/350ms exit survives fast ack','color rejection restores petals and retry','initial observer notification preserves the visible deal','swap asset retains its hand frame during reveal'],telegram:'local test SDK only'},null,2))
+ await writeFile(`${out}/motion-checks.json`,JSON.stringify({passed:true,checks:['first tap raises and second tap plays with physical ID','previous discard remains visible during flight in four viewports','next wildcard restores four petals and neutral face','stable physical CardID during flight','opponent draws expose only anonymous backs','late same-revision recovery preserves accepted movement','fresh server choice supersedes old color feedback','failed asset initialization and unmount destroy renderer once','rejection restores physical hand','turn changes during draw','interrupted timeline restores opacity','delayed revision ignored','new-row purchase scrolls to its physical landing','arrival during gesture preserves touch ID and resumes after release','unmount removes ghosts','new game ID baseline','animation sends no commands','450ms color tween/700ms hold/350ms exit survives fast ack','color rejection restores petals and retry','initial observer notification preserves the visible deal','swap asset retains its hand frame during reveal'],telegram:'local test SDK only'},null,2))
  console.log('Motion stress checks passed')
 } finally {await browser.close()}

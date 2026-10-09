@@ -538,3 +538,10 @@ Trabalhos paralelos conciliados por merge de origin/dev: fullscreen do Mini App 
 - Verificação final desta correção: make check completo passou (108 testes frontend; lint/typecheck/build; Go/vet/debugcards; integração PostgreSQL). Matriz de 324 composições e 16 casos finais passou nas quatro dimensões; movimento em GPU passou com CardID estável, recovery atrasado, nova escolha durante feedback e falha de assets/unmount. Evidências em .reports/partida-pixi/. Telegram real e aparelho físico permanecem sem confirmação.
 
 - Teste final de dois navegadores passou no bundle Go de produção e race detector: 39 jogadas, 23 compras, cinco cores, resultado/COMMIT/ranking, dedup, reconexão e consenso para um novo GameID. Vídeo real local de 10,56 s conferido por frames (distribuição, compra/virada, cor). Relatório .reports/partida-pixi/README.md; Telegram real/aparelho físico não testados.
+
+# Correção de dois toques, descarte e coringa — 2026-10-09
+
+- Primeiro toque seleciona por CardID; segundo na mesma carta envia play, inclusive na parte elevada. Botão separado removido; troca de seleção não envia; guarda síncrona e pending impedem repetição.
+- PixiJS mantém cinco descartes públicos observados, com a face anterior visível sob o voo. Recovery usa só informação conhecida. Coringa pendente usa frente neutra.
+- Seletor reseta pétalas por sala/carta/fase mesmo após sent/chosen limpos e mata callbacks antigos. Mantém duração de feedback e retry.
+- make check passou com 109 testes frontend; movimentos e 16 composições nos quatro tamanhos passaram. E2E real local com race/Go/WS/PostgreSQL passou (39 jogadas/23 compras/5 cores, commit/ranking/revanche). Relatório .reports/correcao-toque-descarte-coringa/README.md; capturas e vídeo conferidos. Telegram real/aparelho físico pendentes; sem novo commit/push/deploy.

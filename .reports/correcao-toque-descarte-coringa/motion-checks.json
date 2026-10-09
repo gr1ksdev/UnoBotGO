@@ -1,0 +1,27 @@
+{
+  "passed": true,
+  "checks": [
+    "first tap raises and second tap plays with physical ID",
+    "previous discard remains visible during flight in four viewports",
+    "next wildcard restores four petals and neutral face",
+    "stable physical CardID during flight",
+    "opponent draws expose only anonymous backs",
+    "late same-revision recovery preserves accepted movement",
+    "fresh server choice supersedes old color feedback",
+    "failed asset initialization and unmount destroy renderer once",
+    "rejection restores physical hand",
+    "turn changes during draw",
+    "interrupted timeline restores opacity",
+    "delayed revision ignored",
+    "new-row purchase scrolls to its physical landing",
+    "arrival during gesture preserves touch ID and resumes after release",
+    "unmount removes ghosts",
+    "new game ID baseline",
+    "animation sends no commands",
+    "450ms color tween/700ms hold/350ms exit survives fast ack",
+    "color rejection restores petals and retry",
+    "initial observer notification preserves the visible deal",
+    "swap asset retains its hand frame during reveal"
+  ],
+  "telegram": "local test SDK only"
+}

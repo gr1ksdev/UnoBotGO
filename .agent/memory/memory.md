@@ -1106,3 +1106,12 @@
 - Teste final de dois navegadores passou no bundle Go de produção e race detector: 39 jogadas, 23 compras, cinco cores, resultado/COMMIT/ranking, dedup, reconexão e consenso para um novo GameID. Vídeo real local de 10,56 s conferido por frames (distribuição, compra/virada, cor). Relatório .reports/partida-pixi/README.md; Telegram real/aparelho físico não testados.
 
 - Autorização posterior: usuário pediu commit e push para dev desta correção. Deploy continua fora do escopo. Relatórios históricos, skills locais e vídeos completos de testes são preservados fora do commit; evidências finais compactas são versionadas.
+
+# Correção de dois toques, descarte e coringa — 2026-10-09
+
+- Primeiro toque seleciona por CardID; segundo na mesma carta envia play, inclusive na parte elevada. Botão separado removido; troca de seleção não envia; guarda síncrona e pending impedem repetição.
+- PixiJS mantém cinco descartes públicos observados, com a face anterior visível sob o voo. Recovery usa só informação conhecida. Coringa pendente usa frente neutra.
+- Seletor reseta pétalas por sala/carta/fase mesmo após sent/chosen limpos e mata callbacks antigos. Mantém duração de feedback e retry.
+- make check passou com 109 testes frontend; movimentos e 16 composições nos quatro tamanhos passaram. E2E real local com race/Go/WS/PostgreSQL passou (39 jogadas/23 compras/5 cores, commit/ranking/revanche). Relatório .reports/correcao-toque-descarte-coringa/README.md; capturas e vídeo conferidos. Telegram real/aparelho físico pendentes; sem novo commit/push/deploy.
+
+- Autorização posterior do usuário: commit e push desta correção de toque/descarte/coringa para dev. Sem deploy; vídeos completos e capturas complementares preservados localmente.

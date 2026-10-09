@@ -179,3 +179,7 @@ body { font-weight: 550; }
 .game.game-v2 .local-player:has(.extra-actions) .play-button { width: 80px; flex-shrink: 0; }
 .game.game-v2 .local-player .extra-actions { position: static; margin: 0; width: auto; display: flex; gap: 6px; }
 .game.game-v2 .local-player .extra-actions button { min-height: 44px; width: 70px; font-size: 10px; padding: 5px; }
+
+.game-v2 .hand-hint { max-width: 108px; font-size: 11px; line-height: 1.35; text-align: center; color: #a9c3cb; }
+.game-v2 .local-player:has(.extra-actions) .hand-hint { display: none; }
+.game.game-v2 .hand button.selected::before { content: ''; position: absolute; inset: -18px 0 0; }

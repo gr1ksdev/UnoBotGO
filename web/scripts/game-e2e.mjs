@@ -159,7 +159,7 @@ try {
     await selectedCard.click()
     await page.waitForTimeout(420)
     assert(Number(await selectedCard.getAttribute('data-visual-lift'))<=-17.9, 'Selected Pixi card must visibly rise without reflow')
-    await page.getByRole('button', { name: 'Jogar carta', exact: true }).click()
+    await selectedCard.click()
    } else if (v.drawn_card_id) {
     await page.getByRole('button', { name: 'Passar turno', exact: true }).click()
    } else {

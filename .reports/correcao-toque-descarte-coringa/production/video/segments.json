@@ -1,0 +1,28 @@
+{
+  "sources": [
+    "account-1.webm",
+    "account-2.webm"
+  ],
+  "real_backend": true,
+  "telegram_real": false,
+  "segments": [
+    {
+      "account": 2,
+      "kind": "deal",
+      "start": 2.461,
+      "seconds": 4.5
+    },
+    {
+      "account": 1,
+      "kind": "draw-and-flip",
+      "start": 84.495,
+      "seconds": 2.5
+    },
+    {
+      "account": 2,
+      "kind": "color",
+      "start": 22.891,
+      "seconds": 3.5
+    }
+  ]
+}

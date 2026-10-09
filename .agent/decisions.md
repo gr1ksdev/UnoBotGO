@@ -1656,3 +1656,20 @@ Separar estado autorizado e apresentação, sem ignorar novas regras nem bloquea
 
 ## Impacto
 Checks de navegador cobrem os cenários. Recuperação com revisão nova continua recompondo o estado sem repetir histórico.
+
+# Decisão: confirmação na carta e lifecycle visual independente
+
+## Data
+2026-10-09
+
+## Contexto
+Usuário pediu dois toques na mesma carta, pilha contínua e correção de cores herdadas. A cena escondia o único topo durante voo; o reset de pétalas dependia de sent ainda ativo.
+
+## Decisão tomada
+Dois toques por CardID com guarda síncrona e alvo elevado acessível; remover botão separado. Manter cinco faces públicas observadas, sem inventar histórico. Reset de novo seletor por sala/carta/fase, sem depender de sent; coringa em escolha usa arte neutra.
+
+## Motivo
+Conservar regra/privacidade/revisão na engine, corrigindo exclusivamente interação e apresentação.
+
+## Impacto
+Regressões cobertas por testes de UI/GPU e partida real local. Nenhuma mudança no backend ou na pontuação.

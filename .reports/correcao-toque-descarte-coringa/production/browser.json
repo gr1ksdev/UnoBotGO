@@ -1,0 +1,69 @@
+{
+  "transport": "real WebSocket",
+  "backend": "real Go engine and PostgreSQL",
+  "frontend": "Go embedded production bundle, unchanged strict CSP",
+  "identities": "two test identities; no live Telegram",
+  "commands": {
+    "start": 1,
+    "play": 39,
+    "draw": 23,
+    "color": 5,
+    "pass": 14
+  },
+  "steps": [
+    "Account A creates inside Mini App, shares a direct invite; account B opens it and joins via the UI; both reopen the same room",
+    "Start via WebSocket; each browser receives only its distinct seven-card private hand",
+    "Account B opens the room deep link from the ranking URL and reconnects to the same game",
+    "Buy, select and confirm play through UI; turns synchronized; normal two-player completion committed",
+    "Wild color choice exercised through the accessible UI",
+    "Retry of final request ID accepted without changing final revision",
+    "Both clients see committed results, updated player/group monthly ranking and one WebApp history entry",
+    "Real server vote synced to both clients, reconnect preserved vote, unanimous vote atomically opened the same new engine ID with private 7-card hands"
+  ],
+  "game_id": "25a7c666b34c0900ce9ec93a77a31de7",
+  "next_game_id": "7499b0a16d4a02aee15450f0d49a4ba1",
+  "motion_counts": {
+    "deal": 56,
+    "draw": 60,
+    "play": 78
+  },
+  "video_segments": [
+    {
+      "account": 1,
+      "kind": "deal",
+      "start": 2.944,
+      "seconds": 4.5
+    },
+    {
+      "account": 1,
+      "kind": "draw-and-flip",
+      "start": 84.495,
+      "seconds": 2.5
+    },
+    {
+      "account": 1,
+      "kind": "color",
+      "start": 66.124,
+      "seconds": 3.5
+    },
+    {
+      "account": 2,
+      "kind": "deal",
+      "start": 2.461,
+      "seconds": 4.5
+    },
+    {
+      "account": 2,
+      "kind": "draw-and-flip",
+      "start": 10.137,
+      "seconds": 2.5
+    },
+    {
+      "account": 2,
+      "kind": "color",
+      "start": 22.891,
+      "seconds": 3.5
+    }
+  ],
+  "passed": true
+}

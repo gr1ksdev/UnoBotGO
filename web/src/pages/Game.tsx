@@ -99,7 +99,8 @@ function Choice({ view, disabled, error, send }: {
  const [chosen, setChosen] = useState(0)
  const choice = view.my_turn && [2, 4].includes(view.phase) && !view.closed
  const latest = useRef({ choice, disabled, error })
- const previousChoice = useRef({choice,phase:view.phase})
+ const choiceKey = `${view.game_id}:${view.top?.ID ?? ''}:${view.phase}`
+ const previousChoice = useRef({choice,key:choiceKey})
  useLayoutEffect(() => { latest.current = { choice, disabled, error } }, [choice, disabled, error])
  useLayoutEffect(() => {
   context.current = gsap.context(() => {}, surface)
@@ -108,16 +109,18 @@ function Choice({ view, disabled, error, send }: {
  }, [])
  useLayoutEffect(() => {
   const previous=previousChoice.current
-  previousChoice.current={choice,phase:view.phase}
-  if(choice && sent.current && (!previous.choice || previous.phase!==view.phase)) {
+  previousChoice.current={choice,key:choiceKey}
+  if(choice && (!previous.choice || previous.key!==choiceKey)) {
    // A fresh server-required choice supersedes feedback from an earlier action.
    feedback.current?.kill();sent.current=false;setChosen(0)
+   gsap.killTweensOf(surface.current)
+   gsap.killTweensOf(surface.current?.querySelectorAll('.color-choice') ?? [])
    context.current?.add(()=>{
     gsap.set(surface.current,{opacity:1,scale:1})
     gsap.set(surface.current?.querySelectorAll('.color-choice') ?? [],{backgroundColor:(_i,el:HTMLElement)=>['','#fb3045','#1b71f6','#60c400','#ffbd10'][Number(el.dataset.color)]})
    })
   }
- },[choice,view.phase])
+ },[choice,choiceKey])
  useLayoutEffect(() => {
   context.current?.add(() => {
    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
@@ -225,6 +228,12 @@ export function GameTable({
  dealOnOpen?: boolean
 }) {
  const [selected, setSelected] = useState('')
+ const submitted = useRef(false)
+ useEffect(() => { setSelected('') }, [view.game_id])
+ useEffect(() => { if (!pending) submitted.current = false }, [pending,error,view.revision,view.game_id])
+ useEffect(() => {
+  if (!view.my_turn || view.closed || !view.hand.some(c => c.Card.ID === selected && c.Playable)) setSelected('')
+ }, [view.my_turn,view.closed,view.hand,selected,view.game_id])
  const [initialDeal] = useState(dealOnOpen)
  const [menu, setMenu] = useState(false)
  const root = useRef<HTMLElement>(null)
@@ -413,7 +422,11 @@ export function GameTable({
        aria-label={`${cardLabel(c.Card)} · ${c.Playable && view.my_turn ? 'pode jogar' : 'indisponível neste turno'}`}
        aria-pressed={visibleSelected === slot.id}
        disabled={disabled || !view.my_turn || !c.Playable}
-       onClick={() => setSelected(slot.id)}
+       onClick={() => {
+        if (disabled || submitted.current || !view.my_turn || !c.Playable) return
+        if (visibleSelected !== slot.id) setSelected(slot.id)
+        else { submitted.current = true; send('play', {card_id:slot.id}) }
+       }}
       />
      })}
      </div>
@@ -431,19 +444,13 @@ export function GameTable({
       <small title={me?.name}>{me?.name}</small>
      </div>
     </div>
-    <button
-     className="play-button"
-     disabled={disabled || !selectedCard}
-     onClick={() =>
-      selectedCard && send('play', { card_id: selectedCard.Card.ID })
-     }
-    >
+    <span className="hand-hint" role="status">
      {pending
       ? 'Confirmando…'
       : selectedCard
-        ? 'Jogar carta'
-        : 'Escolher carta'}
-    </button>
+        ? 'Toque novamente para jogar'
+        : 'Toque em uma carta'}
+    </span>
    {view.my_turn && (view.drawn_card_id || view.can_bluff) && (
     <div className="extra-actions">
      {view.drawn_card_id && (

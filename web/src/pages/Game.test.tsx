@@ -52,19 +52,32 @@ function wrap(v = view, connected = true) {
  return send
 }
 describe('Authoritative game UI', () => {
- it('selection does not play until confirmation and sends the physical ID', () => {
+ it('first tap selects, second tap plays the physical ID only once', () => {
   const send = wrap()
   fireEvent.click(
    screen.getByRole('button', { name: 'Vermelho 2 · pode jogar' }),
   )
   expect(send).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: 'Jogar carta' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Vermelho 2 · pode jogar' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Vermelho 2 · pode jogar' }))
+  expect(send).toHaveBeenCalledTimes(1)
+  expect(screen.queryByRole('button',{name:'Jogar carta'})).not.toBeInTheDocument()
   expect(send).toHaveBeenCalledWith('play', { card_id: 'card-one' })
  })
  it('disables controls while disconnected', () => {
   wrap(view, false)
   expect(screen.getByRole('button', { name: 'Comprar carta' })).toBeDisabled()
   expect(screen.getByText('Conexão perdida. Reconectando…')).toBeInTheDocument()
+ })
+ it('selecting a different card requires another tap on that physical card', () => {
+  const send=wrap({...view,hand:[...view.hand,{Card:{ID:'other-card',Color:2,Rank:7},Playable:true}]})
+  fireEvent.click(screen.getByRole('button',{name:'Vermelho 2 · pode jogar'}))
+  const blue=screen.getByRole('button',{name:'Azul 7 · pode jogar'})
+  fireEvent.click(blue)
+  expect(send).not.toHaveBeenCalled()
+  expect(blue).toHaveAttribute('aria-pressed','true')
+  fireEvent.click(blue)
+  expect(send).toHaveBeenCalledWith('play',{card_id:'other-card'})
  })
  it('finishes two-player controls without inventing committed score', () => {
   wrap({ ...view, closed: true, phase: 3, hand: [], my_turn: false })
@@ -145,9 +158,9 @@ it('keeps touch targets by CardID while new cards reorganize, and disables immed
  expect(button.style.left).toBe(x)
  fireEvent.pointerUp(button);fireEvent.click(button)
  expect(button.style.left).not.toBe(x)
- fireEvent.click(screen.getByRole('button',{name:'Jogar carta'}))
+ fireEvent.click(button)
  expect(send).toHaveBeenCalledWith('play',{card_id:'r2'})
  rendered.rerender(<MemoryRouter><GameTable {...props} view={{...view,revision:5,my_turn:false,hand:added}} /></MemoryRouter>)
  expect(button).toBeDisabled()
- expect(screen.getByRole('button',{name:'Escolher carta'})).toBeDisabled()
+ expect(button).toHaveAttribute('aria-pressed','false')
 })
