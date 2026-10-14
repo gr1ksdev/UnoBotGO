@@ -1,0 +1,102 @@
+{
+  "originalResources": [
+    {
+      "path": "web/public/assets/audio/action_color-KzBo.mp3",
+      "bytes": 8973,
+      "sha256": "72628116af6d3f5ce1a99bad56eab46813fd909e4e382858eb7b7d3da1013237",
+      "source": "docs/design-reference/unobotgo-v2/assets/audio/action_color-KzBo.mp3"
+    },
+    {
+      "path": "web/public/assets/audio/action_reverse-kqelcA.ogg",
+      "bytes": 4684,
+      "sha256": "7d9dfd41f128e625fe71211000d48cc2f12d7c20652c5f5f148ac0da55133d05",
+      "source": "docs/design-reference/unobotgo-v2/assets/audio/action_reverse-kqelcA.ogg"
+    },
+    {
+      "path": "web/public/assets/audio/action_skip-LB_utg.ogg",
+      "bytes": 5002,
+      "sha256": "47e7e546f19591416a7d2444109f101108b0534e51243a2c4626f8163d9c7594",
+      "source": "docs/design-reference/unobotgo-v2/assets/audio/action_skip-LB_utg.ogg"
+    },
+    {
+      "path": "web/public/assets/audio/card_deal_1-JkrG.mp3",
+      "bytes": 2349,
+      "sha256": "f6b42959f14fcf3d585250dff67c95fb00c73f4a64b91f7fdf62968aa82f086e",
+      "source": "docs/design-reference/unobotgo-v2/assets/audio/card_deal_1-JkrG.mp3"
+    },
+    {
+      "path": "web/public/assets/audio/card_draw_3-oTSLjQ.mp3",
+      "bytes": 3213,
+      "sha256": "d4fee9dde7f7707db8ed8149c5db04f94b65ae09f6c35908ab1cba270fb98802",
+      "source": "docs/design-reference/unobotgo-v2/assets/audio/card_draw_3-oTSLjQ.mp3"
+    },
+    {
+      "path": "web/public/assets/audio/card_hover-braxSA.ogg",
+      "bytes": 4551,
+      "sha256": "128a772e6929e77ea471eaf68301c592db9c91a372940dfc0b78bbad9868c529",
+      "source": "docs/design-reference/unobotgo-v2/assets/audio/card_hover-braxSA.ogg"
+    },
+    {
+      "path": "web/public/assets/audio/card_play_1-nJ4MXQ.mp3",
+      "bytes": 2349,
+      "sha256": "1f36a2e939ec4da3887e5546f246c241078ff877b944a14b52fbdb2f17759e71",
+      "source": "docs/design-reference/unobotgo-v2/assets/audio/card_play_1-nJ4MXQ.mp3"
+    },
+    {
+      "path": "web/public/assets/audio/card_return-i9dqNQ.mp3",
+      "bytes": 78191,
+      "sha256": "1d34cad6db7ca2ae029c9c7c6c395d533f2e855dc774d3fa375d7c323a0b2993",
+      "source": "docs/design-reference/unobotgo-v2/assets/audio/card_return-i9dqNQ.mp3"
+    },
+    {
+      "path": "web/public/assets/audio/card_select-YPFdVw.mp3",
+      "bytes": 2000,
+      "sha256": "e33c4df9e11e5822ab90004a53147e55db62de2aa6cbbe0b1d81fc0bd34ae2f8",
+      "source": "docs/design-reference/unobotgo-v2/assets/audio/card_select-YPFdVw.mp3"
+    },
+    {
+      "path": "web/public/assets/audio/picker_select-VEXBcw.mp3",
+      "bytes": 18765,
+      "sha256": "46a5164a201078e03f9119194a0d742d5d90529eba5189c829fa37b5b7d7c390",
+      "source": "docs/design-reference/unobotgo-v2/assets/audio/picker_select-VEXBcw.mp3"
+    },
+    {
+      "path": "web/public/assets/audio/picker_show-sBRNWA.mp3",
+      "bytes": 78178,
+      "sha256": "597c25704c929d6a62071a4ee969a94772ec58e4cb743360485b90dfdca8898e",
+      "source": "docs/design-reference/unobotgo-v2/assets/audio/picker_show-sBRNWA.mp3"
+    },
+    {
+      "path": "web/public/assets/audio/player_lost-IRBd-Q.ogg",
+      "bytes": 19208,
+      "sha256": "a725a8344f9dbe90d3360033089aa0351403a65a6b014710c12ae0aab4dfc3eb",
+      "source": "docs/design-reference/unobotgo-v2/assets/audio/player_lost-IRBd-Q.ogg"
+    },
+    {
+      "path": "web/public/assets/audio/player_won-SVCulg.ogg",
+      "bytes": 18854,
+      "sha256": "c1f7095d73ce3ade209641da379b8e279c5bd43069c275d6e191d64530b585db",
+      "source": "docs/design-reference/unobotgo-v2/assets/audio/player_won-SVCulg.ogg"
+    },
+    {
+      "path": "web/public/assets/audio/ui_rematch-FQ1XIA.mp3",
+      "bytes": 10774,
+      "sha256": "4630833c85e08da00bf3b4cc1fc988e4b01b583bdfc8c618a6fcbf1b21a8db60",
+      "source": "docs/design-reference/unobotgo-v2/assets/audio/ui_rematch-FQ1XIA.mp3"
+    },
+    {
+      "path": "web/public/assets/atlases/cards-cxSAsg@2x.png.json",
+      "bytes": 11566,
+      "sha256": "b86f338b7f76e7c228672887e438d698febbb2be1434718acc210989d0f5b1c1",
+      "source": "docs/design-reference/unobotgo-v2/assets/atlases/cards-cxSAsg@2x.png.json"
+    },
+    {
+      "path": "web/public/assets/atlases/cards-w8MlmQ@2x.png",
+      "bytes": 177833,
+      "sha256": "7933759e792e9778bffaccf1c473cc85ca7328e8403c7e6e087bb7765640efb5",
+      "source": "docs/design-reference/unobotgo-v2/assets/atlases/cards-w8MlmQ@2x.png"
+    }
+  ],
+  "cardFramesPixelMatched": 63,
+  "rawHARIncluded": false
+}

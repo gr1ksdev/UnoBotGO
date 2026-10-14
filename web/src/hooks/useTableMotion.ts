@@ -2,15 +2,17 @@ import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import type { Card, GameView } from '../api/client'
 import type { TableScene } from '../components/scene/TableScene'
 
-export function useTableMotion(root: RefObject<HTMLElement | null>, view: GameView, selected: string, asset: (card: Card, color?: number) => string, dealOnOpen = false) {
+export function useTableMotion(root: RefObject<HTMLElement | null>, view: GameView, selected: string, asset: (card: Card, color?: number) => string, dealOnOpen = false, release?: (id: string) => void) {
  const scene = useRef<TableScene | undefined>(undefined)
  const latest = useRef({ view, selected })
  const baseline = useRef(view)
  const lobby = view.phase === 0
+ const currentRelease = useRef(release)
  useLayoutEffect(() => {
+  currentRelease.current = release
   latest.current = { view, selected }
   scene.current?.sync(view, selected)
- })
+ }, [view, selected, release])
  useEffect(() => {
   const node = root.current
   // Rendering is exercised in real Chromium; jsdom has no ResizeObserver/GPU.
@@ -19,7 +21,7 @@ export function useTableMotion(root: RefObject<HTMLElement | null>, view: GameVi
   let owned: TableScene | undefined
   void import('../components/scene/TableScene').then(async ({ TableScene }) => {
    if(cancelled) return
-   owned = new TableScene(node, asset)
+   owned = new TableScene(node, asset, id => currentRelease.current?.(id))
    await owned.init()
    if(cancelled) return
    scene.current = owned

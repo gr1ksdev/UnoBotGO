@@ -48,7 +48,7 @@ body { font-weight: 550; }
 .game-v2 .turn-info > .icon { display: none; }
 .game-v2 .timer { background: transparent; color: #a8bfc5; font-size: 11px; padding: 0; }
 .game-v2 .turn-glow { position: absolute; bottom: -50px; left: -18%; width: 136%; height: 255px; background: url('/assets/effects/turn_highlight-kZiSfQ@2x.png') center/100% 100%; opacity: 0; pointer-events: none; }
-.game-v2.my-turn .turn-glow { opacity: .8; }
+.game-v2.my-turn .turn-glow { opacity: .8; animation: v2-turn-glow 3s ease-in-out infinite; }
 .game-v2 .hand-area { position: absolute; bottom: calc(max(env(safe-area-inset-bottom, 0px), var(--telegram-bottom, 0px)) + 82px); left: 0; right: 0; width: 100%; margin: 0; height: 166px; }
 .game-v2 .hand { display: block; position: relative; width: 100%; height: 166px; min-height: 0; padding: 26px 16px 10px; margin: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; touch-action: pan-x; scroll-padding: 16px; }
 .game-v2 .hand:after { content: none; }
@@ -63,7 +63,7 @@ body { font-weight: 550; }
 .game-v2 .local-player { position: absolute; bottom: calc(max(env(safe-area-inset-bottom, 0px), var(--telegram-bottom, 0px)) + 16px); left: 16px; right: 16px; height: 52px; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; gap: 12px; background: transparent; border: 0; }
 .game-v2 .local-player .me { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .game-v2 .local-player .avatar { flex-shrink: 0; margin: 0; width: 42px; height: 42px; }
-.game-v2.my-turn .local-player .avatar { border-color: var(--turn-blue); box-shadow: 0 0 32px #0789c688; }
+.game-v2.my-turn .local-player .avatar { border-color: var(--turn-blue); box-shadow: 0 0 32px #0789c688; animation: v2-local-ring 1.7s ease-in-out infinite; }
 .game-v2 .local-name { font-size: 17px; font-weight: 550; }
 .game-v2 .local-name small { display: none; }
 .game-v2 .play-button { width: 102px; min-width: 0; min-height: 44px; background: #0987be; color: white; border: 0; border-radius: 26px; padding: 8px; font-size: 12px; }
@@ -103,6 +103,8 @@ body { font-weight: 550; }
 .game-v2 .result-link { display: inline-block; margin: 8px 8px 0; font-size: 11px; color: #b9c9d5; background: transparent; border: 0; padding: 5px; }
 .game-v2 .connection-banner { z-index: 20; background: #19383f; }
 @keyframes v2-ring { 0%,100% { box-shadow: 0 0 0 1px #0789c622; } 50% { box-shadow: 0 0 0 5px #0789c644; } }
+@keyframes v2-local-ring { 0%,100% { box-shadow: 0 0 0 1px #0789c622, 0 0 20px #0789c655; } 50% { box-shadow: 0 0 0 4px #0789c644, 0 0 32px #0789c688; } }
+@keyframes v2-turn-glow { 0%,100% { opacity: .55; transform: translateY(3px); } 50% { opacity: .85; transform: translateY(-3px); } }
 @media (max-height: 650px) {
  .game-v2 .opponents { top: calc(max(env(safe-area-inset-top, 0px), var(--telegram-top, 0px)) + 48px); }
  .game-v2 .seat .avatar { width: 36px; height: 36px; }
@@ -183,3 +185,14 @@ body { font-weight: 550; }
 .game-v2 .hand-hint { max-width: 108px; font-size: 11px; line-height: 1.35; text-align: center; color: #a9c3cb; }
 .game-v2 .local-player:has(.extra-actions) .hand-hint { display: none; }
 .game.game-v2 .hand button.selected::before { content: ''; position: absolute; inset: -18px 0 0; }
+.game.game-v2 .hand button.selected { touch-action: none; cursor: grab; }
+.game.game-v2[data-drag-card-id] .hand button.selected { cursor: grabbing; }
+.game-v2 .hand-hint { max-width: 138px; }
+.game-v2 .connection-banner { pointer-events: none; }
+.game-v2 .rematch.accepted { background: #086b92; box-shadow: 0 0 0 3px #1abcf32e; }
+.game-v2 .ready-mark { animation: v2-ready .4s ease-out; }
+.game-v2 .draw.ready { cursor: pointer; }
+.v2-choice .color-choice { transition: filter .18s ease; }
+.v2-choice .color-choice:not(:disabled):hover { filter: brightness(1.12); }
+.v2-choice .color-choice:not(:disabled):active { filter: brightness(.92); }
+@keyframes v2-ready { from { opacity: 0; transform: rotate(-90deg) scale(.6); } to { opacity: 1; transform: rotate(0) scale(1); } }

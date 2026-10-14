@@ -21,6 +21,7 @@ type HistoryEntry struct {
 	Awards   []ResultAward        `json:"-"`
 	ID       string               `json:"id"`
 	Group    string               `json:"group"`
+	RoomType RoomType             `json:"room_type"`
 	Origin   string               `json:"origin"`
 	System   groups.RankingSystem `json:"system"`
 	Position int                  `json:"position"`
@@ -29,9 +30,10 @@ type HistoryEntry struct {
 	Finished time.Time            `json:"finished_at"`
 }
 type Profile struct {
-	Stats   []ProfileStats `json:"stats"`
-	History []HistoryEntry `json:"history"`
-	Next    string         `json:"next_cursor,omitempty"`
+	Stats           []ProfileStats `json:"stats"`
+	IndividualStats []ProfileStats `json:"individual_stats"`
+	History         []HistoryEntry `json:"history"`
+	Next            string         `json:"next_cursor,omitempty"`
 }
 type HistoryKey struct {
 	Finished time.Time

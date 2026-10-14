@@ -67,6 +67,7 @@ type liveView struct {
 	Revision    uint64           `json:"revision"`
 	Phase       uno.Phase        `json:"phase"`
 	Group       string           `json:"group"`
+	RoomType    string           `json:"room_type"`
 	Mode        string           `json:"mode"`
 	System      string           `json:"system"`
 	Players     []seat           `json:"players"`
@@ -105,7 +106,7 @@ func (a *API) project(ctx context.Context, id uno.GameID, user int64) (liveView,
 	if err != nil {
 		return liveView{}, err
 	}
-	out := liveView{Capacity: 10, OwnerKey: a.References.key("seat", int64(v.OwnerID)), ID: id, Revision: v.Revision, Phase: v.Phase, Group: v.ChatName, Mode: "classic", System: string(v.GroupConfig.RankingSystem), Players: []seat{}, Hand: []game.CardView{}, Top: v.TopCard, ActiveColor: v.ActiveColor, Direction: v.Direction, CloseReason: v.CloseReason, Closed: v.Closed, Owner: int64(v.OwnerID) == user, MyTurn: int64(v.CurrentTurn) == user, CanBluff: v.CanCallBluff && int64(v.CurrentTurn) == user, ServerTime: a.now()}
+	out := liveView{Capacity: 10, OwnerKey: a.References.key("seat", int64(v.OwnerID)), ID: id, Revision: v.Revision, Phase: v.Phase, Group: v.ChatName, RoomType: string(v.RoomType), Mode: "classic", System: string(v.GroupConfig.RankingSystem), Players: []seat{}, Hand: []game.CardView{}, Top: v.TopCard, ActiveColor: v.ActiveColor, Direction: v.Direction, CloseReason: v.CloseReason, Closed: v.Closed, Owner: int64(v.OwnerID) == user, MyTurn: int64(v.CurrentTurn) == user, CanBluff: v.CanCallBluff && int64(v.CurrentTurn) == user, ServerTime: a.now()}
 	if v.Rematch != nil {
 		r := v.Rematch
 		out.Rematch = &rematchState{Revision: r.Revision, Required: []string{}, Accepted: []string{}, NextGameID: r.NextGameID, Ready: r.Ready}
@@ -153,7 +154,7 @@ func (a *API) project(ctx context.Context, id uno.GameID, user int64) (liveView,
 			}
 		}
 		out.Players = append(out.Players, s)
-		if s.Me && s.Active && v.Phase == uno.Lobby && !v.Closed {
+		if s.Me && s.Active && v.Phase == uno.Lobby && !v.Closed && (v.RoomType != "free" || out.Owner) {
 			out.CanStart = true
 		}
 	}
@@ -192,7 +193,7 @@ func (a *API) rooms(w http.ResponseWriter, r *http.Request) {
 	}
 	out := []map[string]any{}
 	for _, g := range games {
-		out = append(out, map[string]any{"game_id": g.GameID, "group": g.ChatName, "phase": g.Phase})
+		out = append(out, map[string]any{"game_id": g.GameID, "group": g.ChatName, "room_type": g.RoomType, "phase": g.Phase})
 	}
 	writeJSON(w, 200, out)
 }
@@ -217,7 +218,7 @@ func (a *API) command(ctx context.Context, user int64, c liveCommand) error {
 		_, err := a.Games.VoteRematch(ctx, game.Actor{PlayerID: uno.PlayerID(user), ChatID: v.ChatID}, c.GameID, c.Revision, c.Type == "rematch", c.RequestID)
 		return err
 	}
-	kinds := map[string]uno.ActionType{"start": uno.StartGame, "play": uno.PlayCard, "draw": uno.DrawCard, "pass": uno.PassTurn, "color": uno.ChooseColor, "target": uno.ChoosePlayer, "keep": uno.KeepHand, "bluff": uno.CallBluff, "leave": uno.LeaveGame, "cancel": uno.CancelGame}
+	kinds := map[string]uno.ActionType{"start": uno.StartGame, "play": uno.PlayCard, "draw": uno.DrawCard, "color": uno.ChooseColor, "target": uno.ChoosePlayer, "keep": uno.KeepHand, "leave": uno.LeaveGame, "cancel": uno.CancelGame}
 	kind, ok := kinds[c.Type]
 	if !ok {
 		return uno.ErrInvalidAction

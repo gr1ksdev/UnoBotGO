@@ -66,8 +66,10 @@ export function ProfilePage() {
     user?.username ||
     'Jogador'
  const stats = data?.stats.find((s) => s.system === system)
- const games = data?.stats.reduce((n, s) => n + s.games, 0) ?? 0
- const wins = data?.stats.reduce((n, s) => n + s.wins, 0) ?? 0
+ const individualStats = data?.individual_stats ?? []
+ const individual = individualStats.find((s) => s.system === system)
+ const games = (data?.stats.reduce((n, s) => n + s.games, 0) ?? 0) + individualStats.reduce((n, s) => n + s.games, 0)
+ const wins = (data?.stats.reduce((n, s) => n + s.wins, 0) ?? 0) + individualStats.reduce((n, s) => n + s.wins, 0)
  const avatar = data?.identity ?? mine.data?.entry
  return (
   <main className="page">
@@ -89,14 +91,6 @@ export function ProfilePage() {
      large
     />
     <h1 title={name}>{name}</h1>
-    <p className="sub">
-     {!privacy.data?.anonymous && user?.username ? `@${user.username} · ` : ''}
-     seu perfil de jogador
-    </p>
-    <span className="pill">
-     <Icon name="cards" />
-     Inline + Mini App
-    </span>
    </div>
    {profile.isPending ? (
     <Loading label="Carregando perfil" />
@@ -104,20 +98,27 @@ export function ProfilePage() {
     <ErrorState retry={() => void profile.refetch()} />
    ) : (
     <>
-     <div className="summary-card">
-      <div>
-       <span className="sub">
-        Pontuação total · {system === 'updated' ? 'Atualizado' : 'Legado'}
-       </span>
-       <strong className="big">
-        {formatScore(stats?.score_units ?? '0', system)}
-       </strong>
+     <div className="score-summary-stack">
+      <div className="summary-card">
+       <div>
+        <span className="sub">
+         Pontuação total · {system === 'updated' ? 'Atualizado' : 'Legado'}
+        </span>
+        <strong className="big">
+         {formatScore(stats?.score_units ?? '0', system)}
+        </strong>
+       </div>
+       <div className="position">
+        {mine.data?.entry ? `#${mine.data.entry.position}` : '—'}
+        <small>
+         {mine.data?.month_name} {mine.data?.month_start?.slice(0, 4)} · mensal
+        </small>
+       </div>
       </div>
-      <div className="position">
-       {mine.data?.entry ? `#${mine.data.entry.position}` : '—'}
-       <small>
-        {mine.data?.month_name} {mine.data?.month_start?.slice(0, 4)} · mensal
-       </small>
+      <div className="summary-card">
+       <div><span className="sub">Pontuação individual · salas livres · {system === 'updated' ? 'Atualizada' : 'Legada'}</span>
+        <strong className="big">{formatScore(individual?.score_units ?? '0', system)}</strong></div>
+       <div className="position">{individual?.games ?? 0}<small>partidas livres · {individual?.wins ?? 0} vitórias</small></div>
       </div>
      </div>
      <div className="stats">
@@ -151,7 +152,7 @@ export function ProfilePage() {
           <small>
            {new Date(h.finished_at).toLocaleDateString('pt-BR')}
            <span className="chip">
-            {h.origin === 'webapp' ? 'Mini App' : 'Inline'}
+            {h.room_type === 'free' ? 'Sala livre' : h.origin === 'webapp' ? 'Mini App' : 'Inline'}
            </span>
           </small>
          </div>

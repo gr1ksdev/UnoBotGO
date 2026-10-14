@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router'
 import type { GameView } from '../api/client'
 import { GameTable, cardAsset } from './Game'
@@ -87,6 +88,51 @@ describe('Authoritative game UI', () => {
   ).toBeInTheDocument()
   expect(screen.queryByText(/10,00 pontos/)).not.toBeInTheDocument()
  })
+ it('puts all game controls in the single Configuration panel and removes the card menu', () => {
+  wrap()
+  expect(screen.queryByRole('button', { name: 'Opções da partida' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Configuração' }))
+  expect(screen.getByRole('dialog', { name: 'Configuração' })).toBeInTheDocument()
+  expect(screen.getByRole('switch', { name: /Som/ })).toBeInTheDocument()
+  expect(screen.getByRole('switch', { name: /Vibração/ })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Sair da tela e continuar na partida/ })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Desistir da partida/ })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Cancelar partida/ })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Fechar configuração' }))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+ })
+ it('runs exit, leave, and cancel actions from Configuration', () => {
+  const send = vi.fn(), back = vi.fn()
+  render(<MemoryRouter><GameTable view={view} connected pending={false} error="" send={send} back={back} /></MemoryRouter>)
+  fireEvent.click(screen.getByRole('button', { name: 'Configuração' }))
+  fireEvent.click(screen.getByRole('button', { name: /Sair da tela e continuar na partida/ }))
+  expect(back).toHaveBeenCalledOnce()
+  expect(send).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Configuração' }))
+  fireEvent.click(screen.getByRole('button', { name: /Desistir da partida/ }))
+  expect(send).toHaveBeenCalledWith('leave')
+  fireEvent.click(screen.getByRole('button', { name: 'Configuração' }))
+  fireEvent.click(screen.getByRole('button', { name: /Cancelar partida/ }))
+  expect(send).toHaveBeenLastCalledWith('cancel')
+ })
+ it('makes lobby roles and newly joined players clear', () => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ url: 'https://example.test/invite', token: 'opaque' }) } as Response)
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const send = vi.fn()
+  const initialPlayers = view.players.map((player, index) => ({ ...player, current: false, active: true, key: index === 0 ? 'owner' : player.key }))
+  const lobby = { ...view, phase: 0, room_type: 'free' as const, owner: true, owner_key: 'owner', capacity: 6, players: initialPlayers }
+  const tree = (players: typeof initialPlayers) => <QueryClientProvider client={client}><MemoryRouter><GameTable view={{ ...lobby, players }} connected pending={false} error="" send={send} back={vi.fn()} /></MemoryRouter></QueryClientProvider>
+  const rendered = render(tree(initialPlayers))
+  expect(screen.getByRole('heading', { name: 'Jogadores' })).toBeInTheDocument()
+  expect(screen.getByText('2 de 6')).toBeInTheDocument()
+  expect(screen.getByRole('listitem', { name: /Lucas, Você · responsável/ })).toBeInTheDocument()
+  expect(screen.getByRole('listitem', { name: /Outra pessoa, Jogador/ })).toBeInTheDocument()
+  const joined = [...initialPlayers, { ...initialPlayers[1], key: 'new-player', name: 'Nova pessoa' }]
+  rendered.rerender(tree(joined))
+  expect(screen.getByRole('listitem', { name: /Nova pessoa, Jogador, entrou agora/ })).toBeInTheDocument()
+  expect(screen.getByText('Entrou agora')).toBeInTheDocument()
+  expect(screen.getByText('3 de 6')).toBeInTheDocument()
+ })
  it('ignores old revisions and other-room snapshots', () => {
   expect(acceptSnapshot(view, { ...view, revision: 2 })).toBe(view)
   expect(acceptSnapshot(view, { ...view, game_id: 'other' })).toBe(view)
@@ -125,6 +171,14 @@ describe('v2 resources and consensus', () => {
   fireEvent.click(screen.getByRole('button',{name:'Azul'}))
   expect(send).toHaveBeenLastCalledWith('color',{color:2})
   expect(send).toHaveBeenCalledTimes(2)
+ })
+ it('retains color feedback when acknowledgement arrives before its first animation frame', () => {
+  const send = vi.fn(), props = { connected:true, error:'', send, back:vi.fn(), pending:false }
+  const rendered = render(<MemoryRouter><GameTable {...props} view={{...view,phase:2}} /></MemoryRouter>)
+  fireEvent.click(screen.getByRole('button',{name:'Vermelho'}))
+  rendered.rerender(<MemoryRouter><GameTable {...props} view={{...view,revision:4,phase:1,my_turn:false,active_color:1}} /></MemoryRouter>)
+  expect(rendered.container.querySelector<HTMLDialogElement>('.v2-choice')?.open).toBe(true)
+  expect(send).toHaveBeenCalledTimes(1)
  })
  it('disables an engine-playable card when the authorized turn belongs to another player', () => {
   wrap({...view,my_turn:false})

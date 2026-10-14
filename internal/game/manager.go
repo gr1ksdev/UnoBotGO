@@ -47,6 +47,7 @@ type managedGame struct {
 	rematchReceipts map[receiptKey]bool
 	events          []ConfirmedEvent
 	origin          string
+	roomType        ranking.RoomType
 	receipts        map[receiptKey]actionReceipt
 	mu              sync.Mutex
 	startedAt       time.Time
@@ -92,7 +93,7 @@ func (m *manager) create(ctx context.Context, actor Actor, req CreateRequest) (O
 	if err != nil {
 		return Outcome{}, err
 	}
-	entry := &managedGame{groupConfig: req.GroupConfig, engine: engine, chatID: actor.ChatID, chatName: req.ChatName, creatorID: actor.PlayerID, ownerID: actor.PlayerID, turnStarted: time.Now()}
+	entry := &managedGame{groupConfig: req.GroupConfig, roomType: req.RoomType, origin: req.Origin, engine: engine, chatID: actor.ChatID, chatName: req.ChatName, creatorID: actor.PlayerID, ownerID: actor.PlayerID, turnStarted: time.Now()}
 	view := publicView(entry, engine.Snapshot())
 	// Entry is still private to this call. Creation publishes only an empty lobby.
 	m.indexMu.Lock()
@@ -100,14 +101,18 @@ func (m *manager) create(ctx context.Context, actor Actor, req CreateRequest) (O
 	if err := ctx.Err(); err != nil {
 		return Outcome{}, err
 	}
-	if _, exists := m.byChat[actor.ChatID]; exists {
-		return Outcome{}, ErrChatOccupied
+	if req.RoomType == ranking.RoomGroup {
+		if _, exists := m.byChat[actor.ChatID]; exists {
+			return Outcome{}, ErrChatOccupied
+		}
 	}
 	if _, exists := m.byID[id]; exists {
 		return Outcome{}, ErrIDConflict
 	}
 	m.byID[id] = indexRecord{entry: entry, summary: view.summary()}
-	m.byChat[actor.ChatID] = id
+	if req.RoomType == ranking.RoomGroup {
+		m.byChat[actor.ChatID] = id
+	}
 	return Outcome{View: view}, nil
 }
 
@@ -189,7 +194,9 @@ func (m *manager) publish(entry *managedGame, before, after uno.State, result un
 	}
 	m.byID[after.ID] = indexRecord{entry: entry, summary: view.summary()}
 	if view.Closed {
-		delete(m.byChat, entry.chatID)
+		if entry.roomType == ranking.RoomGroup {
+			delete(m.byChat, entry.chatID)
+		}
 		m.history = append(m.history, after.ID)
 		if len(m.history) > m.historyLimit {
 			delete(m.byID, m.history[0])
@@ -409,7 +416,7 @@ func (m *manager) expiredTurns(ctx context.Context, timeout time.Duration, now t
 			break
 		}
 		entry.mu.Lock()
-		if entry.final != nil || entry.engine == nil || entry.turnStarted.IsZero() || now.Sub(entry.turnStarted) < timeout {
+		if entry.roomType == ranking.RoomFree || entry.final != nil || entry.engine == nil || entry.turnStarted.IsZero() || now.Sub(entry.turnStarted) < timeout {
 			entry.mu.Unlock()
 			continue
 		}
@@ -430,7 +437,7 @@ func (m *manager) skipTurn(ctx context.Context, candidate ExpiredTurn, timeout t
 		return Outcome{}, false
 	}
 	defer entry.mu.Unlock()
-	if entry.final != nil || entry.engine == nil || entry.chatID != candidate.ChatID || entry.turnStarted.IsZero() || now.Sub(entry.turnStarted) < timeout {
+	if entry.roomType == ranking.RoomFree || entry.final != nil || entry.engine == nil || entry.chatID != candidate.ChatID || entry.turnStarted.IsZero() || now.Sub(entry.turnStarted) < timeout {
 		return Outcome{}, false
 	}
 	before := entry.engine.Snapshot()

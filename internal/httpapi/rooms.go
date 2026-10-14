@@ -12,6 +12,7 @@ import (
 
 	"github.com/malbs/UnoGoBot/internal/game"
 	"github.com/malbs/UnoGoBot/internal/groups"
+	"github.com/malbs/UnoGoBot/internal/ranking"
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
 
@@ -25,9 +26,11 @@ type roomReceiptKey struct {
 	Request string
 }
 type roomReceipt struct {
-	Chat int64
-	Mode string
-	ID   uno.GameID
+	Chat   int64
+	Mode   string
+	Type   string
+	System string
+	ID     uno.GameID
 }
 
 func decodeRoom(w http.ResponseWriter, r *http.Request, v any) bool {
@@ -103,12 +106,14 @@ func (a *API) resolveRoomGroup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, item)
 }
 func (a *API) createRoom(w http.ResponseWriter, r *http.Request) {
-	if a.Games == nil || a.RoomGroups == nil || a.VerifyRoomGroup == nil {
+	if a.Games == nil {
 		apiError(w, 503, "unavailable")
 		return
 	}
 	var body struct {
+		Type    string `json:"room_type"`
 		Group   string `json:"group_ref"`
+		System  string `json:"system"`
 		Mode    string `json:"mode"`
 		Request string `json:"request_id"`
 	}
@@ -119,32 +124,59 @@ func (a *API) createRoom(w http.ResponseWriter, r *http.Request) {
 		apiError(w, 400, "invalid_request")
 		return
 	}
-	ref, err := a.References.open(body.Group, a.now())
-	if err != nil || ref.Kind != "room_group" || ref.ID >= 0 {
-		apiError(w, 403, "group_not_verified")
-		return
-	}
 	user, _ := UserIDFromContext(r.Context())
-	title, err := a.VerifyRoomGroup(r.Context(), ref.ID, user)
-	if err != nil {
-		apiError(w, 403, "group_not_verified")
+	if body.Type == "" {
+		body.Type = "group"
+	}
+	if body.Type != "group" && body.Type != "free" {
+		apiError(w, 400, "invalid_request")
 		return
 	}
-	cfg, err := a.RoomGroups.GetOrCreateGroupConfig(r.Context(), ref.ID)
-	if err != nil {
-		apiError(w, 503, "unavailable")
-		return
+	var chat int64
+	var title string
+	var system groups.RankingSystem
+	var err error
+	if body.Type == "group" {
+		if a.RoomGroups == nil || a.VerifyRoomGroup == nil {
+			apiError(w, 503, "unavailable")
+			return
+		}
+		ref, e := a.References.open(body.Group, a.now())
+		if e != nil || ref.Kind != "room_group" || ref.ID >= 0 {
+			apiError(w, 403, "group_not_verified")
+			return
+		}
+		title, err = a.VerifyRoomGroup(r.Context(), ref.ID, user)
+		if err != nil {
+			apiError(w, 403, "group_not_verified")
+			return
+		}
+		cfg, e := a.RoomGroups.GetOrCreateGroupConfig(r.Context(), ref.ID)
+		if e != nil {
+			apiError(w, 503, "unavailable")
+			return
+		}
+		_ = a.RoomGroups.ObserveGroupTitle(r.Context(), ref.ID, title)
+		chat, system = ref.ID, cfg.RankingSystem
+	} else {
+		system = groups.RankingSystem(body.System)
+		if body.System == "" {
+			system = groups.Updated
+		}
+		if !system.Valid() || body.Group != "" {
+			apiError(w, 400, "invalid_request")
+			return
+		}
 	}
-	_ = a.RoomGroups.ObserveGroupTitle(r.Context(), ref.ID, title)
 	a.roomMu.Lock()
 	defer a.roomMu.Unlock()
 	key := roomReceiptKey{user, body.Request}
 	receipt, exists := a.createdRooms[key]
-	if exists && (receipt.Chat != ref.ID || receipt.Mode != body.Mode) {
+	if exists && (receipt.Chat != chat || receipt.Mode != body.Mode || receipt.Type != body.Type || receipt.System != body.System) {
 		apiError(w, 409, "request_conflict")
 		return
 	}
-	actor := game.Actor{PlayerID: uno.PlayerID(user), ChatID: game.ChatID(ref.ID)}
+	actor := game.Actor{PlayerID: uno.PlayerID(user), ChatID: game.ChatID(chat)}
 	if !exists {
 		if len(a.createdRooms) >= 2048 {
 			apiError(w, 429, "busy")
@@ -154,12 +186,13 @@ func (a *API) createRoom(w http.ResponseWriter, r *http.Request) {
 		if body.Mode == "caseiro" {
 			rules = uno.CaseiroRules()
 		}
-		out, e := a.Games.Create(r.Context(), actor, game.CreateRequest{ChatName: title, Rules: rules, GroupConfig: cfg.Snapshot()})
+		cfg := groups.Snapshot{RankingSystem: system, ConfigRevision: 1}
+		out, e := a.Games.Create(r.Context(), actor, game.CreateRequest{ChatName: title, RoomType: gameRoomType(body.Type), Origin: "webapp", Rules: rules, GroupConfig: cfg})
 		if e != nil {
 			apiError(w, 409, "group_has_room")
 			return
 		}
-		receipt = roomReceipt{Chat: ref.ID, Mode: body.Mode, ID: out.View.GameID}
+		receipt = roomReceipt{Chat: chat, Mode: body.Mode, Type: body.Type, System: body.System, ID: out.View.GameID}
 		a.createdRooms[key] = receipt
 	}
 	v, err := a.Games.PublicView(r.Context(), receipt.ID)
@@ -190,6 +223,13 @@ func (a *API) createRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, view)
+}
+
+func gameRoomType(value string) ranking.RoomType {
+	if value == "free" {
+		return ranking.RoomFree
+	}
+	return ranking.RoomGroup
 }
 func roomIdentity(r *http.Request) (string, string) {
 	raw, _ := strings.CutPrefix(r.Header.Get("Authorization"), "tma ")
@@ -228,15 +268,20 @@ func (a *API) roomInvite(w http.ResponseWriter, r *http.Request) {
 func (a *API) invited(r *http.Request) (game.PublicGameView, int64, error) {
 	user, _ := UserIDFromContext(r.Context())
 	ref, err := a.References.open(r.PathValue("token"), a.now())
-	if err != nil || ref.Kind != "invite" || ref.Game == "" || a.Games == nil || a.VerifyRoomGroup == nil {
+	if err != nil || ref.Kind != "invite" || ref.Game == "" || a.Games == nil {
 		return game.PublicGameView{}, user, game.ErrForbidden
 	}
 	v, err := a.Games.PublicView(r.Context(), uno.GameID(ref.Game))
 	if err != nil {
 		return v, user, err
 	}
-	if _, err = a.VerifyRoomGroup(r.Context(), int64(v.ChatID), user); err != nil {
-		return v, user, game.ErrForbidden
+	if v.RoomType == ranking.RoomGroup {
+		if a.VerifyRoomGroup == nil {
+			return v, user, game.ErrForbidden
+		}
+		if _, err = a.VerifyRoomGroup(r.Context(), int64(v.ChatID), user); err != nil {
+			return v, user, game.ErrForbidden
+		}
 	}
 	return v, user, nil
 }
@@ -270,7 +315,11 @@ func (a *API) previewInvite(w http.ResponseWriter, r *http.Request) {
 	if v.Rules.AllowSwapHands {
 		mode = "caseiro"
 	}
-	writeJSON(w, 200, map[string]any{"game_id": v.GameID, "revision": v.Revision, "group": v.ChatName, "mode": mode, "system": v.GroupConfig.RankingSystem, "players": players, "capacity": 10, "player_count": count, "owner_key": a.References.key("seat", int64(v.OwnerID)), "joined": joined, "can_join": !v.Closed && !v.Locked && (len(v.Players) < 10 || canReenter) && (v.Phase == uno.Lobby || v.Rules.AllowLateJoin), "closed": v.Closed})
+	label := v.ChatName
+	if v.RoomType == ranking.RoomFree {
+		label = "Sala livre"
+	}
+	writeJSON(w, 200, map[string]any{"game_id": v.GameID, "revision": v.Revision, "room_type": v.RoomType, "group": label, "mode": mode, "system": v.GroupConfig.RankingSystem, "players": players, "capacity": 10, "player_count": count, "owner_key": a.References.key("seat", int64(v.OwnerID)), "joined": joined, "can_join": !v.Closed && !v.Locked && (len(v.Players) < 10 || canReenter) && (v.Phase == uno.Lobby || v.Rules.AllowLateJoin), "closed": v.Closed})
 }
 func (a *API) joinInvite(w http.ResponseWriter, r *http.Request) {
 	var body struct {

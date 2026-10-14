@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/malbs/UnoGoBot/internal/groups"
+	"github.com/malbs/UnoGoBot/internal/ranking"
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
 
@@ -48,6 +49,7 @@ type PublicGameView struct {
 	TurnStarted     time.Time
 	GroupConfig     groups.Snapshot
 	GameID          uno.GameID
+	RoomType        ranking.RoomType
 	ChatID          ChatID
 	ChatName        string
 	CreatorID       uno.PlayerID
@@ -86,6 +88,7 @@ type PlayerGameView struct {
 // GameSummary is an index projection published atomically with membership.
 type GameSummary struct {
 	GameID    uno.GameID
+	RoomType  ranking.RoomType
 	ChatID    ChatID
 	ChatName  string
 	CreatorID uno.PlayerID
@@ -114,12 +117,12 @@ func (v PublicGameView) clone() PublicGameView {
 }
 
 func (v PublicGameView) summary() GameSummary {
-	return GameSummary{GameID: v.GameID, ChatID: v.ChatID, ChatName: v.ChatName, CreatorID: v.CreatorID, OwnerID: v.OwnerID, Locked: v.Locked, Revision: v.Revision, Phase: v.Phase}
+	return GameSummary{GameID: v.GameID, RoomType: v.RoomType, ChatID: v.ChatID, ChatName: v.ChatName, CreatorID: v.CreatorID, OwnerID: v.OwnerID, Locked: v.Locked, Revision: v.Revision, Phase: v.Phase}
 }
 
 func publicView(entry *managedGame, state uno.State) PublicGameView {
 	v := PublicGameView{Events: slices.Clone(entry.events), TurnStarted: entry.turnStarted, GroupConfig: entry.groupConfig,
-		GameID: state.ID, ChatID: entry.chatID, ChatName: entry.chatName,
+		GameID: state.ID, RoomType: entry.roomType, ChatID: entry.chatID, ChatName: entry.chatName,
 		CreatorID: entry.creatorID, OwnerID: entry.ownerID, Locked: entry.locked, Revision: state.Revision,
 		Phase: state.Phase, Rules: state.Rules, CurrentTurn: state.CurrentPlayerID,
 		Direction: state.Direction, ActiveColor: state.ActiveColor,

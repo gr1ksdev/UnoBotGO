@@ -81,15 +81,8 @@ export function HomePage() {
      <br />
      amigos na disputa.
     </p>
-    {rooms.data?.[0] ? (
-     <Link className="primary" to={`/game/${rooms.data[0].game_id}`}>
-      Abrir partida <Icon name="arrow" />
-     </Link>
-    ) : (
-     <button className="primary" onClick={() => setCreating(true)}>Criar sala <Icon name="arrow" /></button>
-    )}
+    <button className="primary" disabled={creating} onClick={() => setCreating(true)}>{creating ? 'Criando sala…' : 'Criar sala'} {!creating && <Icon name="arrow" />}</button>
    </section>
-   {rooms.data?.[0] && <button className="outline load-more" onClick={() => setCreating(true)}>Criar sala</button>}
    {config.data?.bot_username && (
     <a
      className="outline telegram-link"
@@ -119,7 +112,7 @@ export function HomePage() {
      {rooms.data?.map((room) => (
       <Link className="row room-link" key={room.game_id} to={`/game/${encodeURIComponent(room.game_id)}`}>
        <Icon name="cards" />
-       <div><strong>{room.group || 'Partida'}</strong>
+       <div><strong>{room.room_type === 'free' ? 'Sala livre' : room.group || 'Partida'}</strong>
         <small>{room.phase === 0 ? 'Aguardando início' : 'Em andamento'}</small>
        </div>
        <span className="room-action">Abrir na Mini App <Icon name="arrow" /></span>

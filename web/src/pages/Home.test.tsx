@@ -1,14 +1,15 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { HomePage } from './Home'
 import { launchGamePath } from '../lib/telegram'
 let rooms: { game_id: string; group: string; phase: number }[]
 let activated: (() => void) | undefined
+function CurrentPath() { return <output data-testid="current-path">{useLocation().pathname}</output> }
 function wrap() {
  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-  <MemoryRouter><HomePage /></MemoryRouter>
+  <MemoryRouter><HomePage /><CurrentPath /></MemoryRouter>
  </QueryClientProvider>)
 }
 beforeEach(() => {
@@ -16,8 +17,9 @@ beforeEach(() => {
  window.Telegram = { WebApp: { initData: 'signed', ready: vi.fn(), expand: vi.fn(),
   onEvent: (name, fn) => { if (name === 'activated') activated = fn }, offEvent: vi.fn(),
  } }
- vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+ vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
   const path = String(input)
+  if (path.endsWith('/rooms') && init?.method === 'POST') return { ok: true, json: async () => ({ game_id: 'new-free-room', room_type: 'free' }) } as Response
   const data = path.endsWith('/rooms') ? rooms : path.endsWith('/config') ? { bot_username: 'ConfiguredBot' }
    : path.endsWith('/me') ? { stats: [], history: [] } : path.includes('/position') ? { entry: null }
    : { items: [], month_start: '2026-10-01', server_time: '2026-10-08T15:00:00Z', month_ends_at: '2026-11-01T03:00:00Z', system: 'updated' }
@@ -32,12 +34,23 @@ describe('Access to real WebApp rooms', () => {
   expect(screen.getByText(/não precisa usar comandos/)).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Jogar pelo Telegram' })).toHaveAttribute('href', 'https://t.me/ConfiguredBot')
  })
+ it('creates a default room immediately from Home and skips all configuration screens', async () => {
+  wrap()
+  const fetcher = vi.mocked(globalThis.fetch)
+  fireEvent.click(await screen.findByRole('button', { name: 'Criar sala' }))
+  await waitFor(() => expect(fetcher.mock.calls.some(([url, init]) => String(url).endsWith('/rooms') && init?.method === 'POST')).toBe(true))
+  await waitFor(() => expect(screen.getByTestId('current-path')).toHaveTextContent('/game/new-free-room'))
+  const request = fetcher.mock.calls.find(([url, init]) => String(url).endsWith('/rooms') && init?.method === 'POST')
+  expect(JSON.parse(String(request?.[1]?.body))).toMatchObject({ room_type: 'free', mode: 'caseiro', system: 'updated' })
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Modo de jogo')).not.toBeInTheDocument()
+ })
  it('shows a single room with an internal open action', async () => {
   rooms = [{ game_id: 'real-room', group: 'Meu grupo', phase: 0 }]
   wrap()
   const link = await screen.findByRole('link', { name: /Meu grupo.*Abrir na Mini App/ })
   expect(link).toHaveAttribute('href', '/game/real-room')
-  expect(screen.getByRole('link', { name: 'Abrir partida' })).toHaveAttribute('href', '/game/real-room')
+  expect(screen.getByRole('button', { name: 'Criar sala' })).toBeInTheDocument()
  })
  it('discovers a newly joined room when Telegram resumes, with manual refresh also available', async () => {
   wrap()

@@ -69,6 +69,11 @@ describe('Real profile', () => {
   ).toBeInTheDocument()
   expect(screen.getByText('3')).toBeInTheDocument()
   expect(screen.getByText('67%')).toBeInTheDocument()
+  expect(screen.queryByText(/seu perfil de jogador|Inline \+ Mini App/)).not.toBeInTheDocument()
+  const totalCard = screen.getByText('Pontuação total · Atualizado').closest('.summary-card')
+  const individualCard = screen.getByText('Pontuação individual · salas livres · Atualizada').closest('.summary-card')
+  expect(totalCard?.parentElement).toHaveClass('score-summary-stack')
+  expect(individualCard?.parentElement).toBe(totalCard?.parentElement)
  })
  it('identifies Inline and Mini App history once each', async () => {
   wrap()

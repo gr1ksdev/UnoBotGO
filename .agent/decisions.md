@@ -1673,3 +1673,107 @@ Conservar regra/privacidade/revisão na engine, corrigindo exclusivamente intera
 
 ## Impacto
 Regressões cobertas por testes de UI/GPU e partida real local. Nenhuma mudança no backend ou na pontuação.
+
+# Decisão: projeção de cartas independente do transporte
+
+## Data
+2026-10-11
+
+## Contexto
+O usuário pediu mais profundidade e fluidez na compra, distribuição e coringa. A cena existente comprimia sprites horizontalmente e já consumia snapshots autorizados.
+
+## Decisão tomada
+Usar PerspectiveMesh da dependência PixiJS instalada e projeção pura testada, sem copiar módulos compilados da captura. Container por voo mantém mesh e sombra e destrói ambos após cancelamento ou aterrissagem. O seletor usa uma timeline coordenada, com envio imediato e feedback de 1,5 segundo independente do ACK.
+
+## Motivo
+Adicionar profundidade visual sem mover regras, identidade de carta ou estado de jogo para a animação. A projeção mantém orientação da face e evita singularidade no giro.
+
+## Impacto
+Somente frontend e verificação/documentação. Mantidos privacidade de compras adversárias, revisões, recuperação, toques por CardID e acessibilidade. Sem mudança de dependências ou CSP.
+
+# Decisão: aproveitar recursos de referência sem substituir engine ou bibliotecas
+
+## Data
+2026-10-11
+
+## Contexto
+O usuário pediu pacote completo, além de fluidez, incluindo os recursos dos chunks Geometry/browserAll/MatchoRoute, atlas, efeitos e sons.
+
+## Decisão tomada
+Adaptar gestos/timelines ao renderer existente; usar API oficial Pixi/GSAP e atlas/sons locais reais. Evento novo confirmado dispara apresentação; arraste emite apenas intenção validada pelo mesmo caminho do segundo toque. Canvas renderiza sob demanda com RAF coalescido. Sons/haptics opcionais não interferem em regra, persistência ou transporte.
+
+## Motivo
+A captura tem infraestrutura compilada e referências sem todos os corpos. Reutilizar recursos disponíveis e a engine do UnoBotGO preserva identidade, privacidade e revisões, sem copiar o protocolo de outro serviço. Render sob demanda evita trabalho contínuo quando a mesa está parada.
+
+## Impacto
+Novo carregamento de atlas local e 14 sons; frontend/validação/documentação apenas. Patch consolidado sobre a mesma base, contendo a etapa anterior; não aplicar ambos. Nenhum commit/push/deploy.
+
+
+# Decisão: aplicação integral do pacote validado na base exata
+
+## Data
+2026-10-11
+
+## Contexto
+Usuário aprovou pacote consolidado e adaptações apenas se necessárias, sem commit/push/deploy. Base e arquivos rastreados coincidiram com os esperados; patch anterior não aplicado.
+
+## Decisão tomada
+Aplicar o patch consolidado e binários sem adaptar implementação. Preservar históricos importados e acrescentar registro separado da validação local.
+
+## Motivo
+Check de aplicação aprovado e 39 arquivos finais idênticos às referências. Todos os checks frontend, Go sem banco e harnesses disponíveis passaram, sem defeito que justificasse divergência.
+
+## Impacto
+Atlas/gestos/animações/feedback integrados; sem alteração de backend ou dependências. Relatório docs/validacao-experiencia-local.md distingue testes locais de homologação real pendente e registra avisos existentes.
+
+# Decisão: renderização sincronizada e fullscreen móvel
+
+## Data
+2026-10-11
+
+## Contexto
+Usuário relatou engasgos após aplicar a experiência completa. Medição revelou reanimação redundante de toda mão com recovery persistente, sprites remontados durante scroll e tweens por evento de pointer. Fullscreen ignorava plataforma.
+
+## Decisão tomada
+Usar dirty flag com flush após atualização GSAP no próprio ticker, removido em repouso/desmontagem; cachear mesa/máscara e map DOM; limitar seleção a cartas anterior/nova; acompanhar pointer diretamente. requestFullscreen somente android/ios. Verificar disponibilidade antes de pular sync e manter pendingArrivals. Corrigir seletor para respeitar timeline agendada ainda não ativa.
+
+## Motivo
+Reduzir trabalho alocado e atraso de entrada sem mutilar efeitos nem alterar engine. HAR e SwiftShader não medem fluidez física; registrar contadores antes/depois e intervalos diagnósticos sem alegar FPS garantido.
+
+## Impacto
+Mudanças frontend/testes/documentação apenas; patch incremental sobre pacote completo. Assets, pontuação, WebSocket e regras preservados. Sem dependência nova, commit, push ou deploy.
+
+
+# Decisão: preservar histórico local e medir o evento efetivamente entregue
+
+## Data
+2026-10-11
+
+## Contexto
+Patch incremental conflitou somente com memórias acrescidas localmente. Harness podia medir antes da desmontagem e antes do último pointermove entregue pelo Chromium; hot reload também separou o módulo instrumentado da cena ativa.
+
+## Decisão tomada
+Aplicar hunks de código sem mudanças e acrescentar linhas novas às memórias. Instrumentar posição ao final do mesmo pointermove e aguardar DOM desmontado, usando mesmo harness nas duas versões isoladas. Reiniciar Vite entre versões instrumentadas.
+
+## Motivo
+Preservar trabalho e não confundir agendamento CDP/React/HMR com falha do renderer. Comparar redução de trabalho sem prometer FPS físico.
+
+## Impacto
+128 testes e harnesses de performance/movimento/interação/324layouts aprovados. Recursos e documentos anteriores preservados. P95 headless pior nesta coleta explicitamente registrado; homologação física permanece necessária. Sem commit/push/deploy.
+
+# Decisão: salas livres explicitamente tipadas e pontuação individual
+
+## Data
+2026-10-11
+
+## Contexto
+O WebApp precisava criar lobbies sem grupo e persistir seus resultados sem associá-los a um `group_configs` fictício. A remoção dos controles de passar/desafiar também exige que compras no WebApp concluam o turno de forma autoritativa.
+
+## Decisão tomada
+Adicionar `room_type` ao domínio e ao resultado; sala livre usa `chat_id NULL` no banco e acumulador individual por usuário e sistema de pontuação. A finalização segue a mesma transação/idempotência, serializada por GameID. Somente `ApplyWeb` auto passa após compra sem jogada permitida pela engine; o caminho Telegram permanece no `Apply` original.
+
+## Motivo
+Manter políticas Legacy/Updated isoladas e impedir crédito de jogos livres a grupos. Uma única mutação mantém revision, eventos e retries coerentes sem timer de cliente.
+
+## Impacto
+Migration aditiva 0012, perfil/histórico exibem placares individuais livres, e o WebApp resolve +4 desafiável ao aceitar a compra no monte. O desafio do bot de grupo permanece disponível. Integração PostgreSQL depende de `TEST_DATABASE_URL`.

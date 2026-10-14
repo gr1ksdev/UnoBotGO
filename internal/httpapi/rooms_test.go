@@ -147,3 +147,53 @@ func TestDirectRoomInviteAdmissionAndIdempotency(t *testing.T) {
 		t.Fatal("cached create bypassed revoked membership")
 	}
 }
+
+func TestFreeRoomInviteDoesNotRequireGroupMembership(t *testing.T) {
+	svc, _ := game.NewService()
+	refs, _ := NewReferences(make([]byte, 32))
+	a := &API{Games: svc, References: refs, Token: "token", MaxAge: time.Hour, BotUsername: func() string { return "ConfiguredBot" }}
+	handler := a.Handler()
+	request := func(method, path, body string, user int64) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("Authorization", "tma "+signed("token", time.Now(), map[string]string{"user": fmt.Sprintf(`{"id":%d,"first_name":"Jogador"}`, user)}))
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	created := request("POST", "/api/v1/rooms", `{"room_type":"free","system":"updated","mode":"classic","request_id":"free-room-create"}`, 12345)
+	var view liveView
+	if err := json.Unmarshal(created.Body.Bytes(), &view); err != nil || created.Code != 200 || view.RoomType != "free" || view.Group != "" || !view.Owner || len(view.Players) != 1 {
+		t.Fatal(created.Code, created.Body, err)
+	}
+	invite := request("GET", "/api/v1/rooms/"+string(view.ID)+"/invite", "", 12345)
+	var token struct {
+		Token string `json:"token"`
+	}
+	_ = json.Unmarshal(invite.Body.Bytes(), &token)
+	if invite.Code != 200 || token.Token == "" {
+		t.Fatal(invite.Code, invite.Body)
+	}
+	preview := request("GET", "/api/v1/invites/"+token.Token, "", 2)
+	var room struct {
+		Type    string `json:"room_type"`
+		Label   string `json:"group"`
+		CanJoin bool   `json:"can_join"`
+	}
+	_ = json.Unmarshal(preview.Body.Bytes(), &room)
+	if preview.Code != 200 || room.Type != "free" || room.Label != "Sala livre" || !room.CanJoin {
+		t.Fatal(preview.Code, preview.Body)
+	}
+	joined := request("POST", "/api/v1/invites/"+token.Token+"/join", fmt.Sprintf(`{"request_id":"free-join-0001","expected_revision":%d}`, view.Revision), 2)
+	if joined.Code != 200 {
+		t.Fatal(joined.Code, joined.Body)
+	}
+	var joinedView liveView
+	if err := json.Unmarshal(joined.Body.Bytes(), &joinedView); err != nil {
+		t.Fatal(err)
+	}
+	reconnected := request("GET", "/api/v1/rooms/"+string(view.ID), "", 2)
+	var recovered liveView
+	if err := json.Unmarshal(reconnected.Body.Bytes(), &recovered); err != nil || reconnected.Code != 200 || recovered.Revision != joinedView.Revision || recovered.RoomType != "free" {
+		t.Fatal("free room snapshot did not recover", reconnected.Code, reconnected.Body, err)
+	}
+}

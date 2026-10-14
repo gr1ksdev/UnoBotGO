@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/ranking"
+	"sync"
 	"testing"
 	"time"
 )
@@ -50,6 +51,53 @@ func TestSharedInlineWebAppRankingAndProfile(t *testing.T) {
 			result, err := s.ReadResult(t.Context(), second.GameID, 999)
 			if err != nil || len(result) != 0 {
 				t.Fatal("other player's result leaked", err)
+			}
+		})
+	}
+}
+
+func TestFreeRoomIndividualScoresArePolicySeparatedAndIdempotent(t *testing.T) {
+	for _, system := range []groups.RankingSystem{groups.Legacy, groups.Updated} {
+		t.Run(string(system), func(t *testing.T) {
+			s := testStore(t)
+			if err := s.Migrate(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			r := sampleResult("free-"+string(system), system)
+			r.RoomType, r.ChatID, r.Origin = ranking.RoomFree, 0, "webapp"
+			var wg sync.WaitGroup
+			errs := make(chan error, 8)
+			for range 8 {
+				wg.Add(1)
+				go func() { defer wg.Done(); _, err := s.RecordCompletedGame(t.Context(), r); errs <- err }()
+			}
+			wg.Wait()
+			close(errs)
+			for err := range errs {
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			var count, wins int64
+			var score string
+			if err := s.pool.QueryRow(t.Context(), `SELECT score_units::text,completed_games,wins FROM player_individual_stats WHERE user_id=1 AND ranking_system=$1`, system).Scan(&score, &count, &wins); err != nil {
+				t.Fatal(err)
+			}
+			if count != 1 || wins != 1 {
+				t.Fatal("duplicate individual award", score, count, wins)
+			}
+			var groupRows int
+			if err := s.pool.QueryRow(t.Context(), `SELECT count(*) FROM player_group_stats WHERE user_id=1`).Scan(&groupRows); err != nil || groupRows != 0 {
+				t.Fatal("free room credited group", groupRows, err)
+			}
+			var chat *int64
+			var roomType string
+			if err := s.pool.QueryRow(t.Context(), `SELECT chat_id,room_type FROM completed_games WHERE game_id=$1`, r.GameID).Scan(&chat, &roomType); err != nil || chat != nil || roomType != "free" {
+				t.Fatal("free result has group reference", chat, roomType, err)
+			}
+			profile, err := s.ReadProfile(t.Context(), 1, nil)
+			if err != nil || len(profile.Stats) != 0 || len(profile.IndividualStats) != 1 || len(profile.History) != 1 || profile.History[0].RoomType != ranking.RoomFree || profile.History[0].Group != "Sala livre" {
+				t.Fatal(profile, err)
 			}
 		})
 	}

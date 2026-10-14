@@ -10,6 +10,7 @@ export interface TelegramUser {
 interface Insets { top: number; bottom: number; left: number; right: number }
 interface TelegramApp {
  initData: string
+ platform?: string
  initDataUnsafe?: {
   start_param?: string
   user?: TelegramUser
@@ -27,13 +28,21 @@ interface TelegramApp {
  onEvent?(event: string, fn: () => void): void
  offEvent?(event: string, fn: () => void): void
  BackButton?: { show(): void; hide(): void; onClick(fn: () => void): void; offClick(fn: () => void): void }
+ SettingsButton?: { show(): void; hide(): void; onClick(fn: () => void): void; offClick(fn: () => void): void }
+ HapticFeedback?: { impactOccurred(style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft'): void }
 }
 declare global { interface Window { Telegram?: { WebApp: TelegramApp } } }
 
-export function useTelegram(back?: () => void, options: { manageBackButton?: boolean; initialize?: boolean; headerColor?: string } = {}) {
+export function telegramSettingsAvailable(app = window.Telegram?.WebApp): boolean {
+ const button = app?.SettingsButton
+ return Boolean(button && typeof button.show === 'function' && typeof button.hide === 'function' && typeof button.onClick === 'function' && typeof button.offClick === 'function' && (app?.isVersionAtLeast?.('7.0') ?? true))
+}
+
+export function useTelegram(back?: () => void, options: { manageBackButton?: boolean; initialize?: boolean; headerColor?: string; settings?: () => void } = {}) {
  const manageBackButton = options.manageBackButton ?? true
  const initialize = options.initialize ?? false
  const headerColor = options.headerColor
+ const settings = options.settings
  const initializedApp = useRef<TelegramApp | undefined>(undefined)
  useEffect(() => {
    const app = window.Telegram?.WebApp
@@ -56,7 +65,8 @@ export function useTelegram(back?: () => void, options: { manageBackButton?: boo
    if (initialize && initializedApp.current !== app) {
      initializedApp.current = app
      app.ready(); app.expand()
-     if (!app.isFullscreen && app.requestFullscreen && app.isVersionAtLeast?.('8.0')) {
+     const mobile = app.platform === 'android' || app.platform === 'ios'
+     if (mobile && !app.isFullscreen && app.requestFullscreen && app.isVersionAtLeast?.('8.0')) {
        try { app.requestFullscreen() } catch {
          // Some clients expose the method but reject it; expanded mode is ready.
          update()
@@ -66,14 +76,20 @@ export function useTelegram(back?: () => void, options: { manageBackButton?: boo
    if (manageBackButton) {
      if (back) { app.BackButton?.show(); app.BackButton?.onClick(back) } else app.BackButton?.hide()
    }
+   const settingsButton = telegramSettingsAvailable(app) ? app.SettingsButton : undefined
+   if (settingsButton && settings) { settingsButton.show(); settingsButton.onClick(settings) }
    return () => {
      events.forEach(event => app.offEvent?.(event, update))
      if (manageBackButton) {
        if (back) app.BackButton?.offClick(back)
        app.BackButton?.hide()
      }
+    if (settingsButton) {
+     if (settings) settingsButton.offClick(settings)
+     settingsButton.hide()
+    }
    }
- }, [back, manageBackButton, initialize, headerColor])
+ }, [back, manageBackButton, initialize, headerColor, settings])
 }
 
 // The launch parameter selects a route only. Room membership is verified by Go.

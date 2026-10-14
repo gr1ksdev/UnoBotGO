@@ -3,17 +3,18 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTelegram } from './telegram'
 
-function client() {
+function client(platform = 'android') {
  const events = new Map<string, () => void>()
  const app = {
-   initData: 'fixture', ready: vi.fn(), expand: vi.fn(),
-   isVersionAtLeast: vi.fn(() => true), isFullscreen: false,
+   platform, initData: 'fixture', ready: vi.fn(), expand: vi.fn(),
+   isVersionAtLeast: vi.fn((version: string) => Boolean(version)), isFullscreen: false,
    requestFullscreen: vi.fn(), setHeaderColor: vi.fn(),
    safeAreaInset: { top: 24, bottom: 12, left: 0, right: 0 },
    contentSafeAreaInset: { top: 32, bottom: 0, left: 0, right: 0 },
    viewportStableHeight: 780,
    onEvent: vi.fn((event: string, fn: () => void) => { events.set(event, fn) }),
    offEvent: vi.fn((event: string, fn: () => void) => { if (events.get(event) === fn) events.delete(event) }),
+   SettingsButton: { show: vi.fn(), hide: vi.fn(), onClick: vi.fn(), offClick: vi.fn() },
  }
  window.Telegram = { WebApp: app }
  return { app, events }
@@ -25,6 +26,27 @@ afterEach(() => {
 })
 
 describe('Telegram fullscreen', () => {
+ it.each(['tdesktop', 'macos', 'web', 'weba', 'webk', 'unknown', ''])('keeps %s in its normal window even with a narrow viewport', platform => {
+   const { app } = client(platform)
+   renderHook(() => useTelegram(undefined, { initialize: true }))
+   expect(app.ready).toHaveBeenCalledTimes(1)
+   expect(app.expand).toHaveBeenCalledTimes(1)
+   expect(app.requestFullscreen).not.toHaveBeenCalled()
+ })
+
+ it.each(['android', 'ios'])('allows automatic fullscreen on %s', platform => {
+   const { app } = client(platform)
+   renderHook(() => useTelegram(undefined, { initialize: true }))
+   expect(app.requestFullscreen).toHaveBeenCalledTimes(1)
+ })
+
+ it('does not assume a mobile client when the platform field is absent', () => {
+   const { app } = client()
+   window.Telegram = { WebApp: { ...app, platform: undefined } }
+   renderHook(() => useTelegram(undefined, { initialize: true }))
+   expect(app.requestFullscreen).not.toHaveBeenCalled()
+ })
+
  it('initializes once under StrictMode and registers events before requesting fullscreen', () => {
    const { app, events } = client()
    app.requestFullscreen.mockImplementation(() => {
@@ -128,5 +150,26 @@ describe('Telegram fullscreen', () => {
    // Unmounting
    unmount()
    expect(backButton.hide).toHaveBeenCalled()
+ })
+
+ it('opens settings from the native menu item and removes its callback on unmount', () => {
+   const { app } = client()
+   const open = vi.fn()
+   const { unmount } = renderHook(() => useTelegram(undefined, { settings: open }))
+   const button = app.SettingsButton
+   expect(button.show).toHaveBeenCalledOnce()
+   expect(button.onClick).toHaveBeenCalledWith(open)
+   act(() => button.onClick.mock.calls[0][0]())
+   expect(open).toHaveBeenCalledOnce()
+   unmount()
+   expect(button.offClick).toHaveBeenCalledWith(open)
+   expect(button.hide).toHaveBeenCalledOnce()
+ })
+
+ it('does not expose the native settings item to clients older than Bot API 7.0', () => {
+   const { app } = client()
+   app.isVersionAtLeast.mockImplementation((version: string) => version !== '7.0')
+   renderHook(() => useTelegram(undefined, { settings: vi.fn() }))
+   expect(app.SettingsButton.show).not.toHaveBeenCalled()
  })
 })

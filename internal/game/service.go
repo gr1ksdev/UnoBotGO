@@ -23,6 +23,8 @@ type Actor struct {
 
 type CreateRequest struct {
 	ChatName    string
+	RoomType    ranking.RoomType
+	Origin      string
 	Rules       uno.Rules
 	GroupConfig groups.Snapshot
 }
@@ -74,13 +76,19 @@ func (s *Service) Create(ctx context.Context, actor Actor, req CreateRequest) (O
 	if err := checkContext(ctx); err != nil {
 		return Outcome{}, err
 	}
-	if actor.PlayerID <= 0 || actor.ChatID == 0 {
+	if req.RoomType == "" {
+		req.RoomType = ranking.RoomGroup
+	}
+	if actor.PlayerID <= 0 || (req.RoomType == ranking.RoomGroup && actor.ChatID == 0) || (req.RoomType == ranking.RoomFree && actor.ChatID != 0) || (req.RoomType != ranking.RoomGroup && req.RoomType != ranking.RoomFree) {
 		return Outcome{}, ErrInvalidArgument
 	}
 	if req.GroupConfig.RankingSystem == "" {
 		req.GroupConfig = groups.Defaults(int64(actor.ChatID)).Snapshot()
 	}
 	if !req.GroupConfig.RankingSystem.Valid() || req.GroupConfig.ConfigRevision <= 0 {
+		return Outcome{}, ErrInvalidArgument
+	}
+	if req.Origin != "" && req.Origin != "inline" && req.Origin != "webapp" {
 		return Outcome{}, ErrInvalidArgument
 	}
 	return s.manager.create(ctx, actor, req)
@@ -161,7 +169,12 @@ func (s *Service) apply(ctx context.Context, actor Actor, id uno.GameID, action 
 	if err := ctx.Err(); err != nil {
 		return Outcome{}, err
 	}
-	result, err := entry.engine.Apply(action)
+	var result uno.Result
+	if requestID != "" {
+		result, err = entry.engine.ApplyWeb(action)
+	} else {
+		result, err = entry.engine.Apply(action)
+	}
 	if err != nil {
 		return Outcome{}, err
 	}
@@ -180,6 +193,24 @@ func (s *Service) apply(ctx context.Context, actor Actor, id uno.GameID, action 
 
 // Pure application checks, executed while the entry is locked. No role lookup I/O.
 func authorize(entry *managedGame, actor Actor, kind uno.ActionType) error {
+	if entry.roomType == ranking.RoomFree {
+		if actor.ChatID != 0 {
+			return ErrForbidden
+		}
+		switch kind {
+		case uno.JoinGame, uno.LeaveGame:
+			return nil
+		case uno.StartGame, uno.SetRules, uno.CancelGame:
+			if actor.PlayerID != entry.ownerID && actor.PlayerID != entry.creatorID {
+				return ErrForbidden
+			}
+			return nil
+		case uno.PlayCard, uno.DrawCard, uno.PassTurn, uno.ChooseColor, uno.ChoosePlayer, uno.KeepHand, uno.CallBluff:
+			return nil
+		default:
+			return uno.ErrInvalidAction
+		}
+	}
 	if actor.ChatID != 0 && actor.ChatID != entry.chatID {
 		return ErrForbidden
 	}

@@ -1115,3 +1115,62 @@
 - make check passou com 109 testes frontend; movimentos e 16 composições nos quatro tamanhos passaram. E2E real local com race/Go/WS/PostgreSQL passou (39 jogadas/23 compras/5 cores, commit/ranking/revanche). Relatório .reports/correcao-toque-descarte-coringa/README.md; capturas e vídeo conferidos. Telegram real/aparelho físico pendentes; sem novo commit/push/deploy.
 
 - Autorização posterior do usuário: commit e push desta correção de toque/descarte/coringa para dev. Sem deploy; vídeos completos e capturas complementares preservados localmente.
+
+# Fluidez PixiJS — 2026-10-11
+
+- Autorização de implementação registrada na conversa; clone da dev em 7b85f69510ad5be1d2bd46b9a7e7dab16a798084. Nenhum commit, push ou deploy desta tarefa.
+- Voos passam a usar PerspectiveMesh com cantos projetados, alternância de verso/frente no giro, sombra individual e aterrissagem suave. Manter cantos clockwise e largura mínima no ponto de 90 graus; não espelhar números.
+- Compra acompanha o slot atual por CardID durante reorganização. Destino em avatar quadrado preserva proporção do verso anônimo. Sombras da mão seguem elevação e inclinação.
+- Cor entra com giro/pétalas escalonadas e preenche a escolhida primeiro, preservando 450 ms de preenchimento total + 700 ms de permanência + 350 ms de saída. Toque durante entrada mata tweens concorrentes; escolha nova e rejeição restauram rotação/escala/opacidade.
+- Brilho local e contorno azul pulsam; reduced-motion desliga efeitos e recompõe voo ativo. Backend, assets, fileiras de oito, ordenação e regras preservados.
+- Documentação: docs/fluidez-cartas-pixi.md. Gravação de 13,84 s usa somente fixtures locais. Telegram e aparelho físico não homologados nesta tarefa.
+
+- Validação concluída: 112 testes frontend, lint/tipos/build, harness de movimentos e 324 combinações visuais passaram; 37 seleções estreitas e 36 listas de resultado. Patch conferido na base HEAD via índice temporário. Sem homologação em Telegram/aparelho físico ou novo E2E backend.
+
+# Experiência completa a partir do HAR — 2026-10-11
+
+- Autorização explícita: “Faça o pacote completo meu irmão. Eu confio em você”. Mantida base dev 7b85f69510ad5be1d2bd46b9a7e7dab16a798084, sem commit/push/deploy; pacote consolida a etapa anterior de fluidez.
+- Atlas padrão v2 integrado ao Pixi; 63 frames girados/normais comparados pixel a pixel com PNGs. Geometry/browserAll são infraestrutura da biblioteca, não o controller da partida. MatchoRoute usado como referência, não copiado como backend.
+- DOM continua responsável por comandos e alvos; arraste da carta selecionada inclina/elevada/sombra no Pixi. Soltar no descarte usa guarda/validação de CardID do segundo toque. Cancelamento, revisão, perda de disponibilidade e recovery novo encerram gesto sem jogada.
+- Recovery inicial persistido no view não pode chamar stop em toda re-renderização: cancela indevidamente captura de pointer. Stop somente em novo baseline/recovery/revisão ou mudança de preferência.
+- Compra/distribuição/descarte adversário com flip público; chegada de Troca de Mãos só contém IDs próprios. Reorganização e retorno elásticos; efeitos confirmados de bloqueio/inversão/turno/cor e resultado escalonado.
+- Som opcional começa desligado, menu persiste preferência local. 14 arquivos originais, limite de quatro simultâneos, throttle, cleanup e rejeição de autoplay independente da engine. Haptics por API Telegram suportada. Faixa informativa de erro não intercepta controles.
+- Canvas com autoStart:false e render solicitado/coalescido por frame: atualiza em layout/tween/flight/effect e descansa parado. DOM de turno/coroa mantém seus próprios efeitos. Cleanup cancela RAF antes de destruir renderer.
+- Verificação e limitações documentadas em docs/experiencia-completa-har.md. Prévia usa fixtures e não grava áudio. Go/PostgreSQL indisponíveis neste ambiente para novo E2E; backend não modificado.
+
+- Validação final: 117 testes frontend, lint/tipos/build/diff, motion/interaction harnesses e 324 composições finais passaram. 37 seleções estreitas, 36 listas de resultado; repouso WebGL, 63 frames e 14 streams verificados. Prévia final gravada sem erros.
+
+
+## Aplicação local do pacote de experiência — 2026-10-11
+
+- Aprovação explícita do usuário; base dev 7b85f69510ad5be1d2bd46b9a7e7dab16a798084. Working tree original limpo exceto ZIP. Checksum/check do patch aprovados, 39 arquivos idênticos ao pacote, sem adaptações de implementação.
+- Lint/typecheck/build, 117 testes frontend e go test/vet/build ./... aprovados. Motion, interação, matriz324/seleções37/resultados36 e prévia em Chromium149 aprovados. Atlas63 comparado pixel a pixel e áudios14 decodificados; capturas revisadas.
+- Evidências .reports/experiencia-local/; relatório docs/validacao-experiencia-local.md. Vite temporário encerrado. Sem commit/push/deploy.
+- Docker indisponível/PostgreSQL ausente: sem integração com banco ou E2E Go/PostgreSQL nesta execução. Telegram/som/vibração físicos não homologados. Aviso de chunk Pixi e quatro vulnerabilidades npm preexistentes registrados; lockfile preservado.
+
+# Desempenho e fullscreen móvel — 2026-10-11
+
+- Usuário descreve engasgos semelhantes a sistema sobrecarregado, não mera animação longa; pediu patch explícito. Base é pacote completo aplicado, não HEAD puro nem patch antigo de fluidez.
+- Baseline controlado com 30 cartas/dez jogadores: 20 syncs iguais criavam 1.200 tweens e 180 sprites; seleção 182 tweens/27 sprites; scroll 144 sprites; arraste 26 tweens. Após correção: respectivamente zero, seleção quatro tweens/zero sprites, scroll zero sprites, arraste zero tweens.
+- GSAP atualiza timeline antes de flushRender; não agendar outro RAF em cada onUpdate. Desassinar listener quando sem trabalho e antes de destruir Pixi; manter frame final. Não tentar forçar 120 FPS via configuração.
+- Igualdade de view não permite ignorar perda de inputEnabled nem pendingArrivals: gesto deve cancelar mesmo sem revisão nova, e hand congelada durante toque precisa liberar chegadas ao soltar.
+- Cache estático inclui posição/tamanho, topo/histórico, turno/fase, direção, adversários e contagens. Stop restaura escala/alpha transitórios; não reconstruir mesa em cada scroll.
+- Fullscreen automático apenas Telegram android/ios, nunca por largura de janela; não sair de fullscreen escolhido manualmente pelo usuário.
+- isActive() de timeline antes do primeiro tick é falso. Seletor deve preservar confirmação enquanto totalProgress()<1; não antecipar fechamento quando ACK chega instantaneamente.
+- 128 testes frontend, lint/tipos/build e harnesses de movimentos/interação passaram. Intervalos de renderer em Chromium software variam; não são homologação física nem prova de 120 FPS. Backend não modificado.
+
+
+## Aplicação local de desempenho/fullscreen — 2026-10-11
+
+- Autorização explícita do usuário. Patch incremental aplicado sobre pacote completo; hashes da base e integridade verificados. Conflitos apenas em três registros .agent resolvidos por acréscimo, preservando histórico. Assets/fontes/áudios e todos os docs anteriores (inclusive validacao-experiencia-local.md) idênticos por SHA-256.
+- Código de produção idêntico ao patch. Harness performance adaptado para aguardar desmontagem e medir posição após handler no mesmo pointermove entregue (CDP pode responder antes). Baseline final em cópia isolada verificada, sem reverter workspace.
+- Contadores antes→depois: 20sync layouts20→0/sprites180→0/tweens1200→0; seleção sprites27→0/tweens182→4; scroll sprites144→0; arraste tweens26→0/erro síncrono máximo8,944px→0. Desktop fullscreen1→0. Repouso0 renders em ambos.
+- Lint/typecheck/128testes/build, performance com assertions, motion, interaction e visual324 passaram. Capturas revisadas; servidores Vite temporários encerrados. Sem commit/push/deploy ou dependências novas.
+- Mediana renderer headless82,30→67,30ms, p95 96,60→152ms: não demonstra ganho uniforme de FPS. Sem medição física/Telegram ou novo E2E banco. Relatório docs/validacao-desempenho-local.md e .reports/desempenho-local/ distinguem redução de trabalho e fluidez física pendente.
+
+# Salas livres e turnos WebApp — 2026-10-11
+
+- Usar `ranking.RoomType` (`group`/`free`); nunca sintetizar grupo para partida livre. Resultados livres têm `chat_id NULL`, persistem em `player_individual_stats` por `(user_id, ranking_system)` e não atualizam tabelas de grupo nem ranking mensal de grupo.
+- Repetições concorrentes da finalização são serializadas por advisory lock transacional na chave GameID; manter a mesma finalização e políticas de pontuação.
+- API WebApp autoritativa usa `ApplyWeb` com request ID; `Apply` segue preservado para partidas Telegram. Clique no monte aceita a penalidade +4 no WebApp, enquanto o desafio de grupo permanece no bot.
+- Validação da mudança: `go test -count=1 ./...`, vet/build normal e com `debugcards`, 129 testes Vitest, lint/typecheck/build web passaram. Testes PostgreSQL integration só compilaram; `TEST_DATABASE_URL` estava ausente.

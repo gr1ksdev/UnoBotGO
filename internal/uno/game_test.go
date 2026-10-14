@@ -405,6 +405,66 @@ func TestDrawnFourChecksWholeHand(t *testing.T) {
 	}
 }
 
+func TestWebDrawAlwaysPassesAfterPurchaseButTelegramRulesRemain(t *testing.T) {
+	withHandPlay := ClassicRules()
+	withHandPlay.FreePlayAfterDraw = true
+	fixtures := []struct {
+		name  string
+		rules Rules
+		hand  []Card
+		draw  Card
+	}{
+		{name: "no legal card", rules: ClassicRules(), hand: []Card{card(Blue, One)}, draw: card(Yellow, Two)},
+		{name: "new card playable", rules: ClassicRules(), hand: []Card{card(Blue, One)}, draw: card(Red, Two)},
+		{name: "existing hand card playable", rules: withHandPlay, hand: []Card{card(Red, One)}, draw: card(Blue, Two)},
+	}
+	for _, fixture := range fixtures {
+		t.Run(fixture.name, func(t *testing.T) {
+			g := scenario(t, fixture.rules, [][]Card{fixture.hand, {card(Green, Five)}}, card(Red, Five), []Card{fixture.draw})
+			before := g.Snapshot()
+			result, err := g.ApplyWeb(Action{Type: DrawCard, PlayerID: 1, Revision: before.Revision})
+			if err != nil {
+				t.Fatal(err)
+			}
+			after := g.Snapshot()
+			if result.Revision != before.Revision+1 || after.CurrentPlayerID != 2 || after.DrawnCardID != "" || !hasEvent(result, CardsDrawn, 1) || !hasEvent(result, PlayerSkipped, 1) || !hasEvent(result, TurnChanged, 2) {
+				t.Fatalf("purchase must pass in one revision: state=%+v events=%+v", after, result.Events)
+			}
+		})
+	}
+
+	telegram := scenario(t, ClassicRules(), [][]Card{{card(Blue, One)}, {card(Green, Five)}}, card(Red, Five), []Card{card(Yellow, Two)})
+	state := telegram.Snapshot()
+	legacy, err := telegram.Apply(Action{Type: DrawCard, PlayerID: 1, Revision: state.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state = telegram.Snapshot()
+	if state.CurrentPlayerID != 2 || hasEvent(legacy, PlayerSkipped, 1) {
+		t.Fatal("group engine behavior changed")
+	}
+}
+
+func TestWebManualDrawAcceptsChallengeablePlusFour(t *testing.T) {
+	hands := [][]Card{{card(Green, Two), card(NoColor, WildDrawFour)}, {card(Blue, One), card(Green, One)}, {card(Yellow, One), card(Blue, One)}}
+	g := scenario(t, BotRules(), hands, card(Red, Five), nil)
+	p1 := g.Snapshot().Players[0].Hand
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: p1[1]})
+	apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Blue})
+	before := g.Snapshot()
+	if before.PendingBluff == nil || !before.DrawFourChallengeable {
+		t.Fatal("fixture must be challengeable")
+	}
+	r, err := g.ApplyWeb(Action{Type: DrawCard, PlayerID: 2, Revision: before.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := g.Snapshot()
+	if after.PendingBluff != nil || after.DrawFourChallengeable || after.DrawCounter != 0 || after.CurrentPlayerID != 3 || len(after.Players[1].Hand) != len(before.Players[1].Hand)+4 || !hasEvent(r, CardsDrawn, 2) || !hasEvent(r, PlayerSkipped, 2) {
+		t.Fatalf("WebApp draw did not resolve +4 and pass: state=%+v events=%+v", after, r.Events)
+	}
+}
+
 func TestSecurityAndRevision(t *testing.T) {
 	g := scenario(t, ClassicRules(), [][]Card{{card(Red, One), card(Red, Two)}, {card(Blue, Five)}}, card(Red, Five), nil)
 	s := g.Snapshot()

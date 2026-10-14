@@ -33,6 +33,7 @@ try {
  push({...view,revision:21,hand:[...view.hand,drawn],events:[{id:'21:0',revision:21,type:'cards_drawn',player:'me',count:1}]})
  await page.locator('[data-motion-kind=draw]').first().waitFor({state:'attached'})
  assert.equal(await page.locator('[data-motion-kind=draw]').first().getAttribute('data-flight-card-id'),'new-card','accepted physical ID must survive the flight')
+ assert.equal(await page.locator('[data-motion-kind=draw]').first().getAttribute('data-motion-perspective'),'true','purchase must use the projected card mesh')
  socket.send(JSON.stringify({type:'snapshot',view,recovery:true}))
  await page.waitForTimeout(80)
  assert(await page.locator('[data-motion-kind=draw]').count()>0,'late same-revision recovery cancelled an accepted purchase')
@@ -149,10 +150,24 @@ try {
  await page.locator('[data-motion-kind=deal]').first().waitFor({state:'attached'})
  await page.waitForTimeout(250)
  assert(await page.locator('[data-motion-kind=deal]').count()>0,'initial observer notification cancelled the physical deal')
+ assert(await page.locator('[data-motion-kind=deal][data-motion-private=true]').evaluateAll(nodes=>nodes.some(n=>Number(n.dataset.flightAngle)>0)),'own deal must visibly rotate rather than only translate')
  await page.screenshot({path:`${out}/distribution-in-flight-320.png`})
  await page.waitForFunction(()=>!document.querySelector('[data-motion-active]'))
+ // Changing motion preferences during a flight must leave the accepted card visible.
+ const reducedCard={Card:{ID:'reduced-arrival',Color:2,Rank:3},Playable:true}
+ push({...view,revision:3,hand:[...view.hand,reducedCard],events:[{id:'3:0',revision:3,type:'cards_drawn',player:'me',count:1}]})
+ await page.locator('[data-motion-kind=draw]').first().waitFor({state:'attached'})
+ await page.emulateMedia({reducedMotion:'reduce'})
+ await page.waitForFunction(()=>!document.querySelector('[data-motion-active]'))
+ assert.equal(await page.locator(`[data-card-id="${reducedCard.Card.ID}"]`).count(),1)
+ assert.equal(await page.locator('.turn-glow').evaluate(n=>getComputedStyle(n).animationName),'none','turn glow must respect reduced motion')
+ // CDP may acknowledge media emulation before MediaQueryList dispatches change.
+ // Wait for the real preference event before sending the next accepted action.
+ await page.evaluate(()=>{window.__motionRestored=new Promise(resolve=>{window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change',()=>resolve(),{once:true})})})
+ await page.emulateMedia({reducedMotion:'no-preference'})
+ await page.evaluate(()=>window.__motionRestored)
  const swap={Card:{ID:'swap-original',Color:0,Rank:15},Playable:true}
- push({...view,revision:3,hand:[...view.hand,swap],events:[{id:'3:0',revision:3,type:'cards_drawn',player:'me',count:1}]})
+ push({...view,revision:4,hand:[...view.hand,swap],events:[{id:'4:0',revision:4,type:'cards_drawn',player:'me',count:1}]})
  await page.locator('[data-motion-kind=draw]').first().waitFor({state:'attached'})
  await page.waitForTimeout(600)
  await page.screenshot({path:`${out}/swap-original-in-flight-320.png`})
@@ -165,6 +180,6 @@ try {
  await page.getByRole('button',{name:'Voltar ao início',exact:true}).click()
  await page.locator('.game-v2').waitFor({state:'detached'})
  assert.deepEqual(errors, [], 'No errors on destroyed sprites or React unmount')
- await writeFile(`${out}/motion-checks.json`,JSON.stringify({passed:true,checks:['first tap raises and second tap plays with physical ID','previous discard remains visible during flight in four viewports','next wildcard restores four petals and neutral face','stable physical CardID during flight','opponent draws expose only anonymous backs','late same-revision recovery preserves accepted movement','fresh server choice supersedes old color feedback','failed asset initialization and unmount destroy renderer once','rejection restores physical hand','turn changes during draw','interrupted timeline restores opacity','delayed revision ignored','new-row purchase scrolls to its physical landing','arrival during gesture preserves touch ID and resumes after release','unmount removes ghosts','new game ID baseline','animation sends no commands','450ms color tween/700ms hold/350ms exit survives fast ack','color rejection restores petals and retry','initial observer notification preserves the visible deal','swap asset retains its hand frame during reveal'],telegram:'local test SDK only'},null,2))
+ await writeFile(`${out}/motion-checks.json`,JSON.stringify({passed:true,checks:['purchase uses perspective mesh; own deal rotates','reduced motion during flight restores accepted card and disables turn pulse','first tap raises and second tap plays with physical ID','previous discard remains visible during flight in four viewports','next wildcard restores four petals and neutral face','stable physical CardID during flight','opponent draws expose only anonymous backs','late same-revision recovery preserves accepted movement','fresh server choice supersedes old color feedback','failed asset initialization and unmount destroy renderer once','rejection restores physical hand','turn changes during draw','interrupted timeline restores opacity','delayed revision ignored','new-row purchase scrolls to its physical landing','arrival during gesture preserves touch ID and resumes after release','unmount removes ghosts','new game ID baseline','animation sends no commands','450ms staggered color fill/700ms hold/350ms exit survives fast ack','color rejection restores petals and retry','initial observer notification preserves the visible deal','swap asset retains its hand frame during reveal'],telegram:'local test SDK only'},null,2))
  console.log('Motion stress checks passed')
 } finally {await browser.close()}

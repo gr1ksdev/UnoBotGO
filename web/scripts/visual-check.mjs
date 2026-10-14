@@ -452,7 +452,7 @@ await writeFile(
    result_list_cases: 36,
    loss_states: 4,
    local_fonts: ['MatchoNunito 550', 'MatchoLexend 900'],
-   integration: 'Presentation snapshots through the fixture socket; real transport, engine, PostgreSQL and production CSP checked separately in production/browser.json',
+   integration: 'Presentation snapshots through the fixture socket only; run the real backend/engine/PostgreSQL/production CSP integration separately.',
   },
   null,
   2,

@@ -30,7 +30,7 @@ func (s *Service) VoteRematch(ctx context.Context, actor Actor, id uno.GameID, r
 	if e.final == nil || e.final.Rematch == nil {
 		return PublicGameView{}, ErrGameClosed
 	}
-	if actor.ChatID != e.chatID || actor.PlayerID <= 0 {
+	if actor.PlayerID <= 0 || (e.roomType == "free" && actor.ChatID != 0) || (e.roomType != "free" && actor.ChatID != e.chatID) {
 		return PublicGameView{}, ErrForbidden
 	}
 	member := false
@@ -105,7 +105,7 @@ func (s *Service) VoteRematch(ctx context.Context, actor Actor, id uno.GameID, r
 	if err != nil {
 		return PublicGameView{}, err
 	}
-	next := &managedGame{engine: engine, chatID: e.chatID, chatName: e.chatName, creatorID: r.Required[0], ownerID: r.Required[0], groupConfig: e.groupConfig, locked: e.locked, origin: "webapp", participants: make(map[uno.PlayerID]participantHistory), turnStarted: time.Now()}
+	next := &managedGame{engine: engine, roomType: e.roomType, chatID: e.chatID, chatName: e.chatName, creatorID: r.Required[0], ownerID: r.Required[0], groupConfig: e.groupConfig, locked: e.locked, origin: "webapp", participants: make(map[uno.PlayerID]participantHistory), turnStarted: time.Now()}
 	// Prepare the entire round privately. Nothing becomes observable until the
 	// index transaction below. No I/O or factory is called under indexMu.
 	for _, player := range r.Required {
@@ -125,8 +125,10 @@ func (s *Service) VoteRematch(ctx context.Context, actor Actor, id uno.GameID, r
 	if err := ctx.Err(); err != nil {
 		return PublicGameView{}, err
 	}
-	if _, occupied := m.byChat[e.chatID]; occupied {
-		return PublicGameView{}, ErrChatOccupied
+	if e.roomType == "group" {
+		if _, occupied := m.byChat[e.chatID]; occupied {
+			return PublicGameView{}, ErrChatOccupied
+		}
 	}
 	if _, duplicate := m.byID[nextID]; duplicate {
 		return PublicGameView{}, ErrIDConflict
@@ -135,7 +137,9 @@ func (s *Service) VoteRematch(ctx context.Context, actor Actor, id uno.GameID, r
 		return PublicGameView{}, ErrResultPending
 	}
 	m.byID[nextID] = indexRecord{entry: next, summary: view.summary()}
-	m.byChat[e.chatID] = nextID
+	if e.roomType == "group" {
+		m.byChat[e.chatID] = nextID
+	}
 	for _, player := range r.Required {
 		if m.byPlayer[player] == nil {
 			m.byPlayer[player] = make(map[uno.GameID]struct{})
