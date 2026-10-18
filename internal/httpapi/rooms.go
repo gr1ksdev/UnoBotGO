@@ -262,7 +262,7 @@ func (a *API) roomInvite(w http.ResponseWriter, r *http.Request) {
 		apiError(w, 503, "unavailable")
 		return
 	}
-	link := "https://t.me/" + a.BotUsername() + "/ranking?startapp=join_" + token
+	link := "https://t.me/" + a.BotUsername() + "/play?startapp=join_" + token
 	writeJSON(w, 200, map[string]string{"url": link, "token": token})
 }
 func (a *API) invited(r *http.Request) (game.PublicGameView, int64, error) {

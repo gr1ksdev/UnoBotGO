@@ -1,3 +1,37 @@
+# Decisão: resiliência do Telegram Dispatcher e estorno de tokens inline
+
+## Data
+2026-10-18
+
+## Contexto
+O bot parou de responder após uma tentativa de jogada via inline em um grupo (`chat_id=-1003565223332`), gerando aviso de saturação da fila (`chat queue saturated, dropping task, worker_idx=4`). Identificou-se que os workers de chat executavam tarefas sem timeout individual por tarefa (herdando apenas o contexto global do dispatcher), o que permitia que qualquer bloqueio síncrono ou lentidão de rede/I/O travasse a partição inteira. Com a capacidade da partição configurada em apenas 32 tarefas, novas mensagens enchiam o buffer rapidamente e eram sumariamente descartadas. Além disso, em `HandleChosenInlineResult`, o token de ação da carta era consumido antes do enfileiramento (`EnqueueChat`), de modo que tarefas descartadas por saturação deixavam o token permanentemente como consumido, impedindo que o jogador refizesse a jogada.
+
+## Decisão tomada
+1. Delimitação estrita de timeout por tarefa nos workers do Dispatcher (`internal/telegram/dispatch.go`):
+   - Adicionada constante `ChatTaskTimeout = 20 * time.Second` e `RecoveryTaskTimeout = 15 * time.Second`.
+   - Cada execução de `task.fn` em `start()` e `runDedicatedChat()` agora recebe `taskCtx, cancel := context.WithTimeout(task.ctx, ChatTaskTimeout)` com `defer cancel()`.
+   - Tarefas de recuperação em `recoveryQueue` passam a receber `taskCtx, cancel := context.WithTimeout(d.ctx, RecoveryTaskTimeout)` com `defer cancel()`.
+   - Se uma tarefa travar em chamadas externas ou banco, o cancelamento do contexto destrava as chamadas e libera o worker para a próxima tarefa da partição.
+2. Quadruplicação da capacidade de amortecimento de fila:
+   - `ChatQueueCapacity` ampliado de 32 para 128 itens por partição.
+   - `InlineQueueCap` ampliado de 64 para 128 itens.
+   - `RecoveryQueueCapacity` ampliado de 16 para 32 itens.
+3. Estorno atômico de tokens inline (`internal/telegram/tokens.go` e `internal/telegram/inline.go`):
+   - Adicionado método `ReleaseAction(tokenStr string, actorID uno.PlayerID) bool` no `TokenStore`, revertendo `tok.Consumed = false` caso o token não tenha sido finalizado (`ResultSummary == ""`).
+   - Em `HandleChosenInlineResult`, se `EnqueueChat` retornar `false` (saturação ou shutdown), `ReleaseAction` é invocado imediatamente e a falha é registrada nos logs com aviso explicativo, permitindo nova tentativa.
+4. Cobertura completa de testes unitários:
+   - `TestDispatcher_TaskContextHasDeadline` e `TestDispatcher_RecoveryTaskContextHasDeadline` em `dispatch_test.go`.
+   - `TestTokenStore_ReleaseAction` em `tokens_test.go`.
+   - `TestInlineHandler_ChosenResultReleasedWhenQueueSaturated` em `inline_test.go`.
+
+## Motivo
+Garantir alta disponibilidade e imunidade a travamentos perpétuos em workers particionados do Telegram, garantindo que picos de tráfego sejam amortecidos e que falhas transitórias não corrompam o ciclo de vida dos tokens de jogada.
+
+## Impacto
+O bot não corre mais risco de ficar offline ou parar de responder caso uma partição sofra atrasos transitórios; a capacidade de rajada é ampliada em 4x e jogadas inline descartadas por saturação extrema podem ser retentadas sem erros de token consumido.
+
+---
+
 # Decisão: promoção da release com modo Caseiro padrão para a branch main
 
 ## Data

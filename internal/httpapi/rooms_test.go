@@ -75,7 +75,7 @@ func TestDirectRoomInviteAdmissionAndIdempotency(t *testing.T) {
 		Token string `json:"token"`
 	}
 	_ = json.Unmarshal(inv.Body.Bytes(), &invitation)
-	if inv.Code != 200 || !strings.HasPrefix(invitation.URL, "https://t.me/ConfiguredBot/ranking?startapp=join_") {
+	if inv.Code != 200 || !strings.HasPrefix(invitation.URL, "https://t.me/ConfiguredBot/play?startapp=join_") {
 		t.Fatal(inv.Body)
 	}
 	preview := request("GET", "/api/v1/invites/"+invitation.Token, "", 2)

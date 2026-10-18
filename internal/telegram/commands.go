@@ -18,6 +18,7 @@ import (
 type CommandHandler struct {
 	rankingService *ranking.Service
 	miniAppURL     string
+	playAppURL     string
 	knownUsers     groups.UserRepository
 	userPrivacy    UserPrivacyRepository
 	finalize       func(context.Context, game.Outcome) func()
@@ -262,6 +263,8 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 			h.handlePrivateRanking(ctx, msg.Chat.ID, int64(actorID))
 		case "privacidade":
 			h.handlePrivatePrivacy(ctx, msg.Chat.ID, int64(actorID))
+		case "play", "jogar":
+			h.handlePrivatePlay(ctx, msg.Chat.ID)
 		default:
 			h.reply(ctx, msg.Chat.ID, "⚠️ Este comando só pode ser utilizado em grupos. Adicione o bot a um grupo para jogar!\n\nUse /help para mais instruções.", nil)
 		}
@@ -285,6 +288,8 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 	switch cmdName {
 	case "ranking":
 		h.handleRanking(ctx, msg.Chat.ID)
+	case "play", "jogar":
+		h.handleGroupPlay(ctx, msg.Chat.ID)
 	case "novo":
 		mode := ""
 		if len(fields) > 1 {
@@ -906,3 +911,18 @@ func (h *CommandHandler) handleGroupPrivacy(ctx context.Context, msg *telego.Mes
 	}
 	h.reply(ctx, chatID, h.renderer.RenderGroupPrivacy(updated.RankingPrivate), nil)
 }
+
+func (h *CommandHandler) handlePrivatePlay(ctx context.Context, chatID int64) {
+	h.reply(ctx, chatID, "🎮 <b>Jogar UNO</b>\n\nAbra o WebApp para criar, entrar ou gerenciar suas salas de UNO!", h.playMarkup())
+}
+
+func (h *CommandHandler) handleGroupPlay(ctx context.Context, chatID int64) {
+	if summary, err := h.service.FindChatGame(ctx, game.ChatID(chatID)); err == nil && summary.GameID != "" {
+		if view, err := h.service.PublicView(ctx, summary.GameID); err == nil && !view.Closed {
+			h.reply(ctx, chatID, "🎮 <b>Partida no grupo</b>\n\nToque no botão abaixo para abrir a partida no WebApp:", h.gameMarkup(view))
+			return
+		}
+	}
+	h.reply(ctx, chatID, "🎮 <b>Jogar UNO</b>\n\nAbra o WebApp para jogar ou criar uma nova partida:", h.playMarkup())
+}
+

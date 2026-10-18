@@ -11,6 +11,7 @@ import { formatScore } from '../lib/score'
 import { useGame } from '../hooks/useGame'
 import { telegramSettingsAvailable, useTelegram } from '../lib/telegram'
 import { tableFeedback } from '../lib/tableFeedback'
+import { ErrorBoundary } from '../components/ErrorBoundary'
 const colors = ['', 'Vermelho', 'Azul', 'Verde', 'Amarelo']
 const colorFiles = ['', 'red', 'blue', 'green', 'yellow']
 const ranks = [
@@ -31,13 +32,14 @@ const ranks = [
  '+4',
  'Troca de mãos',
 ]
-export function cardAsset(card: Card, activeColor = 0) {
+export function cardAsset(card: Card | null | undefined, activeColor = 0) {
+ if (!card) return '/assets/backs/default.png'
  if (card.Rank === 15) return '/assets/cards/swap_hands.png'
  if (card.Rank >= 13) {
   const prefix = colorFiles[activeColor] ? `${colorFiles[activeColor]}_` : ''
   return `/assets/cards/${prefix}${card.Rank === 14 ? 'wild_draw4' : 'wild'}.png`
  }
- return `/assets/cards/${colorFiles[card.Color]}_${card.Rank < 10 ? card.Rank : ['skip', 'reverse', 'draw2'][card.Rank - 10]}.png`
+ return `/assets/cards/${colorFiles[card.Color] ?? 'red'}_${card.Rank < 10 ? card.Rank : ['skip', 'reverse', 'draw2'][card.Rank - 10] ?? '0'}.png`
 }
 export function cardLabel(card: Card) {
  return `${colors[card.Color]} ${ranks[card.Rank]}`.trim()
@@ -98,6 +100,26 @@ function Timer({ view }: { view: GameView }) {
   </span>
  )
 }
+function safeShowModal(dialog: HTMLDialogElement | null) {
+ try {
+  if (dialog && !dialog.open) {
+   dialog.showModal()
+  }
+ } catch (e) {
+  console.warn('Dialog showModal prevented exception:', e)
+ }
+}
+
+function safeClose(dialog: HTMLDialogElement | null) {
+ try {
+  if (dialog && dialog.open) {
+   dialog.close()
+  }
+ } catch (e) {
+  console.warn('Dialog close prevented exception:', e)
+ }
+}
+
 function Choice({ view, disabled, error, send }: {
  view: GameView; disabled: boolean; error: string; send: (action: string, extra?: Partial<GameCommand>) => void
 }) {
@@ -115,7 +137,7 @@ function Choice({ view, disabled, error, send }: {
  useLayoutEffect(() => {
   context.current = gsap.context(() => {}, surface)
   const node = dialog.current
-  return () => { feedback.current?.kill(); context.current?.revert(); node?.close() }
+  return () => { feedback.current?.kill(); context.current?.revert(); safeClose(node) }
  }, [])
  useLayoutEffect(() => {
   const previous=previousChoice.current
@@ -137,7 +159,7 @@ function Choice({ view, disabled, error, send }: {
   context.current?.add(() => {
    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
    if (choice && !sent.current) {
-    if(!dialog.current?.open) { dialog.current?.showModal(); dialog.current?.focus(); tableFeedback.play('picker') }
+    if(!dialog.current?.open) { safeShowModal(dialog.current); dialog.current?.focus(); tableFeedback.play('picker') }
     gsap.fromTo(surface.current, { opacity: 0, scale: .82 }, { opacity: 1, scale: 1, duration: reduced ? 0 : .55, ease: 'elastic.out(1,.7)' })
     const picker = surface.current?.querySelector('.color-options')
     if(picker) {
@@ -145,8 +167,8 @@ function Choice({ view, disabled, error, send }: {
      gsap.fromTo(picker.querySelectorAll('.color-choice'),{scale:.6,opacity:0},{scale:1,opacity:1,duration:reduced ? 0 : .5,stagger:reduced ? 0 : .08,ease:'back.out(1.4)'})
     }
    } else if (!choice && dialog.current?.open && !sent.current) {
-    gsap.to(surface.current, { opacity: 0, scale: .94, duration: reduced ? 0 : .35, onComplete: () => dialog.current?.close() })
-   } else if (!choice && sent.current && (!feedback.current || feedback.current.totalProgress() === 1)) { dialog.current?.close(); sent.current = false; setChosen(0) }
+    gsap.to(surface.current, { opacity: 0, scale: .94, duration: reduced ? 0 : .35, onComplete: () => safeClose(dialog.current) })
+   } else if (!choice && sent.current && (!feedback.current || feedback.current.totalProgress() === 1)) { safeClose(dialog.current); sent.current = false; setChosen(0) }
   })
  }, [choice, choiceKey])
  useEffect(() => {
@@ -173,11 +195,11 @@ function Choice({ view, disabled, error, send }: {
    gsap.killTweensOf([surface.current,picker,...petals])
    gsap.set(petals,{opacity:1})
    feedback.current = gsap.timeline({ onComplete: () => {
-    if (!latest.current.choice) { dialog.current?.close(); sent.current = false; setChosen(0) }
+    if (!latest.current.choice) { safeClose(dialog.current); sent.current = false; setChosen(0) }
     else gsap.set(surface.current, { opacity: 1, scale: 1 })
    } })
     .to(surface.current,{opacity:1,scale:1,duration:reduced ? 0 : .2},0)
-    .to(ordered, { backgroundColor: ['','#fb3045','#1b71f6','#60c400','#ffbd10'][color], duration: reduced ? 0 : .3, stagger:reduced ? 0 : .05, ease: 'sine.inOut' },0)
+    .to(ordered, { backgroundColor: ['','#fb3045','#1b71f6','#60c400','#ffbd10'][color] ?? '#fb3045', duration: reduced ? 0 : .3, stagger:reduced ? 0 : .05, ease: 'sine.inOut' },0)
     .to(ordered,{scale:1.04,duration:reduced ? 0 : .22,stagger:reduced ? 0 : .05,ease:'sine.out'},0)
     .to(ordered,{scale:1,duration:reduced ? 0 : .22,stagger:reduced ? 0 : .05,ease:'sine.inOut'},reduced ? 0 : .4)
     .to(surface.current, { opacity: 0, scale: .82, duration: reduced ? 0 : .35, ease: 'power2.inOut' }, reduced ? 0 : 1.15)
@@ -239,7 +261,7 @@ export function ResultScreen({ view, disabled = true, send }: { view: GameView; 
     {accepted && !rematch.next_game_id && <button className="result-link" disabled={disabled} onClick={() => send?.('rematch_leave')}>Retirar minha aceitação</button>}
    </>}
    <Link className="result-link" to={`/ranking?system=${view.system}`}>Ver ranking</Link>
-   <Link className="result-link" to="/home">Voltar ao início</Link>
+   <Link className="result-link" to="/play">Voltar ao início</Link>
   </section>
  </section>
 }
@@ -534,7 +556,7 @@ export function GamePage() {
  const { gameID = '' } = useParams()
  const navigate = useNavigate()
  const newRound = useRef('')
- const back = useCallback(() => navigate('/home'), [navigate])
+ const back = useCallback(() => navigate('/play'), [navigate])
  const [settingsOpen, setSettingsOpen] = useState(false)
  const openSettings = useCallback(() => setSettingsOpen(true), [])
  const closeSettings = useCallback(() => setSettingsOpen(false), [])
@@ -545,7 +567,9 @@ export function GamePage() {
  useEffect(() => { if (next) { newRound.current=next; navigate(`/game/${encodeURIComponent(next)}`, { replace: true }) } }, [next, navigate])
  useEffect(() => { if(game.view?.game_id===gameID && newRound.current===gameID)newRound.current='' },[gameID,game.view])
  return game.view?.game_id === gameID ? (
-  <GameTable key={gameID} {...game} view={game.view} back={back} dealOnOpen={newRound.current === gameID} settingsOpen={nativeSettings ? settingsOpen : undefined} closeSettings={nativeSettings ? closeSettings : undefined} nativeSettings={nativeSettings} />
+  <ErrorBoundary>
+   <GameTable key={gameID} {...game} view={game.view} back={back} dealOnOpen={newRound.current === gameID} settingsOpen={nativeSettings ? settingsOpen : undefined} closeSettings={nativeSettings ? closeSettings : undefined} nativeSettings={nativeSettings} />
+  </ErrorBoundary>
  ) : (
   <main className="page">
    <h1>Abrindo sua mesa</h1>

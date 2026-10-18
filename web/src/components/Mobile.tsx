@@ -26,14 +26,16 @@ export function BottomNav() {
  return (
   <nav className="bottom-nav" aria-label="Navegação principal">
    {[
-    { to: '/home', name: 'Jogar', icon: 'home' },
+    { to: '/play', name: 'Jogar', icon: 'home' },
     { to: '/ranking', name: 'Ranking', icon: 'trophy' },
     { to: '/profile', name: 'Perfil', icon: 'user' },
    ].map((item) => (
     <Link
      key={item.to}
      className={
-      pathname === item.to || (item.to === '/ranking' && pathname === '/')
+      pathname === item.to ||
+      (item.to === '/ranking' && pathname === '/') ||
+      (item.to === '/play' && pathname === '/home')
        ? 'active'
        : ''
      }

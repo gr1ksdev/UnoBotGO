@@ -229,6 +229,60 @@ func TestDispatcher_RecoversPanicsInEveryWorkerClass(t *testing.T) {
 	waitDispatchSignal(t, recoveryDone)
 }
 
+func TestDispatcher_TaskContextHasDeadline(t *testing.T) {
+	d := NewDispatcher(nil, nil)
+	defer d.Stop(2 * time.Second)
+
+	chatID := game.ChatID(-500)
+	deadlineFound := make(chan bool, 1)
+
+	d.EnqueueChat(chatID, func(ctx context.Context) {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			deadlineFound <- false
+			return
+		}
+		remaining := time.Until(deadline)
+		deadlineFound <- (remaining > 0 && remaining <= ChatTaskTimeout)
+	})
+
+	select {
+	case valid := <-deadlineFound:
+		if !valid {
+			t.Fatalf("expected task context to have a valid deadline bounded by ChatTaskTimeout")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for task to execute")
+	}
+}
+
+func TestDispatcher_RecoveryTaskContextHasDeadline(t *testing.T) {
+	d := NewDispatcher(nil, nil)
+	defer d.Stop(2 * time.Second)
+
+	chatID := game.ChatID(-501)
+	deadlineFound := make(chan bool, 1)
+
+	d.EnqueueRecovery(chatID, func(ctx context.Context) {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			deadlineFound <- false
+			return
+		}
+		remaining := time.Until(deadline)
+		deadlineFound <- (remaining > 0 && remaining <= RecoveryTaskTimeout)
+	})
+
+	select {
+	case valid := <-deadlineFound:
+		if !valid {
+			t.Fatalf("expected recovery task context to have a valid deadline bounded by RecoveryTaskTimeout")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for recovery task to execute")
+	}
+}
+
 func waitDispatchSignal(t *testing.T, signal <-chan struct{}) {
 	t.Helper()
 	select {

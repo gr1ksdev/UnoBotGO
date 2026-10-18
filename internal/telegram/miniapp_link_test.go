@@ -12,6 +12,9 @@ func TestMiniAppLaunchURL(t *testing.T) {
 		if got := miniAppLaunchURL(username); got != "https://t.me/UnoRobotBot/ranking" {
 			t.Fatalf("got %s", got)
 		}
+		if got := miniAppPlayURL(username); got != "https://t.me/UnoRobotBot/play" {
+			t.Fatalf("got play URL %s", got)
+		}
 	}
 }
 

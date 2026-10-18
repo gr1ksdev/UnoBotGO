@@ -78,20 +78,44 @@ func (b *Bot) SetRankingService(service *ranking.Service) {
 	b.cmdHandler.rankingService = service
 }
 
-const miniAppShortName = "ranking"
+const (
+	miniAppShortName        = "ranking"
+	miniAppShortNameRanking = "ranking"
+	miniAppShortNamePlay    = "play"
+)
 
 func miniAppLaunchURL(username string) string {
 	username = strings.TrimPrefix(strings.TrimSpace(username), "@")
 	if username == "" {
 		return ""
 	}
-	return "https://t.me/" + username + "/" + miniAppShortName
+	return "https://t.me/" + username + "/" + miniAppShortNameRanking
 }
+
+func miniAppPlayURL(username string) string {
+	username = strings.TrimPrefix(strings.TrimSpace(username), "@")
+	if username == "" {
+		return ""
+	}
+	return "https://t.me/" + username + "/" + miniAppShortNamePlay
+}
+
 func (h *CommandHandler) rankingMarkup() *telego.InlineKeyboardMarkup {
 	if h.miniAppURL == "" {
 		return nil
 	}
 	return &telego.InlineKeyboardMarkup{InlineKeyboard: [][]telego.InlineKeyboardButton{{{Text: "🌐 Ranking Global", URL: h.miniAppURL}}}}
+}
+
+func (h *CommandHandler) playMarkup() *telego.InlineKeyboardMarkup {
+	playURL := h.playAppURL
+	if playURL == "" {
+		playURL = h.miniAppURL
+	}
+	if playURL == "" {
+		return nil
+	}
+	return &telego.InlineKeyboardMarkup{InlineKeyboard: [][]telego.InlineKeyboardButton{{{Text: "🎮 Jogar UNO", URL: playURL}}}}
 }
 
 func (h *CommandHandler) handleRanking(ctx context.Context, chatID int64) {
@@ -225,14 +249,18 @@ func (h *CommandHandler) handlePrivateRanking(ctx context.Context, chatID int64,
 // Direct links may be shared, but never grant admission or private-hand access.
 func (h *CommandHandler) gameMarkup(view game.PublicGameView) *telego.InlineKeyboardMarkup {
 	markup := makeGameButtons(view)
-	if h.miniAppURL == "" || view.GameID == "" || view.Closed {
+	playURL := h.playAppURL
+	if playURL == "" {
+		playURL = h.miniAppURL
+	}
+	if playURL == "" || view.GameID == "" || view.Closed {
 		return markup
 	}
 	if markup == nil {
 		markup = &telego.InlineKeyboardMarkup{}
 	}
 	markup.InlineKeyboard = append(markup.InlineKeyboard, []telego.InlineKeyboardButton{{
-		Text: "Abrir partida na Mini App", URL: h.miniAppURL + "?startapp=game_" + string(view.GameID),
+		Text: "Abrir partida na Mini App", URL: playURL + "?startapp=game_" + string(view.GameID),
 	}})
 	return markup
 }

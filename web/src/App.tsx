@@ -7,6 +7,8 @@ import { GamePage } from './pages/Game'
 import { ProfilePage } from './pages/Profile'
 import { launchGamePath, useTelegram } from './lib/telegram'
 
+import { ErrorBoundary } from './components/ErrorBoundary'
+
 export default function App() {
  useTelegram(undefined, { manageBackButton: false, initialize: true })
  const navigate = useNavigate()
@@ -29,18 +31,21 @@ export default function App() {
    </main>
   )
  return (
-  <Routes>
-   <Route path="/" element={<RankingsPage />} />
-   <Route path="/groups/:groupRef" element={<RankingsPage />} />
-   <Route path="/home" element={<HomePage />} />
-   <Route path="/ranking" element={<RankingsPage />} />
-   <Route path="/invite/:token" element={<InvitePage />} />
-   <Route path="/game/:gameID" element={<GamePage />} />
-   <Route path="/profile" element={<ProfilePage />} />
-   <Route
-    path="*"
-    element={<main className="state-card">Página não encontrada.</main>}
-   />
-  </Routes>
+  <ErrorBoundary>
+   <Routes>
+    <Route path="/" element={<RankingsPage />} />
+    <Route path="/groups/:groupRef" element={<RankingsPage />} />
+    <Route path="/home" element={<HomePage />} />
+    <Route path="/play" element={<HomePage />} />
+    <Route path="/ranking" element={<RankingsPage />} />
+    <Route path="/invite/:token" element={<InvitePage />} />
+    <Route path="/game/:gameID" element={<GamePage />} />
+    <Route path="/profile" element={<ProfilePage />} />
+    <Route
+     path="*"
+     element={<main className="state-card">Página não encontrada.</main>}
+    />
+   </Routes>
+  </ErrorBoundary>
  )
 }

@@ -805,3 +805,60 @@ func TestInlineHandler_CallBluffSticker(t *testing.T) {
 		t.Fatal("expected option_bluff sticker in results when CanCallBluff is true")
 	}
 }
+
+func TestInlineHandler_ChosenResultReleasedWhenQueueSaturated(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, _ := game.NewService()
+	renderer := NewRenderer(NewUserCache(100))
+	tokens := NewTokenStore(1000, 100, time.Now, nil)
+	dispatcher := NewDispatcher(nil, nil)
+	defer dispatcher.Stop(2 * time.Second)
+
+	inlineHandler := NewInlineHandler(mockAPI, svc, renderer, tokens, time.Minute, dispatcher, nil)
+	ctx := context.Background()
+
+	chatID := game.ChatID(-100888)
+	actorID := uno.PlayerID(42)
+
+	// Block the worker queue for chatID
+	blocker := make(chan struct{})
+	started := make(chan struct{})
+	dispatcher.EnqueueChat(chatID, func(ctx context.Context) {
+		close(started)
+		<-blocker
+	})
+	waitDispatchSignal(t, started)
+
+	// Fill the buffer to saturation
+	for i := 0; i < ChatQueueCapacity; i++ {
+		dispatcher.EnqueueChat(chatID, func(ctx context.Context) {})
+	}
+
+	// Create an action token
+	tok, err := tokens.CreateActionToken(actorID, "game1", chatID, uno.Action{
+		Type:     uno.PlayCard,
+		PlayerID: actorID,
+		CardID:   "c01",
+		Revision: 1,
+	}, time.Minute)
+	if err != nil {
+		t.Fatalf("failed to create action token: %v", err)
+	}
+
+	// Chosen inline result should fail to enqueue and release the token
+	accepted := inlineHandler.HandleChosenInlineResult(ctx, &telego.ChosenInlineResult{
+		ResultID: tok,
+		From:     telego.User{ID: int64(actorID), FirstName: "Player42"},
+	})
+	close(blocker)
+
+	if accepted {
+		t.Errorf("expected HandleChosenInlineResult to return false on saturated queue")
+	}
+
+	// The token must have been released, so consuming it again should succeed
+	_, status := tokens.ConsumeAction(tok, actorID)
+	if status != ConsumeOK {
+		t.Fatalf("expected token to be released and consumeable, got status %v", status)
+	}
+}

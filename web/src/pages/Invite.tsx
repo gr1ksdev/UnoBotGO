@@ -7,7 +7,7 @@ import { useTelegram } from '../lib/telegram'
 export function InvitePage() {
  const { token = '' } = useParams()
  const navigate = useNavigate()
- useTelegram(() => navigate('/home'), { headerColor: '#10292F' })
+ useTelegram(() => navigate('/play'), { headerColor: '#10292F' })
  const client = useQueryClient()
  const request = useRef(crypto.randomUUID())
  const preview = useQuery({ queryKey: ['invite', token], queryFn: ({ signal }) => apiGet<InvitePreview>(`invites/${encodeURIComponent(token)}`, signal), retry: false })
@@ -19,7 +19,7 @@ export function InvitePage() {
  const responsible = view?.players.find(p => p.key === view.owner_key)
  const responsibleName = responsible?.name.trim() || 'Responsável da sala'
  return <main className="page invite-page">
-  <header className="invite-header"><Brand /><Link to="/home">Início</Link></header>
+  <header className="invite-header"><Brand /><Link to="/play">Início</Link></header>
   {preview.isPending ? <section className="invite-card invite-loading"><span className="eyebrow">ABRINDO CONVITE</span><span className="invite-spinner" aria-hidden="true" /><p role="status">Conferindo se a sala ainda aceita jogadores…</p></section> : view ? <section className="invite-card" aria-labelledby="invite-title">
    <div className="invite-mark"><Icon name="cards" /></div>
    <span className="eyebrow">CONVITE PARA JOGAR</span>
@@ -36,7 +36,7 @@ export function InvitePage() {
   </section> : <section className="invite-card invite-unavailable" aria-labelledby="invite-error-title">
    <span className="eyebrow">CONVITE INDISPONÍVEL</span><h1 id="invite-error-title">Não foi possível abrir esta sala</h1>
    <p role="alert">O convite pode ter expirado ou a sala não aceita mais participantes.</p>
-   <Link className="primary invite-cta" to="/home">Voltar ao início <Icon name="arrow" /></Link>
+   <Link className="primary invite-cta" to="/play">Voltar ao início <Icon name="arrow" /></Link>
   </section>}
  </main>
 }

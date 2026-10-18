@@ -282,6 +282,26 @@ func (s *TokenStore) ConsumeAction(tokenStr string, actorID uno.PlayerID) (Actio
 	return res, ConsumeOK
 }
 
+// ReleaseAction unmarks a previously consumed token if its execution could not be scheduled.
+func (s *TokenStore) ReleaseAction(tokenStr string, actorID uno.PlayerID) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tokVal, ok := s.tokens[tokenStr]
+	if !ok {
+		return false
+	}
+	tok, ok := tokVal.(*ActionToken)
+	if !ok || tok.UserID != actorID {
+		return false
+	}
+	if tok.Consumed && tok.ResultSummary == "" {
+		tok.Consumed = false
+		return true
+	}
+	return false
+}
+
 // SetActionResult records the public outcome of an action token and wipes private action details.
 func (s *TokenStore) SetActionResult(tokenStr string, summary string) {
 	s.mu.Lock()

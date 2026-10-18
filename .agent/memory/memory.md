@@ -1,3 +1,33 @@
+# Resiliência do Dispatcher e Estorno de Tokens Inline — 2026-10-18 (somente dev)
+
+- Pedido do usuário aprovado no plano: `resiliencia-dispatcher-inline_2026-10-18_13-25.md`.
+- **Causa Raiz da Saturação e Travamento**:
+  - O bot parou de responder após uma tentativa de jogada via inline em um grupo (`chat_id=-1003565223332`), gerando log de aviso: `chat queue saturated, dropping task, worker_idx=4`.
+  - O `Dispatcher` particiona chats em 8 workers fixos (`abs(chatID) % 8`).
+  - Cada worker executava tarefas sequencialmente utilizando `task.fn(task.ctx)`, onde `task.ctx` não possuía deadline individual por tarefa.
+  - Bloqueios ou latências de I/O de rede ou banco retinham o worker indefinidamente, e a fila de apenas 32 tarefas enchia rapidamente, descartando novas mensagens.
+  - No `InlineHandler.HandleChosenInlineResult`, o token de ação da carta era consumido antes de `EnqueueChat`. Quando a fila saturava e a tarefa era descartada, o token permanecia consumido, impedindo que o usuário ou Telegram retentasse a jogada.
+- **Implementação Realizada (`internal/telegram`)**:
+  - **Timeouts de Tarefa**:
+    - Adicionado `ChatTaskTimeout = 20 * time.Second` e `RecoveryTaskTimeout = 15 * time.Second` em `dispatch.go`.
+    - `start()` e `runDedicatedChat()` envolvem `task.fn` em `context.WithTimeout(task.ctx, ChatTaskTimeout)`.
+    - Tarefas de recuperação em `recoveryQueue` passam a rodar com `context.WithTimeout(d.ctx, RecoveryTaskTimeout)`.
+  - **Amortecimento de Filas**:
+    - `ChatQueueCapacity` ampliado de 32 para 128 itens.
+    - `InlineQueueCap` ampliado de 64 para 128 itens.
+    - `RecoveryQueueCapacity` ampliado de 16 para 32 itens.
+  - **Estorno Atômico de Token**:
+    - `tokens.go`: implementado método `ReleaseAction(tokenStr, actorID) bool` que reverte atomicamente `tok.Consumed = false` caso o token não tenha resultado finalizado.
+    - `inline.go`: em `HandleChosenInlineResult`, se `EnqueueChat` falhar, invoca `ReleaseAction`, emite log explicativo de aviso e retorna `false`.
+- **Validação e Testes**:
+  - `dispatch_test.go`: adicionados testes `TestDispatcher_TaskContextHasDeadline` e `TestDispatcher_RecoveryTaskContextHasDeadline`.
+  - `tokens_test.go`: adicionado teste `TestTokenStore_ReleaseAction`.
+  - `inline_test.go`: adicionado teste `TestInlineHandler_ChosenResultReleasedWhenQueueSaturated`.
+  - Todas as suítes de teste normais e com tags (`go test -count=1 ./...`, `go test -tags debugcards ./...`), `go vet ./...`, `go build ./...` e `git diff --check` aprovados com 100% de sucesso.
+- Regras de isolamento: zero commit, zero push, mantido no working tree da dev.
+
+---
+
 # Modo Caseiro como Padrão para Novos Grupos — 2026-10-02 (publicado em dev e main)
 
 - Pedido do usuário aprovado nos planos: `modo-caseiro-default-novos-grupos_2026-10-02_23-02.md` e `promover-publicar-main_2026-10-02_23-10.md`.

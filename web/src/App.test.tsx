@@ -111,6 +111,13 @@ describe('Mobile app', () => {
   ).toHaveAttribute('href', 'https://t.me/test_bot')
   expect(screen.queryByText('#12')).not.toBeInTheDocument()
  })
+ it('supports /play route for webapp gameplay with active nav link', async () => {
+  wrap('/play')
+  await screen.findByRole('link', { name: 'Jogar pelo Telegram' })
+  const navPlay = screen.getByRole('link', { name: 'Jogar' })
+  expect(navPlay).toHaveClass('active')
+  expect(navPlay).toHaveAttribute('href', '/play')
+ })
  it('shows a small ranking without fabricated podium positions', async () => {
   vi
    .mocked(fetch)

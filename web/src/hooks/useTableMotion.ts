@@ -11,7 +11,11 @@ export function useTableMotion(root: RefObject<HTMLElement | null>, view: GameVi
  useLayoutEffect(() => {
   currentRelease.current = release
   latest.current = { view, selected }
-  scene.current?.sync(view, selected)
+  try {
+   scene.current?.sync(view, selected)
+  } catch (e) {
+   console.error('TableScene sync error:', e)
+  }
  }, [view, selected, release])
  useEffect(() => {
   const node = root.current
@@ -25,7 +29,11 @@ export function useTableMotion(root: RefObject<HTMLElement | null>, view: GameVi
    await owned.init()
    if(cancelled) return
    scene.current = owned
-   owned.sync(latest.current.view, latest.current.selected, baseline.current)
+   try {
+    owned.sync(latest.current.view, latest.current.selected, baseline.current)
+   } catch (e) {
+    console.error('TableScene initial sync error:', e)
+   }
    if(dealOnOpen) owned.dealInitial()
   }).catch(() => {
    if(cancelled) return

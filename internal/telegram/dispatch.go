@@ -14,11 +14,14 @@ import (
 
 const (
 	ChatWorkerCount       = 8
-	ChatQueueCapacity     = 32
+	ChatQueueCapacity     = 128
 	InlineWorkerCount     = 4
-	InlineQueueCap        = 64
+	InlineQueueCap        = 128
 	RecoveryWorkerCount   = 2
-	RecoveryQueueCapacity = 16
+	RecoveryQueueCapacity = 32
+
+	ChatTaskTimeout     = 20 * time.Second
+	RecoveryTaskTimeout = 15 * time.Second
 )
 
 type chatTask struct {
@@ -94,7 +97,9 @@ func (d *Dispatcher) start() {
 					d.logger.Debug("discarded stale chat task", "chat_id", task.chatID, "generation", task.generation)
 					continue
 				}
-				d.runSafely("chat", task.chatID, func() { task.fn(task.ctx) })
+				taskCtx, cancel := context.WithTimeout(task.ctx, ChatTaskTimeout)
+				d.runSafely("chat", task.chatID, func() { task.fn(taskCtx) })
+				cancel()
 			}
 		}()
 		d.logger.Debug("started chat worker", "worker_id", workerID)
@@ -121,7 +126,9 @@ func (d *Dispatcher) start() {
 		go func() {
 			defer d.workersWg.Done()
 			for task := range d.recoveryQueue {
-				d.runSafely("recovery", task.chatID, func() { task.fn(d.ctx) })
+				taskCtx, cancel := context.WithTimeout(d.ctx, RecoveryTaskTimeout)
+				d.runSafely("recovery", task.chatID, func() { task.fn(taskCtx) })
+				cancel()
 			}
 		}()
 		d.logger.Debug("started recovery worker", "worker_id", workerID)
@@ -249,7 +256,9 @@ func (d *Dispatcher) runDedicatedChat(ctx context.Context, queue <-chan chatTask
 			if !d.isCurrent(task.chatID, task.generation) {
 				continue
 			}
-			d.runSafely("dedicated_chat", task.chatID, func() { task.fn(task.ctx) })
+			taskCtx, cancel := context.WithTimeout(task.ctx, ChatTaskTimeout)
+			d.runSafely("dedicated_chat", task.chatID, func() { task.fn(taskCtx) })
+			cancel()
 		}
 	}
 }

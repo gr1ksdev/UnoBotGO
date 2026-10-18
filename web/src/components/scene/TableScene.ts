@@ -109,7 +109,8 @@ export class TableScene {
   return { x: b.left - r.left + b.width / 2, y: b.top - r.top + b.height / 2, width: b.width, height: b.height }
  }
  private sprite(src: string, p: Position, layer: Container) {
-  const sprite = new Sprite({ texture: this.textures[src], anchor: .5, x: p.x, y: p.y, eventMode: 'none' })
+  const texture = this.textures[src] ?? Texture.WHITE
+  const sprite = new Sprite({ texture, anchor: .5, x: p.x, y: p.y, eventMode: 'none' })
   sprite.setSize(p.width, p.height)
   layer.addChild(sprite)
   return sprite
@@ -142,7 +143,11 @@ export class TableScene {
   if(this.disposed || !this.initialized) { this.detachRender(); return }
   if(this.renderDirty) {
    this.renderDirty = false
-   this.app.render()
+   try {
+    this.app.render()
+   } catch (e) {
+    console.error('Pixi app.render error:', e)
+   }
   }
   if(!this.renderDirty && !this.animations.size) this.detachRender()
  }
@@ -433,7 +438,8 @@ export class TableScene {
   const flight = new Container({ x:from.x, y:from.y, visible:false, label:cardID, eventMode:'none' })
   this.flights.addChild(flight)
   const castShadow = this.sprite(cardShadow, {x:0,y:6,width:startWidth*1.1,height:startHeight*1.1},flight)
-  const mesh = new PerspectiveMesh({ texture:this.textures[kind==='play' && front && !opponentPlay ? front : back], verticesX:8, verticesY:8, eventMode:'none' })
+  const initialTexture = this.textures[kind==='play' && front && !opponentPlay ? front : back] ?? this.textures[back] ?? Texture.WHITE
+  const mesh = new PerspectiveMesh({ texture: initialTexture, verticesX:8, verticesY:8, eventMode:'none' })
   mesh.setCorners(...cardCorners(startWidth,startHeight,0))
   flight.addChild(mesh)
   const marker = document.createElement('span')
@@ -458,7 +464,7 @@ export class TableScene {
     const landingHeight = destination || kind==='play' ? landing.height : landing.width*344/256
     const width = startWidth+(landing.width-startWidth)*t, height = startHeight+(landingHeight-startHeight)*t
     const revealed = !!front && (kind==='play' && !opponentPlay || flip.angle>=Math.PI/2)
-    const texture = this.textures[revealed ? front! : back]
+    const texture = this.textures[revealed ? front! : back] ?? this.textures[back] ?? Texture.WHITE
     if(mesh.texture!==texture) mesh.texture=texture
     mesh.setCorners(...cardCorners(width,height,flip.angle))
     mesh.tint = revealed && destination ? destination.face.tint : 0xffffff
@@ -498,7 +504,7 @@ export class TableScene {
   })
  }
  private effect(src: string, p: Position | undefined, kind: string, duration = .75, fadeOnly = false) {
-  if(!p || this.reduced.matches) return
+  if(!p || this.reduced.matches || !src) return
   const group = new Container({eventMode:'none'})
   this.flights.addChild(group)
   const sprite = this.sprite(src,p,group)
@@ -583,7 +589,7 @@ export class TableScene {
      }
      if(event.type === 'color_chosen') {
       tableFeedback.play('color')
-      if(before!.top?.ID === view.top?.ID && this.discard) this.effect(this.asset(before!.top!,before!.phase===2 ? undefined : before!.active_color),this.discard,'color',.45,true)
+      if(before?.top && view.top && before.top.ID === view.top.ID && this.discard) this.effect(this.asset(before.top,before.phase===2 ? undefined : before.active_color),this.discard,'color',.45,true)
      }
      if(event.type === 'turn_changed') {
       const p=this.players.get(event.player)
