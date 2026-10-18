@@ -3,6 +3,7 @@ module github.com/malbs/UnoGoBot
 go 1.26.3
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.12.3

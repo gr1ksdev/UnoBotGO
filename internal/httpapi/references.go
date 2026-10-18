@@ -16,6 +16,7 @@ import (
 )
 
 type reference struct {
+	Game    string           `json:"g,omitempty"`
 	Kind    string           `json:"k"`
 	ID      int64            `json:"i,omitempty"`
 	System  string           `json:"s,omitempty"`

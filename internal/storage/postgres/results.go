@@ -15,6 +15,9 @@ var _ ranking.Repository = (*Store)(nil)
 // Retrying after an indeterminate commit uses the same GameID and payload hash.
 func (s *Store) RecordCompletedGame(ctx context.Context, result ranking.Result) (ranking.Commit, error) {
 	r := result.Clone()
+	if r.RoomType == "" {
+		r.RoomType = ranking.RoomGroup
+	}
 	if err := r.Validate(); err != nil {
 		return ranking.Commit{}, err
 	}
@@ -27,10 +30,15 @@ func (s *Store) RecordCompletedGame(ctx context.Context, result ranking.Result) 
 		return ranking.Commit{}, operationError(ctx, "begin result")
 	}
 	defer rollback(tx)
-	// Serialize results for one group and forbid incompatible stats silently mixing.
+	// Serialize retries even when there is no group row to lock.
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, r.GameID); err != nil {
+		return ranking.Commit{}, operationError(ctx, "lock result identity")
+	}
 	var system string
-	if err = tx.QueryRow(ctx, `SELECT ranking_system FROM group_configs WHERE chat_id=$1 FOR UPDATE`, r.ChatID).Scan(&system); err != nil {
-		return ranking.Commit{}, operationError(ctx, "lock result group")
+	if r.RoomType == ranking.RoomGroup {
+		if err = tx.QueryRow(ctx, `SELECT ranking_system FROM group_configs WHERE chat_id=$1 FOR UPDATE`, r.ChatID).Scan(&system); err != nil {
+			return ranking.Commit{}, operationError(ctx, "lock result group")
+		}
 	}
 	var storedHash, status string
 	err = tx.QueryRow(ctx, `SELECT payload_hash,scoring_status FROM completed_games WHERE game_id=$1`, r.GameID).Scan(&storedHash, &status)
@@ -46,7 +54,7 @@ func (s *Store) RecordCompletedGame(ctx context.Context, result ranking.Result) 
 	}
 	status = r.ScoringStatus()
 	scored := status == ranking.StatusScored
-	if scored && system != string(r.RankingSystem) {
+	if scored && r.RoomType == ranking.RoomGroup && system != string(r.RankingSystem) {
 		return ranking.Commit{}, ranking.ErrNeedsProductDecision
 	}
 	var policy any
@@ -58,8 +66,12 @@ func (s *Store) RecordCompletedGame(ctx context.Context, result ranking.Result) 
 		scoredAt = r.FinishedAt
 	}
 	// ON CONFLICT also covers accidental reuse of a GameID in different chats.
-	tag, err := tx.Exec(ctx, `INSERT INTO completed_games(game_id,chat_id,game_mode,ranking_system,config_revision,started_at,finished_at,final_revision,finish_reason,payload_hash,participant_count,scoring_status,policy_version,scored_at)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT(game_id) DO NOTHING`, r.GameID, r.ChatID, r.GameMode, r.RankingSystem, r.ConfigRevision, r.StartedAt, r.FinishedAt, int64(r.FinalRevision), r.FinishReason, hash, len(r.Players), status, policy, scoredAt)
+	var chat any
+	if r.RoomType == ranking.RoomGroup {
+		chat = r.ChatID
+	}
+	tag, err := tx.Exec(ctx, `INSERT INTO completed_games(game_id,chat_id,game_mode,ranking_system,config_revision,started_at,finished_at,final_revision,finish_reason,payload_hash,participant_count,scoring_status,policy_version,scored_at,origin,room_type)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT(game_id) DO NOTHING`, r.GameID, chat, r.GameMode, r.RankingSystem, r.ConfigRevision, r.StartedAt, r.FinishedAt, int64(r.FinalRevision), r.FinishReason, hash, len(r.Players), status, policy, scoredAt, resultOrigin(r.Origin), r.RoomType)
 	if err != nil {
 		return ranking.Commit{}, operationError(ctx, "insert completed game")
 	}
@@ -76,7 +88,7 @@ func (s *Store) RecordCompletedGame(ctx context.Context, result ranking.Result) 
 		return 0
 	})
 	for _, p := range r.Players {
-		if !p.LastSeenAt.IsZero() {
+		if r.RoomType == ranking.RoomGroup && !p.LastSeenAt.IsZero() {
 			if err = observeGroupUser(ctx, tx, groups.KnownUser{ChatID: r.ChatID, UserID: p.UserID, DisplayName: p.DisplayName, Username: p.Username, LastSeenAt: p.LastSeenAt}); err != nil {
 				return ranking.Commit{}, operationError(ctx, "observe result user")
 			}
@@ -101,6 +113,17 @@ func (s *Store) RecordCompletedGame(ctx context.Context, result ranking.Result) 
 		wins := 0
 		if p.Position == 1 {
 			wins = 1
+		}
+		if r.RoomType == ranking.RoomFree {
+			tag, err = tx.Exec(ctx, `INSERT INTO player_individual_stats(user_id,ranking_system,score_units,completed_games,wins,display_name,last_finished_at)
+ VALUES($1,$2,$3,1,$4,$5,$6) ON CONFLICT(user_id,ranking_system) DO UPDATE SET
+ score_units=player_individual_stats.score_units+EXCLUDED.score_units,completed_games=player_individual_stats.completed_games+1,wins=player_individual_stats.wins+EXCLUDED.wins,
+ display_name=CASE WHEN EXCLUDED.last_finished_at>=player_individual_stats.last_finished_at THEN EXCLUDED.display_name ELSE player_individual_stats.display_name END,
+ last_finished_at=GREATEST(player_individual_stats.last_finished_at,EXCLUDED.last_finished_at),updated_at=now()`, p.UserID, r.RankingSystem, int64(p.Score), wins, p.DisplayName, r.FinishedAt)
+			if err != nil {
+				return ranking.Commit{}, operationError(ctx, "update individual score")
+			}
+			continue
 		}
 		tag, err = tx.Exec(ctx, `INSERT INTO player_group_stats(chat_id,user_id,ranking_system,score_units,completed_games,wins,display_name,last_finished_at)
  VALUES($1,$2,$3,$4,1,$5,$6,$7) ON CONFLICT(chat_id,user_id) DO UPDATE SET
@@ -132,4 +155,11 @@ func (s *Store) RecordCompletedGame(ctx context.Context, result ranking.Result) 
 		return ranking.Commit{}, operationError(ctx, "commit result")
 	}
 	return ranking.Commit{Scored: scored}, nil
+}
+
+func resultOrigin(origin string) string {
+	if origin == "webapp" {
+		return origin
+	}
+	return "inline"
 }

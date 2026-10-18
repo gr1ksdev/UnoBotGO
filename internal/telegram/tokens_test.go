@@ -221,3 +221,53 @@ func TestTokenStore_CursorToken(t *testing.T) {
 		t.Errorf("expected error for expired cursor")
 	}
 }
+
+func TestTokenStore_ReleaseAction(t *testing.T) {
+	fakeNow := time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+	store := NewTokenStore(100, 10, func() time.Time { return fakeNow }, nil)
+
+	action := uno.Action{
+		Type:     uno.PlayCard,
+		PlayerID: 42,
+		CardID:   "c001",
+		Revision: 1,
+	}
+
+	tok, err := store.CreateActionToken(42, "g1", 1001, action, 2*time.Minute)
+	if err != nil {
+		t.Fatalf("unexpected error creating token: %v", err)
+	}
+
+	// Cannot release unconsumed token
+	if store.ReleaseAction(tok, 42) {
+		t.Errorf("expected release of unconsumed token to return false")
+	}
+
+	// Consume token
+	_, status := store.ConsumeAction(tok, 42)
+	if status != ConsumeOK {
+		t.Fatalf("expected ConsumeOK, got %v", status)
+	}
+
+	// Wrong user cannot release
+	if store.ReleaseAction(tok, 99) {
+		t.Errorf("expected release with wrong user to return false")
+	}
+
+	// Release by correct user should succeed
+	if !store.ReleaseAction(tok, 42) {
+		t.Errorf("expected release to succeed")
+	}
+
+	// Second consumption should now succeed because token was released
+	_, status2 := store.ConsumeAction(tok, 42)
+	if status2 != ConsumeOK {
+		t.Fatalf("expected ConsumeOK after release, got %v", status2)
+	}
+
+	// Once result is recorded, token cannot be released
+	store.SetActionResult(tok, "confirmed")
+	if store.ReleaseAction(tok, 42) {
+		t.Errorf("expected release of finalized token to return false")
+	}
+}

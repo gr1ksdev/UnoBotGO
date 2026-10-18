@@ -10,7 +10,6 @@ import (
 
 	"github.com/malbs/UnoGoBot/internal/game"
 	"github.com/malbs/UnoGoBot/internal/ranking"
-	"github.com/malbs/UnoGoBot/internal/uno"
 	"github.com/mymmrac/telego"
 )
 
@@ -18,6 +17,7 @@ import (
 // outbox, engine snapshot or database access is added to nonterminal actions.
 func (b *Bot) SetResultRepository(repository ranking.Repository) {
 	b.resultRepository = repository
+	b.finalizer = &game.Finalizer{Service: b.service, Repository: repository}
 	b.cmdHandler.finalize = b.finalizeOutcome
 	b.inlineHandler.finalize = b.finalizeOutcome
 }
@@ -27,6 +27,13 @@ func (b *Bot) SetResultRepository(repository ranking.Repository) {
 // returned for failed persistence, N<2 or a previously committed retry.
 func (b *Bot) finalizeOutcome(ctx context.Context, outcome game.Outcome) func() {
 	if outcome.Completed == nil || b.resultRepository == nil {
+		return nil
+	}
+	if b.finalizer != nil && b.finalizer.Notify != nil {
+		commit, err := b.finalizer.Commit(ctx, *outcome.Completed)
+		if err == nil && commit.Scored && !commit.AlreadyPersisted {
+			return func() {}
+		}
 		return nil
 	}
 	result, err := b.persistResult(ctx, *outcome.Completed)
@@ -39,25 +46,26 @@ func (b *Bot) finalizeOutcome(ctx context.Context, outcome game.Outcome) func() 
 // persistResult acknowledges only confirmed commits. An indeterminate commit
 // keeps the immutable memory result for an idempotent retry using the same ID.
 func (b *Bot) persistResult(ctx context.Context, input ranking.Result) (*ranking.Result, error) {
-	result, err := ranking.Prepare(input)
+	if b.finalizer == nil {
+		b.finalizer = &game.Finalizer{Service: b.service, Repository: b.resultRepository}
+	}
+	commit, err := b.finalizer.Commit(ctx, input)
 	if err != nil {
-		b.logger.Error("invalid completed result; retained in memory", "game_id", input.GameID, "error", err)
+		b.logger.Error("result pending; persistence failed", "game_id", input.GameID)
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	commit, err := b.resultRepository.RecordCompletedGame(ctx, result)
-	if err != nil {
-		b.logger.Error("completed result persistence failed; retained in memory", "game_id", result.GameID, "chat_id", result.ChatID, "error", err)
-		return nil, err
-	}
-	b.service.AcknowledgeResult(uno.GameID(result.GameID))
-	b.logger.Info("completed result committed", "game_id", result.GameID, "scored", commit.Scored, "eligible_count", result.EligibleCount(), "scoring_status", result.ScoringStatus(), "already_persisted", commit.AlreadyPersisted)
-	if !commit.Scored || commit.AlreadyPersisted {
+	if !commit.Scored || commit.AlreadyPersisted || b.finalizer.Notify != nil {
 		return nil, nil
 	}
-	return &result, nil
+	result, err := ranking.Prepare(input)
+	return &result, err
 }
+
+func (b *Bot) SetFinalizer(f *game.Finalizer) { b.finalizer = f }
+func (b *Bot) NotifyCommitted(ctx context.Context, result ranking.Result) {
+	b.notifyPoints(ctx, result)
+}
+func (b *Bot) Username() string { value, _ := b.usernamePublic.Load().(string); return value }
 
 func (b *Bot) notifyPoints(ctx context.Context, result ranking.Result) {
 	sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)

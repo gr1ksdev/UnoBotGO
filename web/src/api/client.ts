@@ -24,20 +24,35 @@ export interface UserPrivacy {
  anonymous: boolean
 }
 export class APIError extends Error {
- constructor(public status: number) { super('Não foi possível carregar o ranking.') }
+ constructor(public status: number) {
+  super('Não foi possível carregar o ranking.')
+ }
 }
 export function authHeaders(): HeadersInit {
  return { Authorization: `tma ${window.Telegram?.WebApp.initData ?? ''}` }
 }
-export async function rankingPage(path: string, system: System, cursor: string, signal: AbortSignal): Promise<RankingPage> {
+export async function rankingPage(
+ path: string,
+ system: System,
+ cursor: string,
+ signal: AbortSignal,
+): Promise<RankingPage> {
  const query = new URLSearchParams({ system, limit: '50' })
  if (cursor) query.set('cursor', cursor)
- const response = await fetch(`/api/v1/rankings/${path}?${query}`, { headers: authHeaders(), signal })
+ const response = await fetch(`/api/v1/rankings/${path}?${query}`, {
+  headers: authHeaders(),
+  signal,
+ })
  if (!response.ok) throw new APIError(response.status)
  return response.json() as Promise<RankingPage>
 }
-export async function getUserPrivacy(signal?: AbortSignal): Promise<UserPrivacy> {
- const response = await fetch('/api/v1/me/privacy', { headers: authHeaders(), signal })
+export async function getUserPrivacy(
+ signal?: AbortSignal,
+): Promise<UserPrivacy> {
+ const response = await fetch('/api/v1/me/privacy', {
+  headers: authHeaders(),
+  signal,
+ })
  if (!response.ok) throw new APIError(response.status)
  return response.json() as Promise<UserPrivacy>
 }
@@ -50,3 +65,114 @@ export async function setUserPrivacy(anonymous: boolean): Promise<UserPrivacy> {
  if (!response.ok) throw new APIError(response.status)
  return response.json() as Promise<UserPrivacy>
 }
+
+export async function apiGet<T>(
+ path: string,
+ signal?: AbortSignal,
+): Promise<T> {
+ const response = await fetch(`/api/v1/${path}`, {
+  headers: authHeaders(),
+  signal,
+ })
+ if (!response.ok) throw new APIError(response.status)
+ return response.json() as Promise<T>
+}
+export interface ProfileStats {
+ system: System
+ score_units: string
+ games: number
+ wins: number
+}
+export interface HistoryEntry {
+ id: string
+ group: string
+ room_type?: 'group' | 'free'
+ origin: 'inline' | 'webapp'
+ system: System
+ position: number
+ score_units?: string
+ status: string
+ finished_at: string
+}
+export interface PlayerProfile {
+ identity?: RankingItem
+ stats: ProfileStats[]
+ individual_stats?: ProfileStats[]
+ history: HistoryEntry[]
+ next_cursor?: string
+}
+export interface PositionResponse {
+ entry: RankingItem | null
+ month_start: string
+ month_name: string
+ system: System
+}
+export interface Room {
+ game_id: string
+ group: string
+ room_type?: 'group' | 'free'
+ phase: number
+}
+export interface Card {
+ ID: string
+ Color: number
+ Rank: number
+}
+export interface Seat {
+ avatar_url?: string
+ key: string
+ name: string
+ count: number
+ me: boolean
+ current: boolean
+ active: boolean
+ position?: number
+}
+export interface GameView {
+ rematch?: { revision: number; required: string[]; accepted: string[]; next_game_id: string; ready: boolean }
+ can_start?: boolean
+ events?: ConfirmedEvent[]
+ recovery?: boolean
+ capacity?: number
+ owner_key?: string
+ awards?: { key: string; score_units: string | null; position: number }[]
+ game_id: string
+ revision: number
+ phase: number
+ group: string
+ room_type?: 'group' | 'free'
+ mode: string
+ system: System
+ players: Seat[]
+ hand: { Card: Card; Playable: boolean }[]
+ top: Card | null
+ active_color: number
+ direction: number
+ closed: boolean
+ close_reason?: string
+ owner: boolean
+ my_turn: boolean
+ drawn_card_id: string
+ can_bluff: boolean
+ deadline: string | null
+ server_time: string
+ result: HistoryEntry | null
+}
+export interface GameCommand {
+ game_id: string
+ request_id: string
+ expected_revision: number
+ action: string
+ card_id?: string
+ color?: number
+ target?: string
+}
+
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+ const response = await fetch(`/api/v1/${path}`, { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+ if (!response.ok) throw new APIError(response.status)
+ return response.json() as Promise<T>
+}
+export interface RoomGroup { ref: string; title: string; system: System }
+export interface InvitePreview { game_id: string; revision: number; room_type?: 'group' | 'free'; group: string; mode: string; system: System; players: Seat[]; owner_key: string; capacity: number; joined: boolean; can_join: boolean; closed: boolean }
+export interface ConfirmedEvent { id: string; revision: number; type: string; player: string; target?: string; card_id?: string; count?: number }

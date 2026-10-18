@@ -1,62 +1,128 @@
-import { useCallback, useEffect, useRef } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
-import { APIError, type System } from '../api/client'
-import { Arrow, Avatar, Calendar, ErrorState, RankingCard, Score, Segmented, Skeleton, UsersIcon } from '../components/Ranking'
-import { BottomNavigation } from '../components/BottomNavigation'
-import { ScrollingName } from '../components/ScrollingName'
-import { HeroCards } from '../components/HeroCards'
+import { useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
+import {
+ APIError,
+ apiGet,
+ type PositionResponse,
+ type System,
+} from '../api/client'
+import {
+ Brand,
+ BottomNav,
+ Empty,
+ ErrorState,
+ Loading,
+ MyPosition,
+ Podium,
+ PolicyPicker,
+ RankingRow,
+ RankingTabs,
+} from '../components/Mobile'
 import { useRanking } from '../hooks/useRanking'
 import { useTelegram } from '../lib/telegram'
-
-function More({ hasNext, busy, load }: { hasNext: boolean; busy: boolean; load: () => void }) {
- const ref = useRef<HTMLButtonElement>(null)
- useEffect(() => {
-   if (!ref.current || !hasNext || busy || !('IntersectionObserver' in window)) return
-   const observer = new IntersectionObserver(entries => { if (entries.some(e => e.isIntersecting)) load() }, { rootMargin: '120px' })
-   observer.observe(ref.current); return () => observer.disconnect()
- }, [hasNext, busy, load])
- return hasNext ? <button className="load-more" ref={ref} disabled={busy} onClick={load}>{busy ? 'Carregando mais…' : 'Carregar mais'}</button> : null
-}
-
 export function RankingsPage() {
  const [params, setParams] = useSearchParams()
  const system: System = params.get('system') === 'legacy' ? 'legacy' : 'updated'
- const tab = params.get('tab') === 'players' ? 'players' : 'groups'
+ const tab = params.get('tab') === 'groups' ? 'groups' : 'players'
  const { groupRef } = useParams()
- const detail = !!groupRef
  const navigate = useNavigate()
- const back = useCallback(() => navigate(`/?system=${system}&tab=groups`), [navigate, system])
- const hasNativeBack = typeof window !== 'undefined' && Boolean(window.Telegram?.WebApp?.BackButton)
- useTelegram(detail ? back : undefined, { headerColor: detail ? '#99121f' : '#073b82' })
- const query = useRanking(detail ? `groups/${encodeURIComponent(groupRef)}` : tab, system)
- const { fetchNextPage } = query
- const load = useCallback(() => { void fetchNextPage() }, [fetchNextPage])
- const unauthorized = query.error instanceof APIError && query.error.status === 401
- const reset = () => { void query.refetch() }
- const month = query.first?.month_name
- const group = query.first?.group
- return <main className={`app-shell ${detail ? 'detail-view' : 'global-view'}`}>
-   <header className={`ranking-header ${detail ? 'detail-header' : ''}`}>
-     <div className="title-bar">
-       <div className="title-bar-left">
-         {detail && !hasNativeBack && <button className="back-button" aria-label="Voltar ao Ranking Global" onClick={back}><Arrow /></button>}
-       </div>
-       <h1>{detail ? 'Ranking do grupo' : <>Ranking Global{month && ` · ${month}`}</>}</h1>
-       <div className="title-bar-right">
-         {!detail && <span className="calendar-icon"><Calendar /></span>}
-       </div>
-     </div>
-     {!detail && <Segmented label="Sistema de ranking" className="system-switch" value={system} options={[{ value: 'updated', label: 'Atualizado' }, { value: 'legacy', label: 'Legado' }]} onChange={value => setParams({ system: value, tab })} />}
-     {detail && group && <section className="group-hero" aria-label="Resumo do grupo"><Avatar item={group} large /><div className="group-summary"><h2><ScrollingName name={group.name} /></h2><p className="hero-id">{group.masked_id}</p><Score item={group} system={system} /></div><HeroCards /></section>}
-     {detail && !group && query.isPending && <div className="hero-placeholder" />}
+ const back = useCallback(
+  () => navigate(`/ranking?system=${system}&tab=groups`),
+  [navigate, system],
+ )
+ useTelegram(groupRef ? back : undefined, { headerColor: '#10292F' })
+ const query = useRanking(
+  groupRef ? `groups/${encodeURIComponent(groupRef)}` : tab,
+  system,
+ )
+ const mine = useQuery({
+  queryKey: ['position', system],
+  queryFn: ({ signal }) =>
+   apiGet<PositionResponse>(`me/position?system=${system}`, signal),
+  enabled: !groupRef && tab === 'players',
+ })
+ const change = (s: System) => setParams({ system: s, tab })
+ const rows = query.items.length >= 3 ? query.items.slice(3) : []
+ return (
+  <main className="page">
+   <div className="app-top">
+    <Brand />
+    <PolicyPicker system={system} change={change} />
+   </div>
+   <header className="heading">
+    <span className="eyebrow">TODO MUNDO NA MESMA DISPUTA</span>
+    <h1>{groupRef ? 'Ranking do grupo' : 'Ranking'}</h1>
+    <p className="sub">
+     Inline e Mini App somam juntos.
+     <br />
+     Cada partida conta na sua história.
+    </p>
    </header>
-   <section className="ranking-panel" aria-label={detail ? 'Ranking interno do grupo' : 'Ranking global'}>
-     {detail ? <h2 className="section-title"><span className="section-icon" aria-hidden="true"><UsersIcon /></span> Ranking interno do grupo{month && ` · ${month}`}</h2> : null}
-     {query.isPending ? <Skeleton /> : query.isError && !query.first ? <><ErrorState unauthorized={unauthorized} retry={reset} />{detail && <Link className="load-more" to={`/?system=${system}&tab=groups`}>Voltar ao Ranking Global</Link>}</> : <>
-       {query.items.length === 0 ? <p className="state-card">{detail ? 'Nenhum jogador pontuou neste grupo neste mês.' : tab === 'groups' ? 'Nenhum grupo pontuou neste mês.' : 'Nenhum jogador pontuou neste mês.'}</p> : <ol className="ranking-list">{query.items.map(item => <RankingCard key={item.key} item={item} system={system} tab={tab} />)}</ol>}
-       {query.isFetchNextPageError ? <ErrorState retry={load} unauthorized={unauthorized} /> : <More hasNext={query.hasNextPage} busy={query.isFetchingNextPage} load={load} />}
-     </>}
-   </section>
-   {!detail && <BottomNavigation system={system} tab={tab} />}
- </main>
+   {!groupRef && (
+    <RankingTabs category={tab} change={(t) => setParams({ system, tab: t })} />
+   )}
+   <div className="rank-context">
+    <span>
+     {query.first
+      ? `${query.first.month_name} ${query.first.month_start.slice(0, 4)}`
+      : 'Ranking mensal'}
+    </span>
+    <span>{groupRef ? query.first?.group?.name : 'Classificação mensal'}</span>
+   </div>
+   {query.isPending ? (
+    <Loading />
+   ) : query.isError && !query.first ? (
+    <ErrorState
+     retry={() => void query.refetch()}
+     unauthorized={
+      query.error instanceof APIError && query.error.status === 401
+     }
+    />
+   ) : query.items.length === 0 ? (
+    <Empty title="Ainda sem pontuação">
+     <p className="sub">Nenhuma partida elegível neste mês.</p>
+    </Empty>
+   ) : (
+    <>
+     <Podium items={query.items.slice(0, 3)} system={system} />
+     {rows.length > 0 && (
+      <>
+       <div className="rank-title">
+        <h3>{tab === 'groups' ? 'Grupos na disputa' : 'Na cola do pódio'}</h3>
+        <span>pontuação mensal</span>
+       </div>
+       <div className="list">
+        {rows.map((item) => (
+         <RankingRow key={item.key} item={item} system={system} />
+        ))}
+       </div>
+      </>
+     )}
+     {query.isFetchNextPageError ? (
+      <ErrorState retry={() => void query.fetchNextPage()} />
+     ) : (
+      query.hasNextPage && (
+       <button
+        className="outline load-more"
+        disabled={query.isFetchingNextPage}
+        onClick={() => void query.fetchNextPage()}
+       >
+        {query.isFetchingNextPage ? 'Carregando mais…' : 'Carregar mais'}
+       </button>
+      )
+     )}
+    </>
+   )}
+   {!groupRef &&
+    tab === 'players' &&
+    mine.data &&
+    mine.data.month_start === query.first?.month_start && (
+     <MyPosition entry={mine.data.entry} system={system} />
+    )}
+   {!groupRef && <BottomNav />}
+  </main>
+ )
 }
+
+export { RankingsPage as RankingScreen }

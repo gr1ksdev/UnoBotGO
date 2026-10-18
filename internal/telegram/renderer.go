@@ -420,6 +420,7 @@ func (r *Renderer) RenderHelp(botUsername string) string {
 	sb.WriteString("<b>/destrancar</b> — Permite novas entradas.\n")
 	sb.WriteString("<b>/iniciar</b> — Inicia a partida quando houver pelo menos dois jogadores.\n")
 	sb.WriteString("<b>/estado</b> — Mostra o lobby ou o estado atual da partida.\n")
+	sb.WriteString("<b>/play</b> — Abre o WebApp para jogar UNO. O comando /jogar é um alias.\n")
 	sb.WriteString("<b>/ranking</b> — Mostra o ranking mensal do grupo (ou seus rankings mensais se usado no privado).\n")
 	sb.WriteString("<b>/sair</b> — Sai da partida em andamento.\n")
 	sb.WriteString("<b>/cancelar</b> — Cancela a partida (criador, responsável ou admin). O comando /kill é um alias.\n")

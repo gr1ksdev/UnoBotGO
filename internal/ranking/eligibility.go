@@ -43,6 +43,9 @@ func (r Result) ScoringStatus() string {
 // Retrying an already prepared result validates its original payload, not a
 // recalculation which could conceal divergent scores.
 func Prepare(result Result) (Result, error) {
+	if result.RoomType == "" {
+		result.RoomType = RoomGroup
+	}
 	if err := result.Validate(); err != nil {
 		return Result{}, err
 	}

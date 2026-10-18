@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
 
@@ -543,5 +544,66 @@ func TestResetChatHonorsContextWhileWaitingForGame(t *testing.T) {
 	}
 	if summary, err := s.FindChatGame(t.Context(), -800); err != nil || summary.GameID != v.GameID {
 		t.Fatal("timed-out reset changed state")
+	}
+}
+
+func TestFreeRoomAuthorizationReceiptAndRematch(t *testing.T) {
+	s := testService(t)
+	created, err := s.Create(t.Context(), Actor{PlayerID: 1}, CreateRequest{RoomType: "free", Origin: "webapp", GroupConfig: groups.Snapshot{RankingSystem: groups.Updated, ConfigRevision: 1}, Rules: uno.BotRules()})
+	if err != nil || created.View.RoomType != "free" || created.View.ChatID != 0 {
+		t.Fatal(created, err)
+	}
+	id := created.View.GameID
+	for _, player := range []uno.PlayerID{1, 2} {
+		v, _ := s.PublicView(t.Context(), id)
+		if _, err := s.ApplyWeb(t.Context(), Actor{PlayerID: player}, id, uno.Action{Type: uno.JoinGame, PlayerID: player, Revision: v.Revision}, fmt.Sprintf("free-join-%02d", player)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	v, _ := s.PublicView(t.Context(), id)
+	if _, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 3}, id, uno.Action{Type: uno.StartGame, PlayerID: 3, Revision: v.Revision}, "forged-start"); !errors.Is(err, ErrForbidden) {
+		t.Fatal("non-owner started free room", err)
+	}
+	if _, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 1, ChatID: 42}, id, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: v.Revision}, "wrong-chat-start"); !errors.Is(err, ErrForbidden) {
+		t.Fatal("free room accepted group identity", err)
+	}
+	started, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 1}, id, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: v.Revision}, "free-start-0001")
+	if err != nil || started.View.Phase != uno.TakingTurn {
+		t.Fatal(started, err)
+	}
+	retry, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 1}, id, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: v.Revision}, "free-start-0001")
+	if err != nil || retry.View.Revision != started.View.Revision {
+		t.Fatal("duplicate WebApp command mutated room", retry, err)
+	}
+	turn := started.View.CurrentTurn
+	turnActor := Actor{PlayerID: turn}
+	drawAction := uno.Action{Type: uno.DrawCard, PlayerID: turn, Revision: started.View.Revision}
+	drawn, err := s.ApplyWeb(t.Context(), turnActor, id, drawAction, "free-draw-0001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	drawRetry, err := s.ApplyWeb(t.Context(), turnActor, id, drawAction, "free-draw-0001")
+	if err != nil || drawRetry.View.Revision != drawn.View.Revision {
+		t.Fatal("duplicate purchase advanced twice", drawRetry, err)
+	}
+	current, _ := s.PublicView(t.Context(), id)
+	closed, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 1}, id, uno.Action{Type: uno.LeaveGame, PlayerID: 1, Revision: current.Revision}, "free-leave-0001")
+	if err != nil || !closed.View.Closed || closed.Completed == nil || closed.Completed.RoomType != "free" || closed.Completed.ChatID != 0 {
+		t.Fatal(closed, err)
+	}
+	if _, err := s.VoteRematch(t.Context(), Actor{PlayerID: 1}, id, closed.View.Revision, true, "free-vote-0001"); !errors.Is(err, ErrResultPending) {
+		t.Fatal(err)
+	}
+	s.AcknowledgeResult(id)
+	if _, err := s.VoteRematch(t.Context(), Actor{PlayerID: 1}, id, closed.View.Revision, true, "free-vote-0002"); err != nil {
+		t.Fatal(err)
+	}
+	rematch, err := s.VoteRematch(t.Context(), Actor{PlayerID: 2}, id, closed.View.Revision, true, "free-vote-0003")
+	if err != nil || rematch.Rematch == nil || rematch.Rematch.NextGameID == "" {
+		t.Fatal(rematch, err)
+	}
+	fresh, err := s.PublicView(t.Context(), rematch.Rematch.NextGameID)
+	if err != nil || fresh.RoomType != "free" || fresh.ChatID != 0 || len(fresh.Players) != 2 {
+		t.Fatal(fresh, err)
 	}
 }

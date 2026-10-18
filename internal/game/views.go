@@ -2,14 +2,17 @@ package game
 
 import (
 	"slices"
+	"time"
 
 	"github.com/malbs/UnoGoBot/internal/groups"
+	"github.com/malbs/UnoGoBot/internal/ranking"
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
 
 type ChatID int64
 
 type PublicPlayer struct {
+	Name      string
 	ID        uno.PlayerID
 	Status    uno.PlayerStatus
 	CardCount int
@@ -26,9 +29,27 @@ const (
 
 // PublicGameView has no hands, draw pile or full inventory. OwnerID is metadata,
 // not a participant; Players contains only users explicitly registered via Join.
+type ConfirmedEvent struct {
+	ID       string
+	Revision uint64
+	Event    uno.Event
+}
+
+type RematchView struct {
+	Revision   uint64
+	Required   []uno.PlayerID
+	Accepted   []uno.PlayerID
+	NextGameID uno.GameID
+	Ready      bool
+}
+
 type PublicGameView struct {
+	Rematch         *RematchView
+	Events          []ConfirmedEvent
+	TurnStarted     time.Time
 	GroupConfig     groups.Snapshot
 	GameID          uno.GameID
+	RoomType        ranking.RoomType
 	ChatID          ChatID
 	ChatName        string
 	CreatorID       uno.PlayerID
@@ -67,6 +88,7 @@ type PlayerGameView struct {
 // GameSummary is an index projection published atomically with membership.
 type GameSummary struct {
 	GameID    uno.GameID
+	RoomType  ranking.RoomType
 	ChatID    ChatID
 	ChatName  string
 	CreatorID uno.PlayerID
@@ -77,6 +99,13 @@ type GameSummary struct {
 }
 
 func (v PublicGameView) clone() PublicGameView {
+	if v.Rematch != nil {
+		r := *v.Rematch
+		r.Required = slices.Clone(r.Required)
+		r.Accepted = slices.Clone(r.Accepted)
+		v.Rematch = &r
+	}
+	v.Events = slices.Clone(v.Events)
 	v.Players = slices.Clone(v.Players)
 	v.Order = slices.Clone(v.Order)
 	v.Placements = slices.Clone(v.Placements)
@@ -88,12 +117,12 @@ func (v PublicGameView) clone() PublicGameView {
 }
 
 func (v PublicGameView) summary() GameSummary {
-	return GameSummary{GameID: v.GameID, ChatID: v.ChatID, ChatName: v.ChatName, CreatorID: v.CreatorID, OwnerID: v.OwnerID, Locked: v.Locked, Revision: v.Revision, Phase: v.Phase}
+	return GameSummary{GameID: v.GameID, RoomType: v.RoomType, ChatID: v.ChatID, ChatName: v.ChatName, CreatorID: v.CreatorID, OwnerID: v.OwnerID, Locked: v.Locked, Revision: v.Revision, Phase: v.Phase}
 }
 
 func publicView(entry *managedGame, state uno.State) PublicGameView {
-	v := PublicGameView{GroupConfig: entry.groupConfig,
-		GameID: state.ID, ChatID: entry.chatID, ChatName: entry.chatName,
+	v := PublicGameView{Events: slices.Clone(entry.events), TurnStarted: entry.turnStarted, GroupConfig: entry.groupConfig,
+		GameID: state.ID, RoomType: entry.roomType, ChatID: entry.chatID, ChatName: entry.chatName,
 		CreatorID: entry.creatorID, OwnerID: entry.ownerID, Locked: entry.locked, Revision: state.Revision,
 		Phase: state.Phase, Rules: state.Rules, CurrentTurn: state.CurrentPlayerID,
 		Direction: state.Direction, ActiveColor: state.ActiveColor,
@@ -103,7 +132,7 @@ func publicView(entry *managedGame, state uno.State) PublicGameView {
 		Players: make([]PublicPlayer, 0, len(state.Players)),
 	}
 	for _, p := range state.Players {
-		v.Players = append(v.Players, PublicPlayer{ID: p.ID, Status: p.Status, CardCount: len(p.Hand), Active: !v.Closed && p.Status == uno.Playing})
+		v.Players = append(v.Players, PublicPlayer{Name: entry.participants[p.ID].DisplayName, ID: p.ID, Status: p.Status, CardCount: len(p.Hand), Active: !v.Closed && p.Status == uno.Playing})
 	}
 	if len(state.DiscardPile) > 0 {
 		top := state.DiscardPile[len(state.DiscardPile)-1]

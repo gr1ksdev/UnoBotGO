@@ -524,7 +524,12 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 		}
 		_, _ = h.bot.SendMessage(taskCtx, params)
 	})
-	return accepted
+	if !accepted {
+		h.tokens.ReleaseAction(tokenStr, actorID)
+		h.logger.WarnContext(ctx, "failed to enqueue chosen inline action, token released for retry", "chat_id", actionToken.ChatID, "user_id", actorID)
+		return false
+	}
+	return true
 }
 
 // Failed actions use current public context, never the old token's turn.

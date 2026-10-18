@@ -16,6 +16,13 @@ import (
 )
 
 type Units int64 // 100 units = one point; never a binary float.
+type RoomType string
+
+const (
+	RoomGroup RoomType = "group"
+	RoomFree  RoomType = "free"
+)
+
 var ErrInvalid = errors.New("ranking: invalid completed result")
 var ErrConflict = errors.New("ranking: GameID already contains a different result")
 var ErrNeedsProductDecision = errors.New("ranking: scoring policy requires product decision")
@@ -68,6 +75,8 @@ type Player struct {
 // Result contains result/audit metadata only, with no cards or private snapshots.
 // Finalization callers must Clone at boundaries and treat the value as immutable.
 type Result struct {
+	Origin                string `json:",omitempty"`
+	RoomType              RoomType
 	GameID                string
 	ChatID                int64
 	GameMode              groups.Mode
@@ -107,7 +116,14 @@ func (r Result) Hash() (string, error) {
 // Placements are engine facts: gaps, duplicates or placements on Left players
 // are errors, never repaired by inventing/reordering ranking positions.
 func (r Result) Validate() error {
-	if r.GameID == "" || r.ChatID == 0 || !r.GameMode.Valid() || !r.RankingSystem.Valid() || r.ConfigRevision <= 0 || r.StartedAt.IsZero() || r.FinishedAt.Before(r.StartedAt) || r.FinalRevision == 0 || r.FinalRevision > 1<<63-1 || len(r.Players) == 0 {
+	roomType := r.RoomType
+	if roomType == "" { // Historical results and callers are group-scoped.
+		roomType = RoomGroup
+	}
+	if r.Origin != "" && r.Origin != "inline" && r.Origin != "webapp" {
+		return ErrInvalid
+	}
+	if (roomType != RoomGroup && roomType != RoomFree) || (roomType == RoomGroup && r.ChatID == 0) || (roomType == RoomFree && r.ChatID != 0) || r.GameID == "" || !r.GameMode.Valid() || !r.RankingSystem.Valid() || r.ConfigRevision <= 0 || r.StartedAt.IsZero() || r.FinishedAt.Before(r.StartedAt) || r.FinalRevision == 0 || r.FinalRevision > 1<<63-1 || len(r.Players) == 0 {
 		return ErrInvalid
 	}
 	if r.FinishReason != "completed" && r.FinishReason != "departure" {

@@ -23,6 +23,8 @@ type Actor struct {
 
 type CreateRequest struct {
 	ChatName    string
+	RoomType    ranking.RoomType
+	Origin      string
 	Rules       uno.Rules
 	GroupConfig groups.Snapshot
 }
@@ -74,7 +76,10 @@ func (s *Service) Create(ctx context.Context, actor Actor, req CreateRequest) (O
 	if err := checkContext(ctx); err != nil {
 		return Outcome{}, err
 	}
-	if actor.PlayerID <= 0 || actor.ChatID == 0 {
+	if req.RoomType == "" {
+		req.RoomType = ranking.RoomGroup
+	}
+	if actor.PlayerID <= 0 || (req.RoomType == ranking.RoomGroup && actor.ChatID == 0) || (req.RoomType == ranking.RoomFree && actor.ChatID != 0) || (req.RoomType != ranking.RoomGroup && req.RoomType != ranking.RoomFree) {
 		return Outcome{}, ErrInvalidArgument
 	}
 	if req.GroupConfig.RankingSystem == "" {
@@ -83,10 +88,24 @@ func (s *Service) Create(ctx context.Context, actor Actor, req CreateRequest) (O
 	if !req.GroupConfig.RankingSystem.Valid() || req.GroupConfig.ConfigRevision <= 0 {
 		return Outcome{}, ErrInvalidArgument
 	}
+	if req.Origin != "" && req.Origin != "inline" && req.Origin != "webapp" {
+		return Outcome{}, ErrInvalidArgument
+	}
 	return s.manager.create(ctx, actor, req)
 }
 
 func (s *Service) Apply(ctx context.Context, actor Actor, id uno.GameID, action uno.Action) (Outcome, error) {
+	return s.apply(ctx, actor, id, action, "")
+}
+
+// ApplyWeb is the authenticated adapter entry. Receipts are checked under the game lock.
+func (s *Service) ApplyWeb(ctx context.Context, actor Actor, id uno.GameID, action uno.Action, requestID string) (Outcome, error) {
+	if len(requestID) < 8 || len(requestID) > 128 {
+		return Outcome{}, ErrInvalidArgument
+	}
+	return s.apply(ctx, actor, id, action, requestID)
+}
+func (s *Service) apply(ctx context.Context, actor Actor, id uno.GameID, action uno.Action, requestID string) (Outcome, error) {
 	if err := checkContext(ctx); err != nil {
 		return Outcome{}, err
 	}
@@ -101,6 +120,19 @@ func (s *Service) Apply(ctx context.Context, actor Actor, id uno.GameID, action 
 		return Outcome{}, err
 	}
 	defer entry.mu.Unlock()
+	requested := action
+	if requestID != "" {
+		key := receiptKey{actor.PlayerID, requestID}
+		if receipt, ok := entry.receipts[key]; ok {
+			if receipt.action != action {
+				return Outcome{}, ErrInvalidArgument
+			}
+			return Outcome{View: receipt.view.clone()}, nil
+		}
+		if len(entry.receipts) >= 8192 {
+			return Outcome{}, ErrInvalidArgument
+		}
+	}
 	if entry.final != nil {
 		return Outcome{}, ErrGameClosed
 	}
@@ -137,15 +169,48 @@ func (s *Service) Apply(ctx context.Context, actor Actor, id uno.GameID, action 
 	if err := ctx.Err(); err != nil {
 		return Outcome{}, err
 	}
-	result, err := entry.engine.Apply(action)
+	var result uno.Result
+	if requestID != "" {
+		result, err = entry.engine.ApplyWeb(action)
+	} else {
+		result, err = entry.engine.Apply(action)
+	}
 	if err != nil {
 		return Outcome{}, err
 	}
-	return s.manager.publish(entry, before, entry.engine.Snapshot(), result), nil
+	if requestID != "" && action.Type == uno.StartGame {
+		entry.origin = "webapp"
+	}
+	outcome := s.manager.publish(entry, before, entry.engine.Snapshot(), result)
+	if requestID != "" {
+		if entry.receipts == nil {
+			entry.receipts = make(map[receiptKey]actionReceipt)
+		}
+		entry.receipts[receiptKey{actor.PlayerID, requestID}] = actionReceipt{requested, outcome.View.clone()}
+	}
+	return outcome, nil
 }
 
 // Pure application checks, executed while the entry is locked. No role lookup I/O.
 func authorize(entry *managedGame, actor Actor, kind uno.ActionType) error {
+	if entry.roomType == ranking.RoomFree {
+		if actor.ChatID != 0 {
+			return ErrForbidden
+		}
+		switch kind {
+		case uno.JoinGame, uno.LeaveGame:
+			return nil
+		case uno.StartGame, uno.SetRules, uno.CancelGame:
+			if actor.PlayerID != entry.ownerID && actor.PlayerID != entry.creatorID {
+				return ErrForbidden
+			}
+			return nil
+		case uno.PlayCard, uno.DrawCard, uno.PassTurn, uno.ChooseColor, uno.ChoosePlayer, uno.KeepHand, uno.CallBluff:
+			return nil
+		default:
+			return uno.ErrInvalidAction
+		}
+	}
 	if actor.ChatID != 0 && actor.ChatID != entry.chatID {
 		return ErrForbidden
 	}
@@ -183,7 +248,14 @@ func (s *Service) PublicView(ctx context.Context, id uno.GameID) (PublicGameView
 	}
 	defer entry.mu.Unlock()
 	if entry.final != nil {
-		return entry.final.clone(), nil
+		v := entry.final.clone()
+		if v.Rematch != nil {
+			s.manager.indexMu.RLock()
+			_, pending := s.manager.pendingResults[id]
+			s.manager.indexMu.RUnlock()
+			v.Rematch.Ready = !pending
+		}
+		return v, nil
 	}
 	return publicView(entry, entry.engine.Snapshot()), nil
 }

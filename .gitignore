@@ -9,3 +9,10 @@ web/dist/*
 web/coverage/
 mockup*.png
 /devseed
+.DS_Store
+*.har
+*.zip
+*.patch
+.reports/desempenho-local/
+.reports/diagnostico-fluidez/
+.reports/experiencia-local/
