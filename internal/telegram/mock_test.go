@@ -16,9 +16,11 @@ type mockBotAPI struct {
 	WebhookInfo        *telego.WebhookInfo
 	WebhookErr         error
 	SetWebhookErr      error
+	SetWebhookErrs     []error
 	DeleteWebhookErr   error
 	SetWebhookCalls    []telego.SetWebhookParams
 	DeleteWebhookCalls []telego.DeleteWebhookParams
+	GetUpdatesCalls    []telego.GetUpdatesParams
 	CommandsErr        error
 	ChatMemberErr      error
 	ChatMembers        map[int64]telego.ChatMember
@@ -72,12 +74,22 @@ func (m *mockBotAPI) SetWebhook(ctx context.Context, params *telego.SetWebhookPa
 	defer m.mu.Unlock()
 	if params != nil {
 		m.SetWebhookCalls = append(m.SetWebhookCalls, *params)
+	}
+	if len(m.SetWebhookErrs) > 0 {
+		err := m.SetWebhookErrs[0]
+		m.SetWebhookErrs = m.SetWebhookErrs[1:]
+		return err
+	}
+	if m.SetWebhookErr != nil {
+		return m.SetWebhookErr
+	}
+	if params != nil {
 		if m.WebhookInfo == nil {
 			m.WebhookInfo = &telego.WebhookInfo{}
 		}
 		m.WebhookInfo.URL = params.URL
 	}
-	return m.SetWebhookErr
+	return nil
 }
 
 func (m *mockBotAPI) DeleteWebhook(ctx context.Context, params *telego.DeleteWebhookParams) error {
@@ -122,6 +134,11 @@ func (m *mockBotAPI) UpdatesViaLongPolling(
 ) (<-chan telego.Update, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if params != nil {
+		copyParams := *params
+		copyParams.AllowedUpdates = append([]string(nil), params.AllowedUpdates...)
+		m.GetUpdatesCalls = append(m.GetUpdatesCalls, copyParams)
+	}
 	return m.UpdatesChan, nil
 }
 

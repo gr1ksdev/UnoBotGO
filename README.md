@@ -163,7 +163,9 @@ duas arquiteturas após as validações.
 
 ### Transporte Telegram
 
-Long polling é o padrão e o modo recomendado. Webhook permanece experimental, sem homologação real aprovada; consulte o [estado do projeto](docs/project-status.md#transportes-e-evidência-real). Para webhook, use `TELEGRAM_MODE=webhook` e `WEBHOOK_URL=https://bot.exemplo.com/telegram`; publique esse endpoint HTTPS por um proxy externo encaminhando ao servidor compartilhado (`WEB_ADDR`, padrão `:8080`). A URL pública é necessária para `setWebhook` e não pode ser deduzida do endereço local. O segredo de autenticação é derivado internamente; updates pendentes são sempre preservados.
+Long polling é o padrão para desenvolvimento local. Em produção atrás de HTTPS e reverse proxy, **webhook é o transporte recomendado**: ele elimina o ciclo de `getUpdates`/`429` e permite que o Telegram reenvie updates quando o endpoint responde `5xx`/`503`. Use `TELEGRAM_MODE=webhook` e `WEBHOOK_URL=https://bot.exemplo.com/telegram`; publique esse endpoint HTTPS pelo proxy encaminhando ao servidor compartilhado (`WEB_ADDR`, padrão `:8080`). A URL pública é necessária para `setWebhook` e não pode ser deduzida do endereço local. O segredo de autenticação é derivado internamente; updates pendentes são sempre preservados.
+
+O estado das partidas vive em memória: rode **uma única instância** do bot. No Coolify, configure o container com nome consistente/sem rolling update para que o container antigo seja parado antes do novo; caso contrário, polling pode sofrer `409` e webhook pode dividir updates entre instâncias. Detalhes em [docs/v2-telegram.md](docs/v2-telegram.md#transporte-webhook-e-operação-em-produção).
 
 ### Configuração V2
 

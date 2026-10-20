@@ -1,3 +1,27 @@
+# Decisão: webhook como transporte de produção e polling com long polling real
+
+## Data
+2026-10-19
+
+## Contexto
+O bot apresentou indisponibilidade intermitente, parando de responder a comandos e consultas inline. A investigação encontrou `GetUpdatesParams` sem `Timeout`, o que faz o telego v1.10.0 enviar `timeout=0` (short polling), além de cliente HTTP de 15s e tratamento de 429 limitado a `retry_after <= 5s`. O logger do telego estava descartado, ocultando 409/429 e falhas de rede. O bot roda em VPS Linode com Coolify, e o estado das partidas é em memória.
+
+## Decisão tomada
+1. Corrigir o polling para long polling real: `timeout=30`, `limit=100`, cliente HTTP de 45s e retry explícito de 8s.
+2. Fazer `getUpdates` esperar integralmente o `retry_after` de 429 (limite de 5 min, até 3 tentativas); demais métodos mantêm retry curto.
+3. Encaminhar logs do telego ao `slog` com redação de token; redigir erros de transporte na origem.
+4. Adicionar retry de `setWebhook`, log de `getWebhookInfo` e monitor de entrega a cada 5 min.
+5. Recomendar webhook em produção atrás de HTTPS/reverse proxy, mantendo polling corrigido como fallback.
+6. Exigir uma única instância: no Coolify, container com nome consistente/sem rolling update, ou Docker Compose. Vários jogos em grupos diferentes continuam suportados no mesmo processo; duas instâncias do bot não são.
+
+## Motivo
+Eliminar a classe de falha de short polling/429, tornar falhas de transporte observáveis e evitar divisão de estado entre containers durante deploys.
+
+## Impacto
+O polling deixa de consumir a API em modo curto e passa a respeitar rate limits. O webhook fica observável e com retry de registro, e o Telegram pode reenviar updates quando a fila responde 503. A operação passa a exigir deploy sem sobreposição; partidas em memória continuam sendo perdidas em qualquer reinício. Nenhuma migração ou mudança de schema.
+
+---
+
 # Decisão: resiliência do Telegram Dispatcher e estorno de tokens inline
 
 ## Data

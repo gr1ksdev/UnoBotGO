@@ -1,3 +1,23 @@
+# Correção de long polling, 429 e observabilidade do Telegram — 2026-10-19 (somente dev)
+
+- Pedido do usuário aprovado no plano `corrigir-polling-webhook-telegram_2026-10-19_22-34.md`: bot intermitentemente offline, sem comandos/inline; token vazado já revogado; hospedagem Coolify; preferência por solução completa e dúvida sobre webhook.
+- **Causa raiz do polling**:
+  - `UpdatesViaLongPolling` recebia `GetUpdatesParams` não nulo sem `Timeout`; o telego v1.10.0 envia `timeout=0` nesse caso (short polling), em vez do default de 8s.
+  - O cliente HTTP tinha timeout de 15s, incompatível com long polling.
+  - `SafeAPICaller` só repetia 429 com `retry_after <= 5s`; valores maiores viravam erro e o telego esperava apenas 8s.
+  - `telego.WithDiscardLogger()` escondia 409, 429 e erros de rede.
+- **Implementação**:
+  - `internal/telegram/client.go`: `longPollingTimeoutSeconds=30`, `telegramHTTPTimeout=45s`; logger telego encaminhado ao `slog` com redação de token; erros de transporte redigidos; `getUpdates` respeita `retry_after` integral (cap de 5 min) com até 3 tentativas, demais métodos mantêm retry curto.
+  - `internal/telegram/bot.go`: `GetUpdatesParams{Timeout: 30, Limit: 100}`, retry explícito de long polling de 8s, `registerWebhook` com 3 tentativas, log `webhook configured`, `webhook status` via `getWebhookInfo` e monitor a cada 5 min.
+  - `internal/telegram/shared_http.go`: webhook compartilhado usa o mesmo registro/log.
+  - Webhook continua retornando 503 quando a fila está cheia, para o Telegram reenviar.
+- **Operação**: estado de partidas em memória; vários grupos/jogos simultâneos funcionam no mesmo processo, mas duas instâncias do bot não. No Coolify, usar container name consistente/sem rolling update ou Docker Compose para parar o antigo antes do novo. Deploy perde partidas em andamento.
+- **Testes**: `go test ./...`, `go test -race ./...`, `go vet ./...`, `go build ./...` e `git diff --check` aprovados. Novos testes cobrem timeout de polling, retry 429 de `getUpdates`, redação de token, retry de webhook e 503 com dispatcher parado.
+- **Documentação**: `README.md`, `.env.example`, `docs/v2-telegram.md` e `docs/project-status.md` atualizados. Webhook recomendado em produção após validar proxy do Coolify e instância única; polling corrigido permanece como fallback.
+- Commit criado na `dev` (interno). A árvore pública foi promovida para `main` no commit `cd7b766` (`fix(telegram): correct long polling, 429 handling and webhook resilience`) e enviada para `origin/main`; a `dev` não foi enviada ao remoto nesta etapa.
+
+---
+
 # Resiliência do Dispatcher e Estorno de Tokens Inline — 2026-10-18 (somente dev)
 
 - Pedido do usuário aprovado no plano: `resiliencia-dispatcher-inline_2026-10-18_13-25.md`.

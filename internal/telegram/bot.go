@@ -30,6 +30,13 @@ var (
 
 var allowedUpdates = []string{"message", "inline_query", "chosen_inline_result", "callback_query", "my_chat_member"}
 
+const (
+	longPollingRetryTimeout     = 8 * time.Second
+	webhookRegistrationAttempts = 3
+	webhookRetryBaseDelay       = time.Second
+	webhookHealthCheckInterval  = 5 * time.Minute
+)
+
 type Bot struct {
 	finalizer        *game.Finalizer
 	resultRepository ranking.Repository
@@ -53,6 +60,7 @@ type Bot struct {
 	dedupe           *updateDeduper
 	externalHTTP     bool
 	onReady          func()
+	retrySleep       func(context.Context, time.Duration) error
 }
 
 type UserPrivacyRepository interface {
@@ -107,7 +115,7 @@ func New(api BotAPI, service *game.Service, tokens *TokenStore, renderer *Render
 	if renderer == nil {
 		renderer = NewRenderer(nil)
 	}
-	b := &Bot{api: api, service: service, tokens: tokens, renderer: renderer, logger: logger, transport: TransportConfig{Mode: TransportPolling, ListenAddr: defaultWebhookListenAddr}, dedupe: newUpdateDeduper(time.Now)}
+	b := &Bot{api: api, service: service, tokens: tokens, renderer: renderer, logger: logger, transport: TransportConfig{Mode: TransportPolling, ListenAddr: defaultWebhookListenAddr}, dedupe: newUpdateDeduper(time.Now), retrySleep: waitContext}
 	b.inlineHandler = NewInlineHandler(api, service, renderer, tokens, tokenTTL, nil, logger)
 	b.dispatcher = NewDispatcher(logger, func(ctx context.Context, q *telego.InlineQuery) { b.inlineHandler.HandleInlineQuery(ctx, q) })
 	b.inlineHandler.dispatcher = b.dispatcher
@@ -186,6 +194,121 @@ func (b *Bot) registerCommands(ctx context.Context) error {
 	}
 	return nil
 }
+
+// longPollingParams must include a positive Timeout. telego only applies its
+// default timeout when params is nil; passing a non-nil struct without Timeout
+// results in timeout=0 (short polling) and much higher 429 exposure.
+func longPollingParams() *telego.GetUpdatesParams {
+	return &telego.GetUpdatesParams{
+		Limit:          100,
+		Timeout:        longPollingTimeoutSeconds,
+		AllowedUpdates: allowedUpdates,
+	}
+}
+
+func (b *Bot) retry(ctx context.Context, delay time.Duration) error {
+	if b.retrySleep == nil {
+		return waitContext(ctx, delay)
+	}
+	return b.retrySleep(ctx, delay)
+}
+
+func webhookLogURL(raw string) string {
+	if raw == "" {
+		return "not-set"
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "invalid"
+	}
+	return u.Scheme + "://" + u.Host + u.Path
+}
+
+func (b *Bot) registerWebhook(ctx context.Context, cfg TransportConfig) error {
+	params := &telego.SetWebhookParams{
+		URL:                cfg.WebhookURL,
+		SecretToken:        cfg.WebhookSecret,
+		AllowedUpdates:     allowedUpdates,
+		DropPendingUpdates: config.WebhookDropPendingUpdates,
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= webhookRegistrationAttempts; attempt++ {
+		if attempt > 1 {
+			if err := b.retry(ctx, time.Duration(attempt-1)*webhookRetryBaseDelay); err != nil {
+				return err
+			}
+		}
+		if err := b.api.SetWebhook(ctx, params); err != nil {
+			lastErr = err
+			b.logger.WarnContext(ctx, "failed to set webhook",
+				"attempt", attempt,
+				"error", err,
+			)
+			continue
+		}
+		b.logger.InfoContext(ctx, "webhook configured", "url", webhookLogURL(cfg.WebhookURL))
+		b.logWebhookStatus(ctx)
+		return nil
+	}
+
+	return fmt.Errorf("set webhook after %d attempts: %w", webhookRegistrationAttempts, lastErr)
+}
+
+func (b *Bot) logWebhookStatus(ctx context.Context) {
+	info, err := b.api.GetWebhookInfo(ctx)
+	if err != nil {
+		b.logger.WarnContext(ctx, "failed to read webhook status", "error", err)
+		return
+	}
+	if info == nil {
+		return
+	}
+	attrs := []any{
+		"url", webhookLogURL(info.URL),
+		"pending_update_count", info.PendingUpdateCount,
+		"allowed_updates", info.AllowedUpdates,
+	}
+	if info.LastErrorDate > 0 {
+		attrs = append(attrs,
+			"last_error_date", info.LastErrorDate,
+			"last_error_message", redactToken(info.LastErrorMessage),
+		)
+	}
+	b.logger.InfoContext(ctx, "webhook status", attrs...)
+}
+
+func (b *Bot) startWebhookMonitor(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(webhookHealthCheckInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				info, err := b.api.GetWebhookInfo(ctx)
+				if err != nil {
+					b.logger.WarnContext(ctx, "failed to read webhook health", "error", err)
+					continue
+				}
+				if info == nil {
+					continue
+				}
+				lastErrorRecent := info.LastErrorDate > 0 && time.Since(time.Unix(info.LastErrorDate, 0)) < 2*webhookHealthCheckInterval
+				if info.PendingUpdateCount > 0 || lastErrorRecent {
+					b.logger.WarnContext(ctx, "webhook delivery issue",
+						"url", webhookLogURL(info.URL),
+						"pending_update_count", info.PendingUpdateCount,
+						"last_error_date", info.LastErrorDate,
+						"last_error_message", redactToken(info.LastErrorMessage),
+					)
+				}
+			}
+		}
+	}()
+}
+
 func (b *Bot) runPolling(ctx context.Context) error {
 	info, err := b.api.GetWebhookInfo(ctx)
 	if err != nil {
@@ -197,7 +320,11 @@ func (b *Bot) runPolling(ctx context.Context) error {
 		}
 		b.logger.Info("deleted existing webhook before polling")
 	}
-	updates, err := b.api.UpdatesViaLongPolling(ctx, &telego.GetUpdatesParams{AllowedUpdates: allowedUpdates})
+	updates, err := b.api.UpdatesViaLongPolling(
+		ctx,
+		longPollingParams(),
+		telego.WithLongPollingRetryTimeout(longPollingRetryTimeout),
+	)
 	if err != nil {
 		return fmt.Errorf("start long polling: %w", err)
 	}
@@ -258,13 +385,14 @@ func (b *Bot) runWebhook(ctx context.Context, cfg TransportConfig) error {
 		return nil
 	default:
 	}
-	if err := b.api.SetWebhook(ctx, &telego.SetWebhookParams{URL: cfg.WebhookURL, SecretToken: cfg.WebhookSecret, AllowedUpdates: allowedUpdates, DropPendingUpdates: config.WebhookDropPendingUpdates}); err != nil {
+	if err := b.registerWebhook(ctx, cfg); err != nil {
 		_ = server.Shutdown(context.Background())
 		b.dispatcher.Stop(10 * time.Second)
-		return fmt.Errorf("set webhook: %w", err)
+		return err
 	}
 	b.logger.Info("started webhook server", "addr", cfg.ListenAddr, "path", path)
 	b.startScheduler(ctx)
+	b.startWebhookMonitor(ctx)
 	<-ctx.Done()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

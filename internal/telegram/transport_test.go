@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"github.com/malbs/UnoGoBot/internal/config"
 	"net/http"
 	"net/http/httptest"
@@ -123,5 +124,40 @@ func TestSharedWebhookUsesDerivedSecret(t *testing.T) {
 				t.Fatalf("derived secret authentication status=%d want=%d", recorder.Code, want)
 			}
 		}
+	}
+}
+
+func TestWebhookRegistrationRetriesTransientFailure(t *testing.T) {
+	api := newMockBotAPI()
+	api.SetWebhookErrs = []error{errors.New("temporary telegram failure")}
+	svc, _ := game.NewService()
+	b := New(api, svc, nil, nil, time.Minute, nil)
+	defer b.dispatcher.Stop(time.Second)
+	b.retrySleep = func(context.Context, time.Duration) error { return nil }
+
+	if err := b.registerWebhook(context.Background(), TransportConfig{WebhookURL: "https://example.com/telegram", WebhookSecret: "secret"}); err != nil {
+		t.Fatalf("register webhook: %v", err)
+	}
+	if len(api.SetWebhookCalls) != 2 {
+		t.Fatalf("expected 2 setWebhook attempts, got %d", len(api.SetWebhookCalls))
+	}
+	if api.SetWebhookCalls[1].SecretToken != "secret" || api.SetWebhookCalls[1].DropPendingUpdates {
+		t.Fatalf("unexpected webhook params: %#v", api.SetWebhookCalls[1])
+	}
+}
+
+func TestWebhookHandlerReturns503WhenDispatcherStopped(t *testing.T) {
+	svc, _ := game.NewService()
+	b := New(newMockBotAPI(), svc, nil, nil, time.Minute, nil)
+	b.dispatcher.Stop(time.Second)
+
+	body := `{"update_id":77,"message":{"message_id":1,"chat":{"id":-1001,"type":"supergroup"},"from":{"id":1,"first_name":"Alice"},"text":"/novo"}}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(telego.WebhookSecretTokenHeader, "secret")
+	recorder := httptest.NewRecorder()
+	b.webhookHandler("secret").ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d want %d", recorder.Code, http.StatusServiceUnavailable)
 	}
 }
