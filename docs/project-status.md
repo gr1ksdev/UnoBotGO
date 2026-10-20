@@ -31,8 +31,8 @@ A coluna Implementado considera a `dev`; Main indica a presença na base públic
 | Clássico | IMPLEMENTED + HOMOLOGATED | Regras e partidas determinísticas | Telegram real | Sim | Usa BotRules, não ClassicRules estrito |
 | Caseiro | IMPLEMENTED + HOMOLOGATED | Stacking, blefe e troca de mãos | Telegram real | Parcial | Regras diferentes por branch |
 | TURN_TIMEOUT | IMPLEMENTED + HOMOLOGATED | Revalidação e corrida com término | Telegram real | Sim | Turno pulado automaticamente por timeout |
-| Polling | IMPLEMENTED + HOMOLOGATED | Transporte/pipeline com mocks | Telegram real | Sim | Padrão e recomendado |
-| Webhook | IMPLEMENTED BUT NOT HOMOLOGATED | HTTP, secret, dedupe, lifecycle | Não aprovado no teste real | Sim | Experimental; não recomendado atualmente |
+| Polling | IMPLEMENTED + HOMOLOGATED | Transporte/pipeline com mocks | Telegram real | Sim | Padrão local; long polling corrigido para 30s |
+| Webhook | IMPLEMENTED; PRODUCTION VALIDATION PENDING | HTTP, secret, retry, status, dedupe, lifecycle | Testes automatizados; Coolify real pendente | Sim | Recomendado em produção após validar proxy e instância única |
 | Docker V2 | IMPLEMENTED BUT NOT HOMOLOGATED | Build no CI | Build confirmado; operação não certificada | Sim | linux/amd64 e linux/arm64 |
 | GHCR | IMPLEMENTED + HOMOLOGATED | Workflow de publicação aprovado | Publicação pelo CI confirmada | Sim | latest e sha-commit |
 | CI | IMPLEMENTED + HOMOLOGATED | Execuções aprovadas | N/A | Sim | dev valida com Postgres; main valida/publica |
@@ -56,17 +56,19 @@ A coluna Implementado considera a `dev`; Main indica a presença na base públic
 
 ## Transportes e evidência real
 
-**Polling** permanece o default de `internal/config/config.go` e a recomendação atual.
-Há relato de uso em partidas reais, em escala pequena. Isso não homologa toda combinação
-de regra, cliente, concorrência ou indisponibilidade da API.
+**Polling** permanece o default de `internal/config/config.go` para desenvolvimento local.
+A implementação foi corrigida para usar long polling real (`timeout=30`, cliente HTTP de 45s)
+e para respeitar `retry_after` de `getUpdates`. Há relato de uso em partidas reais, em escala
+pequena. Isso não homologa toda combinação de regra, cliente, concorrência ou indisponibilidade
+da API.
 
-**Webhook** está implementado nas duas branches e tem testes automatizados.
-O relato operacional fornecido para esta revisão registra ausência de resposta,
-atrasos grandes e comportamento não confiável no teste real. A revisão anterior
-não identificou causa óbvia; isso **não atribui a falha ao código nem declara o
-transporte quebrado**. Não há evidência posterior de aceite que substitua esse relato.
-Permanece **experimental, não homologado e não recomendado**; use polling.
-Esta milestone não investigou nem alterou o transporte.
+**Webhook** está implementado nas duas branches e tem testes automatizados, retry de
+`setWebhook`, logs de `getWebhookInfo` e monitor de entrega. O relato operacional anterior
+registrava ausência de resposta e atrasos no teste real; a revisão atual não encontrou uma
+causa única, mas passou a cobrir o requisito operacional mais provável: **uma única instância**
+e deploy sem rolling update. A recomendação é usar webhook em produção atrás de HTTPS, após
+validar o proxy do Coolify e confirmar que o header de secret e o POST chegam ao endpoint.
+A homologação real nesse ambiente ainda está pendente; polling corrigido permanece como fallback.
 
 ## Modos e cartas
 
@@ -142,7 +144,7 @@ de grupos ou milhares de jogadores. Isso é uma limitação conhecida, não um b
 | M2 — Application | Implementada, validada internamente e publicada; sem persistência durável |
 | M3 — Telegram MVP | Publicado e usado em partidas; aceite completo de UX não documentado |
 | M5 — Build/container | CI e publicação GHCR entregues; extensão AMD64/ARM64 publicada |
-| M6 — Webhook transport | Implementado e publicado; homologação real não aprovada, experimental |
+| M6 — Webhook transport | Implementado e publicado; retry/status adicionados; homologação real no Coolify pendente |
 | Milestone corretiva V2 | Lifecycle/timeout/menções publicados e testados; aceite visual pendente |
 | Simulador e recuperação | Implementados, testados e publicados; não são homologação de carga Telegram |
 | Gameplay UX Polish | Ordem lógica validada/exibida, room lock e mensagens compactas; testes concluídos, aceite real pendente; somente dev |

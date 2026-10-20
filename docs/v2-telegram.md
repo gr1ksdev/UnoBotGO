@@ -280,13 +280,22 @@ O UnoBotGO V2 é executado via `./cmd/bot` e consome diretamente a camada de apl
 
 ## 2. Transporte e Concorrência
 
-- **Biblioteca**: `telego v1.10.0` com long polling e `net/http`.
+- **Biblioteca**: `telego v1.10.0` com long polling, webhook e `net/http`.
+- **Long polling**:
+  - `GetUpdatesParams` sempre envia `timeout=30` e `limit=100`. Parâmetros não nulos sem `Timeout` fariam o telego enviar `timeout=0` (short polling), aumentando muito o consumo e a exposição a `429`.
+  - O cliente HTTP usa timeout de 45s, acima dos 30s do long polling, para dar margem à resposta do Telegram.
+  - O telego reaplica long polling a cada 8s após erro de transporte.
+  - Em `429`, `getUpdates` respeita integralmente o `retry_after` informado (limitado a 5 minutos) antes de tentar de novo; os demais métodos mantêm no máximo uma repetição curta para não bloquear trabalho visível.
 - **Startup seguro**:
   - `GetMe`: valida nome de usuário e flag `SupportsInlineQueries`. Se o modo inline estiver desabilitado, o bot falha no startup orientando o uso do `/setinline` no @BotFather.
-  - `GetWebhookInfo`: se houver webhook ativo, falha no startup instruindo o usuário a deletar o webhook manualmente para evitar conflito com long polling.
+  - `GetWebhookInfo`: em polling, um webhook ativo é removido com `drop_pending_updates=false` antes de iniciar o long polling.
   - `SetMyCommands`: registra menus por escopo. O privado recebe `/start` e
     `/help`; grupos recebem comandos de partida e `/help`; o escopo padrão mantém
     `/help` como fallback.
+- **Observabilidade**:
+  - Os logs internos do telego são encaminhados ao `slog` com o token redigido.
+  - Erros de transporte também são redigidos antes de sair do caller.
+  - No webhook, o startup registra `webhook configured` e `webhook status`; um monitor a cada 5 minutos alerta quando houver `pending_update_count` ou erro recente de entrega.
 - **Apresentação privada**:
   - `/start` envia boas-vindas, uma descrição curta e um botão para adicionar o
     bot a grupos usando `https://t.me/<username>?startgroup=true`.
@@ -297,16 +306,18 @@ O UnoBotGO V2 é executado via `./cmd/bot` e consome diretamente a camada de apl
   - `/help` lista comandos em blockquote, mantém `/ajuda` como alias e registra a
     origem brasileira baseada no `@unopybot`.
 - **Particionamento por ChatID**:
-  - 8 workers com canais de capacidade 32 dedicados às mensagens, comandos e confirmações de ações agrupados pelo `ChatID`.
+  - 8 workers com canais de capacidade 128 dedicados às mensagens, comandos e confirmações de ações agrupados pelo `ChatID`.
   - Garante ordem estrita de execução para a mesma partida, eliminando condições de corrida entre comandos e jogadas.
+  - Cada tarefa de chat tem timeout de 20s; chats diferentes podem ser processados em paralelo, e vários grupos podem manter partidas simultâneas no mesmo processo.
 - **Recuperação por ChatID**:
-  - `/reset` entra por uma fila independente com 2 workers e capacidade 16.
+  - `/reset` entra por uma fila independente com 2 workers e capacidade 32.
   - Cada reset troca a geração e o contexto do chat; trabalhos antigos são descartados e comandos novos seguem por uma fila limpa dedicada àquele grupo.
 - **Inline Workers**:
-  - 4 workers dedicados a responder consultas inline através de uma fila com capacidade 64.
+  - 4 workers dedicados a responder consultas inline através de uma fila com capacidade 128.
   - Não bloqueiam nem são bloqueados por requisições de rede no chat de grupo.
 - **Backpressure**:
   - Filas limitadas rejeitam trabalho de forma segura sob sobrecarga sem corromper o estado do jogo.
+  - Em webhook, a rejeição vira `503` e o Telegram reenvia o update; em polling, a tarefa descartada não é reenviada.
 - **Shutdown gracioso**:
   - Intercepta `SIGINT`/`SIGTERM`, interrompe o polling, drena os trabalhos admitidos nas filas em até 10 segundos e encerra as conexões.
 
@@ -423,13 +434,32 @@ Quando `cache_time` é 0, o encoder padrão omite o campo, fazendo o Telegram ad
    - Continuar a partida até um jogador bater (zero cartas).
    - Sob `BotRules`, o jogador obtém a 1ª colocação e a partida continua para os demais decidirem as próximas colocações até o encerramento total (`GameFinished`).
 
-## Transporte Webhook
+## Transporte Webhook e Operação em Produção
 
-O transporte padrão é o long polling (`TELEGRAM_MODE=polling`). Para receber updates por webhook, configure `TELEGRAM_MODE=webhook` e uma `WEBHOOK_URL` pública HTTPS com caminho dedicado, por exemplo `https://bot.exemplo.com/telegram`. O servidor compartilhado atende em `WEB_ADDR` (padrão `:8080`); a terminação TLS fica no reverse proxy ou plataforma externa. A URL pública não pode ser deduzida do endereço local. O segredo é derivado internamente com HMAC-SHA256, master `MINIAPP_SECRET` decodificado e contexto exclusivo `unobotgo/v2/telegram-webhook-secret/v1`. A saída em Base64URL sem padding tem 43 caracteres compatíveis com `secret_token`; não é a chave AES original. O header `X-Telegram-Bot-Api-Secret-Token` é validado em tempo constante e o segredo nunca é registrado.
+O transporte padrão é o long polling (`TELEGRAM_MODE=polling`). Para produção atrás de HTTPS e reverse proxy, o webhook é o transporte recomendado: ele elimina o ciclo de `getUpdates`, não sofre `429` de long polling e permite que o Telegram reenvie updates quando o endpoint responde `5xx`/`503`.
 
-No modo webhook o bot aplica `setWebhook` em todo startup, inclusive quando a URL não mudou, para garantir que alterações do segredo sejam efetivadas. `drop_pending_updates` é sempre `false` (política interna fixa). Ao voltar para polling, um webhook existente é removido com `drop_pending_updates=false`, preservando updates pendentes. O shutdown normal não remove o webhook remoto.
+Para receber updates por webhook, configure `TELEGRAM_MODE=webhook` e uma `WEBHOOK_URL` pública HTTPS com caminho dedicado, por exemplo `https://bot.exemplo.com/telegram`. O servidor compartilhado atende em `WEB_ADDR` (padrão `:8080`); a terminação TLS fica no reverse proxy ou plataforma externa. A URL pública não pode ser deduzida do endereço local. O segredo é derivado internamente com HMAC-SHA256, master `MINIAPP_SECRET` decodificado e contexto exclusivo `unobotgo/v2/telegram-webhook-secret/v1`. A saída em Base64URL sem padding tem 43 caracteres compatíveis com `secret_token`; não é a chave AES original. O header `X-Telegram-Bot-Api-Secret-Token` é validado em tempo constante e o segredo nunca é registrado.
 
-`GET /healthz` retorna apenas `200 OK` para liveness. O endpoint de webhook aceita somente `POST` JSON no caminho configurado, com corpo limitado a 1 MiB. Updates repetidos são ignorados por uma deduplicação em memória; após reinício essa proteção é perdida.
+No modo webhook o bot aplica `setWebhook` em todo startup, inclusive quando a URL não mudou, para garantir que alterações do segredo sejam efetivadas. Falhas transitórias são repetidas até três vezes com backoff curto. `drop_pending_updates` é sempre `false` (política interna fixa). Ao voltar para polling, um webhook existente é removido com `drop_pending_updates=false`, preservando updates pendentes. O shutdown normal não remove o webhook remoto.
+
+### Requisito de instância única
+
+O estado das partidas vive em memória. Vários grupos e partidas simultâneas funcionam no mesmo processo, mas **duas instâncias do bot não são suportadas**:
+
+- Em polling, dois containers com o mesmo token recebem `409 Conflict` do Telegram.
+- Em webhook, o proxy pode distribuir updates entre containers diferentes, dividindo o estado das partidas.
+- O Coolify faz rolling update por padrão e inicia o container novo antes de parar o antigo. Configure **Container naming = Consistent name (no rolling updates)** ou use um deploy Docker Compose, que para o container antigo antes de iniciar o novo.
+
+Mantenha uma única instância e nenhum processo local/remoto usando o mesmo token. Qualquer deploy reinicia o processo e perde partidas em andamento; isso é uma limitação separada do transporte.
+
+### Verificação operacional
+
+- O startup registra `webhook configured` com URL sanitizada e `webhook status` com `pending_update_count` e último erro de entrega.
+- Um monitor a cada 5 minutos alerta quando houver updates pendentes ou erro recente.
+- `GET /healthz` retorna `200 OK` para liveness; `/readyz` só fica pronto depois do registro do webhook.
+- O endpoint de webhook aceita somente `POST` JSON no caminho configurado, com corpo limitado a 1 MiB, e retorna `503` quando a fila está cheia para o Telegram reenviar.
+- Updates repetidos são ignorados por uma deduplicação em memória; após reinício essa proteção é perdida.
+- Valide com `getWebhookInfo` após o deploy e teste comandos, inline e callbacks. Se o proxy não encaminhar `X-Telegram-Bot-Api-Secret-Token` ou o POST, o bot ficará sem updates mesmo com o processo saudável.
 
 ## Endereçamento de comandos em grupos
 

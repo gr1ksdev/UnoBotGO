@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -160,7 +161,7 @@ func TestSafeAPICaller_Retry429UnderThreshold(t *testing.T) {
 	}
 }
 
-func TestSafeAPICaller_NoRetry429OverThreshold(t *testing.T) {
+func TestSafeAPICaller_NoRetry429OverThresholdForUserMethods(t *testing.T) {
 	caller := &mockCaller{
 		fn: func(ctx context.Context, url string, data *telegoapi.RequestData) (*telegoapi.Response, error) {
 			return &telegoapi.Response{
@@ -189,9 +190,72 @@ func TestSafeAPICaller_NoRetry429OverThreshold(t *testing.T) {
 		t.Errorf("expected Ok: false")
 	}
 	if slept {
-		t.Errorf("sleeper should not be called for retry_after > 5s")
+		t.Errorf("sleeper should not be called for retry_after > 5s on sendMessage")
 	}
 	if len(caller.calls) != 1 {
 		t.Errorf("expected exactly 1 attempt, got %d", len(caller.calls))
+	}
+}
+
+func TestSafeAPICaller_GetUpdatesRetries429OverThreshold(t *testing.T) {
+	attempts := 0
+	caller := &mockCaller{
+		fn: func(ctx context.Context, url string, data *telegoapi.RequestData) (*telegoapi.Response, error) {
+			attempts++
+			if attempts == 1 {
+				return &telegoapi.Response{
+					Ok: false,
+					Error: &telegoapi.Error{
+						ErrorCode:   http.StatusTooManyRequests,
+						Description: "Too Many Requests",
+						Parameters:  &telegoapi.ResponseParameters{RetryAfter: 10},
+					},
+				}, nil
+			}
+			return &telegoapi.Response{Ok: true}, nil
+		},
+	}
+
+	safe := NewSafeAPICaller(caller, nil)
+	var sleptFor time.Duration
+	safe.sleeper = func(ctx context.Context, d time.Duration) error {
+		sleptFor = d
+		return nil
+	}
+
+	resp, err := safe.Call(context.Background(), "https://api.telegram.org/bot123/getUpdates", &telegoapi.RequestData{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.Ok {
+		t.Fatal("expected successful retry")
+	}
+	if sleptFor != 10*time.Second {
+		t.Fatalf("expected full retry_after of 10s, got %v", sleptFor)
+	}
+	if attempts != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts)
+	}
+}
+
+func TestSafeAPICaller_RedactsTokenFromNetworkError(t *testing.T) {
+	const token = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	networkErr := fmt.Errorf("Post \"https://api.telegram.org/bot%s/getUpdates\": connection reset", token)
+	caller := &mockCaller{
+		fn: func(ctx context.Context, url string, data *telegoapi.RequestData) (*telegoapi.Response, error) {
+			return nil, networkErr
+		},
+	}
+
+	safe := NewSafeAPICaller(caller, nil)
+	_, err := safe.Call(context.Background(), "https://api.telegram.org/bot"+token+"/getUpdates", &telegoapi.RequestData{})
+	if err == nil {
+		t.Fatal("expected network error")
+	}
+	if strings.Contains(err.Error(), token) {
+		t.Fatalf("token leaked in error: %v", err)
+	}
+	if !errors.Is(err, networkErr) {
+		t.Fatal("redacted error must preserve errors.Is")
 	}
 }

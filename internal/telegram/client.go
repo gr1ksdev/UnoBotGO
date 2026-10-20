@@ -3,15 +3,78 @@ package telegram
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/mymmrac/telego"
 	"github.com/mymmrac/telego/telegoapi"
 )
+
+const (
+	// Long polling waits up to 30s for an update. The HTTP client timeout must
+	// stay above it so telego can finish the request and return a response.
+	longPollingTimeoutSeconds = 30
+	telegramHTTPTimeout       = 45 * time.Second
+
+	safeCallerMaxAttempts   = 3
+	maxGetUpdatesRetryAfter = 5 * time.Minute
+)
+
+var telegramTokenPattern = regexp.MustCompile(`[0-9]{3,}:[A-Za-z0-9_-]{10,}`)
+
+// redactToken removes Telegram bot tokens from strings before they reach logs
+// or callers. Errors from net/http commonly embed the full request URL.
+func redactToken(value string) string {
+	return telegramTokenPattern.ReplaceAllString(value, "[REDACTED]")
+}
+
+type redactedError struct {
+	err error
+}
+
+func (e *redactedError) Error() string { return redactToken(e.err.Error()) }
+func (e *redactedError) Unwrap() error { return e.err }
+
+func redactError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &redactedError{err: err}
+}
+
+func waitContext(ctx context.Context, duration time.Duration) error {
+	if duration <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+// telegoSlogLogger forwards telego's library logs to slog after removing the
+// bot token. The default telego logger is discarded in production, which hides
+// long-polling failures such as 409 and network errors.
+type telegoSlogLogger struct {
+	logger *slog.Logger
+}
+
+func (l telegoSlogLogger) Debugf(format string, args ...any) {
+	l.logger.Debug("telego", "message", redactToken(fmt.Sprintf(format, args...)))
+}
+
+func (l telegoSlogLogger) Errorf(format string, args ...any) {
+	l.logger.Error("telego", "message", redactToken(fmt.Sprintf(format, args...)))
+}
 
 // BotAPI defines the contract for interacting with the Telegram Bot API.
 // Allows mock implementations in tests.
@@ -105,16 +168,9 @@ func NewSafeAPICaller(caller telegoapi.Caller, logger *slog.Logger) *SafeAPICall
 		logger = slog.Default()
 	}
 	return &SafeAPICaller{
-		caller: caller,
-		logger: logger,
-		sleeper: func(ctx context.Context, d time.Duration) error {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(d):
-				return nil
-			}
-		},
+		caller:  caller,
+		logger:  logger,
+		sleeper: waitContext,
 	}
 }
 
@@ -128,54 +184,79 @@ func SanitizeMethod(rawURL string) string {
 }
 
 func (s *SafeAPICaller) Call(ctx context.Context, url string, data *telegoapi.RequestData) (*telegoapi.Response, error) {
-	resp, err := s.caller.Call(ctx, url, data)
-	if err != nil {
-		// Network errors, timeouts or context errors are not retried.
-		s.logger.DebugContext(ctx, "telegram transport error",
-			"method", SanitizeMethod(url),
-			"error", "network request failed",
-		)
-		return nil, err
-	}
+	method := SanitizeMethod(url)
 
-	if resp == nil {
-		return nil, fmt.Errorf("nil response from caller")
-	}
+	for attempt := 1; attempt <= safeCallerMaxAttempts; attempt++ {
+		resp, err := s.caller.Call(ctx, url, data)
+		if err != nil {
+			// Network errors, timeouts or context errors are not retried here.
+			// telego's long-polling loop applies its own retry policy.
+			s.logger.DebugContext(ctx, "telegram transport error",
+				"method", method,
+				"error", "network request failed",
+			)
+			return nil, redactError(err)
+		}
 
-	// Telegram API error check
-	if !resp.Ok && resp.ErrorCode == http.StatusTooManyRequests {
+		if resp == nil {
+			return nil, errors.New("nil response from caller")
+		}
+
+		if resp.Ok || resp.Error == nil || resp.ErrorCode != http.StatusTooManyRequests {
+			return resp, nil
+		}
+
 		retryAfter := 0
 		if resp.Parameters != nil {
 			retryAfter = resp.Parameters.RetryAfter
 		}
-
 		s.logger.WarnContext(ctx, "telegram rate limited (429)",
-			"method", SanitizeMethod(url),
+			"method", method,
 			"retry_after", retryAfter,
+			"attempt", attempt,
 		)
 
-		// Retry at most once if retry_after is between 1 and 5 seconds
-		if retryAfter > 0 && retryAfter <= 5 {
-			if sleepErr := s.sleeper(ctx, time.Duration(retryAfter)*time.Second); sleepErr != nil {
+		if retryAfter <= 0 {
+			return resp, nil
+		}
+		delay := time.Duration(retryAfter) * time.Second
+
+		// getUpdates is the only method where waiting the full retry_after is
+		// correct: it runs in the long-polling loop and is not holding a chat
+		// worker. Other methods keep the short, single retry to avoid blocking
+		// user-visible work for tens of seconds.
+		if method == "getUpdates" {
+			if attempt == safeCallerMaxAttempts {
+				return resp, nil
+			}
+			if delay > maxGetUpdatesRetryAfter {
+				delay = maxGetUpdatesRetryAfter
+			}
+			if sleepErr := s.sleeper(ctx, delay); sleepErr != nil {
 				return nil, sleepErr
 			}
-			// One retry attempt
-			retryResp, retryErr := s.caller.Call(ctx, url, data)
-			if retryErr != nil {
-				return nil, retryErr
-			}
-			return retryResp, nil
+			continue
+		}
+
+		if attempt > 1 || delay > 5*time.Second {
+			return resp, nil
+		}
+		if sleepErr := s.sleeper(ctx, delay); sleepErr != nil {
+			return nil, sleepErr
 		}
 	}
 
-	return resp, nil
+	return nil, errors.New("telegram retry loop exhausted")
 }
 
 // NewBot creates a production telego.Bot configured with our safe caller, custom constructor,
 // and disabled raw library logging.
 func NewBot(token string, httpClient *http.Client, logger *slog.Logger) (*telego.Bot, error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 15 * time.Second}
+		httpClient = &http.Client{Timeout: telegramHTTPTimeout}
 	}
 
 	httpCaller := telegoapi.HTTPCaller{Client: httpClient}
@@ -185,6 +266,6 @@ func NewBot(token string, httpClient *http.Client, logger *slog.Logger) (*telego
 	return telego.NewBot(token,
 		telego.WithAPICaller(safeCaller),
 		telego.WithRequestConstructor(constructor),
-		telego.WithDiscardLogger(),
+		telego.WithLogger(telegoSlogLogger{logger: logger}),
 	)
 }
