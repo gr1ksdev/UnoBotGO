@@ -1,3 +1,65 @@
+# Redesign e correção visual do modal de Trocar Mãos no WebApp — 2026-11-02
+
+- **Pedido do usuário aprovado**:
+  - Corrigir o menu de seleção da carta Trocar Mãos que estava invertido/desalinhado ("de cabeça pra baixo"), além de feio e não condizente com a identidade visual do jogo.
+- **Implementação**:
+  - `web/src/pages/Game.tsx`: modal de escolha de alvo (`view.phase === 4`) reformulado com cabeçalho ilustrado (badge `🔀`, título `Trocar de Mãos` e subtítulo), linhas interativas com avatar do jogador, nome com ellipsis, quantidade de cartas atual (`{p.count} cartas`) com ícone de cartas, e botão secundário dedicado `Manter minhas cartas ({me.count})`.
+  - `web/src/game-v2.css`: estilos v2 completos para `.v2-choice.target-sheet` com fundo glassmorphism escuro (`#0c1c24f2`), borda em ciano neon (`#00bcc4`), tipografia `MatchoLexend`, hover interativo e `rotation: 0` explícito isolado de qualquer animação GSAP.
+  - `web/dist`: bundle compilado via Vite/Deno para o binário Go embutido (`go:embed all:dist`).
+- **Testes**:
+  - `web/src/pages/Game.test.tsx`: novo teste cobrindo a renderização do modal de Trocar Mãos, verificação de contagem de cartas, envio de ação `target` e ação `keep`.
+  - Vitest: 143/143 testes aprovados. Typecheck: 0 erros.
+  - Backend Go: todas as suítes aprovadas com sucesso.
+
+---
+
+# Posições da mesa no WebApp: 1 em cada lado com 3 jogadores — 2026-11-02
+
+- **Pedido do usuário aprovado**:
+  - Em partidas com 3 jogadores no total (você + 2 oponentes), dispor os oponentes um em cada lado (esquerda e direita) com o jogador local embaixo, mantendo o topo livre.
+- **Implementação**:
+  - `web/src/pages/Game.tsx`: bloco condicional para 2 oponentes (`opponents.length === 2`) associa `opponents[0]` à classe `seat-left` e `opponents[1]` à classe `seat-right`.
+  - `web/src/game-v2.css`: classes `.seat-left` e `.seat-right` refinadas com posicionamento lateral seguro (`top: 43%`, `width: 70px`), `text-overflow: ellipsis` nos nomes e media query para telas estreitas (< 380px) evitando colisão com a mesa PixiJS central.
+  - `web/dist`: bundle de produção recompilado via Vite/Deno para que o binário Go embutido (`go:embed all:dist`) sirva o layout atualizado.
+- **Testes**:
+  - `web/src/pages/Game.test.tsx`: novo teste unitário validando que com 2 oponentes são renderizados `.seat-left` e `.seat-right` (sem `.seat-top`), e com 3 oponentes a cruz completa é montada.
+  - 142 testes do Vitest e typecheck do TypeScript 100% aprovados.
+  - Testes do backend Go (`go test ./internal/...`) e `go build ./cmd/bot` 100% aprovados.
+
+---
+
+# Salas WebApp: capacidade de 4 jogadores, mesa em cruz, lista de participantes no convite e bloqueio de partida iniciada — 2026-10-31
+
+- **Pedido do usuário aprovado**:
+  - Limitar capacidade do WebApp / WebSocket a 4 jogadores.
+  - Mesa com assentos em cruz centralizados: um em cima, um embaixo, um na esquerda e um na direita.
+  - Mensagem do link da mesa mostrando a lista de jogadores que já estão na sala.
+  - Tela/mensagem clara avisando que a partida já foi iniciada quando alguém tentar entrar após o início.
+- **Implementação**:
+  - `internal/httpapi/live.go` e `internal/httpapi/rooms.go`: capacidade ajustada para 4 em salas livres (`RoomFree`), com validação de limite e exposição do status `started`.
+  - `web/src/pages/Game.tsx` e `web/src/game-v2.css`: assentos dos oponentes dispostos em `.seat-top`, `.seat-left`, `.seat-right`, com o jogador local em `.local-player` (Bottom), todos centralizados ao redor da mesa PixiJS.
+  - `web/src/components/ShareRoom.tsx`: formatação de texto incluindo `Jogadores na sala (X/4): • Jogador...` para compartilhamento e clipboard.
+  - `web/src/pages/Invite.tsx` e `web/src/pages/Game.tsx`: renderização de card dedicado informando "Esta partida já foi iniciada!" com bloqueio de botão e rota para voltar a `/play`.
+- **Testes**:
+  - Backend: `TestFreeRoomCapacityFourAndStartedRejection` em `internal/httpapi/rooms_test.go`.
+  - Frontend: `Invite.test.tsx`, `Game.test.tsx` e suíte completa Vitest (141 testes) passando 100%. `deno task typecheck` com 0 erros.
+
+---
+
+# Substituição de lobby abandonado via /novo com proteção de partidas ativas — 2026-10-31
+
+- **Pedido do usuário aprovado**: permitir que `/novo` crie um lobby limpo caso exista um jogo perdido que ainda não iniciou (`Phase == uno.Lobby`), em vez de barrar com mensagem pedindo `/estado`. Partidas que já estão rolando (`Phase != uno.Lobby`) continuam estritamente protegidas e avisam que a partida já foi iniciada.
+- **Implementação**:
+  - `internal/game/service.go`: adicionados campos `ReplaceLobby bool` em `CreateRequest` e `ReplacedGameID uno.GameID` em `Outcome`.
+  - `internal/game/manager.go`: `create` implementa substituição segura respeitando `entry.mu -> indexMu`. Se a partida existente não for `uno.Lobby`, recusa com `ErrChatOccupied`. Se for lobby, faz tombstone do anterior, limpa `byPlayer` e instala o novo jogo.
+  - `internal/telegram/commands.go`: `handleNovoObserved` passa `ReplaceLobby: true`, invalida tokens do jogo substituído e informa `"⚠️ Já existe uma partida iniciada em andamento neste grupo.\nUse /estado para ver ou /cancelar para encerrar."` caso a partida já esteja em andamento.
+- **Testes**:
+  - `internal/game/service_test.go`: `TestCreateReplaceLobby`.
+  - `internal/telegram/commands_test.go`: `TestNovoCommandReplacesUnstartedLobbyAndProtectsStartedGame`.
+  - Suítes completas de teste e race detector aprovadas: `go test -race ./internal/...` e `go build ./cmd/bot`.
+
+---
+
 # Correção de long polling, 429 e observabilidade do Telegram — 2026-10-19 (somente dev)
 
 - Pedido do usuário aprovado no plano `corrigir-polling-webhook-telegram_2026-10-19_22-34.md`: bot intermitentemente offline, sem comandos/inline; token vazado já revogado; hospedagem Coolify; preferência por solução completa e dúvida sobre webhook.

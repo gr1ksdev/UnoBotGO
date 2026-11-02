@@ -149,7 +149,7 @@ function Choice({ view, disabled, error, send }: {
    gsap.killTweensOf(surface.current?.querySelector('.color-options') ?? [])
    gsap.killTweensOf(surface.current?.querySelectorAll('.color-choice') ?? [])
    context.current?.add(()=>{
-    gsap.set(surface.current,{opacity:1,scale:1})
+    gsap.set(surface.current,{opacity:1,scale:1,rotation:0})
     gsap.set(surface.current?.querySelector('.color-options') ?? [],{rotation:45})
     gsap.set(surface.current?.querySelectorAll('.color-choice') ?? [],{opacity:1,scale:1,backgroundColor:(_i,el:HTMLElement)=>['','#fb3045','#1b71f6','#60c400','#ffbd10'][Number(el.dataset.color)]})
    })
@@ -175,7 +175,7 @@ function Choice({ view, disabled, error, send }: {
   if (!disabled && choice && error && sent.current) {
    feedback.current?.kill(); sent.current = false; setChosen(0)
    context.current?.add(() => {
-    gsap.set(surface.current, { opacity: 1, scale: 1 })
+    gsap.set(surface.current, { opacity: 1, scale: 1, rotation: 0 })
     gsap.set(surface.current?.querySelector('.color-options') ?? [],{rotation:45})
     gsap.to(surface.current?.querySelectorAll('.color-choice') ?? [], { opacity:1,scale:1,backgroundColor: (_i, el: HTMLElement) => ['','#fb3045','#1b71f6','#60c400','#ffbd10'][Number(el.dataset.color)], duration: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : .2 })
    })
@@ -209,15 +209,36 @@ function Choice({ view, disabled, error, send }: {
   })
  }
  const target = view.phase === 4 && !chosen
+ const me = view.players.find(p => p.me)
+ const opponents = view.players.filter(p => p.active && !p.me)
  return <dialog ref={dialog} tabIndex={-1} className={`choice-sheet v2-choice ${target ? 'target-sheet' : ''}`} aria-labelledby="choice-title" onCancel={event => event.preventDefault()}>
-  <div ref={surface} className="choice-surface">
-   <h2 id="choice-title" className={target ? '' : 'sr-only'}>{target ? 'Trocar com quem?' : 'Escolha uma cor'}</h2>
-   {!target ? <div className="color-options" role="group" aria-label="Escolher cor">
-    {[1, 4, 3, 2].map(color => <button key={color} data-color={color} className={`color-choice color-${color}`} aria-label={colors[color]} aria-pressed={chosen === color} disabled={disabled || !!chosen} onClick={() => chooseColor(color)} />)}
-   </div> : <div className="target-options">
-    {view.players.filter(p => p.active && !p.me).map(p => <button key={p.key} disabled={disabled} onClick={() => send('target', { target: p.key })}>{p.name}</button>)}
-    <button disabled={disabled} onClick={() => send('keep')}>Manter minha mão</button>
-   </div>}
+  <div ref={surface} className={`choice-surface ${target ? 'target-surface' : ''}`}>
+   {!target ? <>
+    <h2 id="choice-title" className="sr-only">Escolha uma cor</h2>
+    <div className="color-options" role="group" aria-label="Escolher cor">
+     {[1, 4, 3, 2].map(color => <button key={color} data-color={color} className={`color-choice color-${color}`} aria-label={colors[color]} aria-pressed={chosen === color} disabled={disabled || !!chosen} onClick={() => chooseColor(color)} />)}
+    </div>
+   </> : <>
+    <div className="target-badge" aria-hidden="true">
+     <Icon name="swap" />
+    </div>
+    <h2 id="choice-title">Trocar de Mãos</h2>
+    <p className="target-subtitle">Escolha um jogador para trocar todas as cartas ou mantenha sua mão.</p>
+    <div className="target-options" role="group" aria-label="Escolher jogador para trocar de mãos">
+     {opponents.map(p => <button key={p.key} className="target-player-row" disabled={disabled} onClick={() => send('target', { target: p.key })} aria-label={`Trocar cartas com ${p.name}, que tem ${p.count} ${p.count === 1 ? 'carta' : 'cartas'}`}>
+      <PlayerAvatar player={p} />
+      <div className="target-player-info">
+       <strong>{p.name}</strong>
+       <span className="target-card-count">
+        {p.count} {p.count === 1 ? 'carta' : 'cartas'}
+        <Icon name="cards" />
+       </span>
+      </div>
+      <span className="target-select-indicator">Trocar</span>
+     </button>)}
+     <button className="target-keep-button" disabled={disabled} onClick={() => send('keep')}>Manter minhas cartas ({me?.count ?? 0})</button>
+    </div>
+   </>}
   </div>
  </dialog>
 }
@@ -350,7 +371,17 @@ export function GameTable({
   const timeout = window.setTimeout(() => setRecentLobbyPlayers([]), 3500)
   return () => window.clearTimeout(timeout)
  }, [recentLobbyPlayers])
- const topOpponents = opponents
+  if (!me && view.phase !== 0 && !view.closed)
+  return (
+   <main ref={root} className="page lobby">
+    <button className="icon-button" aria-label="Voltar ao início" onClick={back}><Icon name="back" /></button>
+    <div className="invite-mark" style={{ margin: '40px auto 16px' }}><Icon name="cards" /></div>
+    <span className="eyebrow" style={{ textAlign: 'center', display: 'block' }}>PARTIDA EM ANDAMENTO</span>
+    <h1 style={{ textAlign: 'center' }}>Esta partida já foi iniciada!</h1>
+    <p className="sub" style={{ textAlign: 'center' }}>O jogo já começou e não está mais aceitando novos participantes.</p>
+    <Link className="primary invite-cta" to="/play" style={{ maxWidth: 280, margin: '24px auto' }}>Voltar ao início <Icon name="arrow" /></Link>
+   </main>
+  )
  if (view.phase === 0)
   return (
    <main ref={root} className="page lobby">
@@ -369,7 +400,7 @@ export function GameTable({
     <section className="lobby-roster" aria-labelledby="lobby-roster-title">
      <header className="lobby-roster-heading">
       <h2 id="lobby-roster-title">Jogadores</h2>
-      <span>{lobbyPlayers.length} de {view.capacity ?? 10}</span>
+      <span>{lobbyPlayers.length} de {view.capacity ?? 4}</span>
      </header>
      <div className="lobby-seats" role="list" aria-label="Participantes da sala">
       {lobbyPlayers.map(p => {
@@ -381,8 +412,8 @@ export function GameTable({
         <div className="lobby-player-meta"><small>{role}</small>{recentlyJoined && <strong className="joined-label">Entrou agora</strong>}</div>
        </div>
       })}
-      {Array.from({length: Math.min(Math.max(0, (view.capacity ?? 10) - lobbyPlayers.length), 3)}, (_, i) => <div className="lobby-player waiting-seat" key={`waiting-${i}`} role="listitem"><span className="waiting-avatar" aria-hidden="true">+</span><span>Aguardando jogador</span></div>)}
-      {(view.capacity ?? 10) - lobbyPlayers.length > 3 && <div className="lobby-player more-seats" role="listitem">+ {(view.capacity ?? 10) - lobbyPlayers.length - 3} vagas</div>}
+      {Array.from({length: Math.min(Math.max(0, (view.capacity ?? 4) - lobbyPlayers.length), 3)}, (_, i) => <div className="lobby-player waiting-seat" key={`waiting-${i}`} role="listitem"><span className="waiting-avatar" aria-hidden="true">+</span><span>Aguardando jogador</span></div>)}
+      {(view.capacity ?? 4) - lobbyPlayers.length > 3 && <div className="lobby-player more-seats" role="listitem">+ {(view.capacity ?? 4) - lobbyPlayers.length - 3} vagas</div>}
      </div>
     </section>
     {error && (
@@ -391,7 +422,7 @@ export function GameTable({
      </p>
     )}
     <p role="status" className="lobby-connection">{connected ? 'Sala atualizada em tempo real' : 'Conexão perdida. Reconectando à sala…'}</p>
-    <ShareRoom gameID={view.game_id} />
+    <ShareRoom gameID={view.game_id} players={view.players} capacity={view.capacity ?? 4} />
     {(view.can_start ?? view.owner) && (
      <button
       className="primary"
@@ -440,12 +471,37 @@ export function GameTable({
     ]}
    />
    <section
-    className={`opponents ${opponents.length > 3 ? 'many-opponents' : ''}`}
+    className="opponents table-cross-seats"
     aria-label="Oponentes"
    >
-    {topOpponents.map((p) => (
-     <PlayerBadge player={p} key={p.key} />
-    ))}
+    {opponents.length === 1 && (
+     <div className="seat-wrapper seat-top">
+      <PlayerBadge player={opponents[0]} />
+     </div>
+    )}
+    {opponents.length === 2 && (
+     <>
+      <div className="seat-wrapper seat-left">
+       <PlayerBadge player={opponents[0]} />
+      </div>
+      <div className="seat-wrapper seat-right">
+       <PlayerBadge player={opponents[1]} />
+      </div>
+     </>
+    )}
+    {opponents.length >= 3 && (
+     <>
+      <div className="seat-wrapper seat-left">
+       <PlayerBadge player={opponents[0]} />
+      </div>
+      <div className="seat-wrapper seat-top">
+       <PlayerBadge player={opponents[1]} />
+      </div>
+      <div className="seat-wrapper seat-right">
+       <PlayerBadge player={opponents[2]} />
+      </div>
+     </>
+    )}
    </section>
    <section className="table" aria-label="Pilhas de cartas">
     <div className={`table-orbit ${view.direction === -1 ? 'reversed' : ''}`} role="img" aria-label={view.direction === 1 ? 'Sentido horário' : 'Sentido anti-horário'}>

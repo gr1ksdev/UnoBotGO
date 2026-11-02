@@ -607,3 +607,73 @@ func TestFreeRoomAuthorizationReceiptAndRematch(t *testing.T) {
 		t.Fatal(fresh, err)
 	}
 }
+
+func TestCreateReplaceLobby(t *testing.T) {
+	s, err := NewService()
+	if err != nil {
+		t.Fatal(err)
+	}
+	chatID := ChatID(-1234)
+
+	// 1. Create first lobby
+	out1, err := s.Create(t.Context(), Actor{PlayerID: 10, ChatID: chatID}, CreateRequest{ChatName: "Lobby1", Rules: uno.BotRules()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	join(t, s, out1.View, 20)
+
+	games, err := s.FindPlayerGames(t.Context(), Actor{PlayerID: 20})
+	if err != nil || len(games) != 1 {
+		t.Fatalf("expected player 20 to have 1 game, got %v", games)
+	}
+
+	// 2. Create second lobby without ReplaceLobby -> ErrChatOccupied
+	_, err = s.Create(t.Context(), Actor{PlayerID: 30, ChatID: chatID}, CreateRequest{ChatName: "Lobby2", Rules: uno.BotRules()})
+	if !errors.Is(err, ErrChatOccupied) {
+		t.Fatalf("expected ErrChatOccupied, got %v", err)
+	}
+
+	// 3. Create second lobby with ReplaceLobby: true -> succeeds and replaces old lobby
+	out2, err := s.Create(t.Context(), Actor{PlayerID: 30, ChatID: chatID}, CreateRequest{ChatName: "Lobby2", Rules: uno.BotRules(), ReplaceLobby: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out2.ReplacedGameID != out1.View.GameID {
+		t.Fatalf("expected ReplacedGameID %s, got %s", out1.View.GameID, out2.ReplacedGameID)
+	}
+	if out2.View.GameID == out1.View.GameID {
+		t.Fatal("expected new game ID")
+	}
+
+	// Player 20 should no longer be indexed in FindPlayerGames
+	games, err = s.FindPlayerGames(t.Context(), Actor{PlayerID: 20})
+	if err != nil || len(games) != 0 {
+		t.Fatalf("expected player 20 to have 0 games after lobby replacement, got %v", games)
+	}
+
+	// Active chat game must now be out2
+	summary, err := s.FindChatGame(t.Context(), chatID)
+	if err != nil || summary.GameID != out2.View.GameID {
+		t.Fatalf("expected active game to be %s, got %v", out2.View.GameID, summary)
+	}
+
+	// 4. Start out2 with 2 players
+	join(t, s, out2.View, 30)
+	join(t, s, out2.View, 40)
+	started := act(t, s, out2.View.GameID, Actor{PlayerID: 30, ChatID: chatID}, uno.Action{Type: uno.StartGame})
+	if started.View.Phase != uno.TakingTurn {
+		t.Fatalf("failed to start game: %v", started.View.Phase)
+	}
+
+	// 5. Trying to ReplaceLobby on an already started game MUST fail with ErrChatOccupied
+	_, err = s.Create(t.Context(), Actor{PlayerID: 50, ChatID: chatID}, CreateRequest{ChatName: "Lobby3", Rules: uno.BotRules(), ReplaceLobby: true})
+	if !errors.Is(err, ErrChatOccupied) {
+		t.Fatalf("expected ErrChatOccupied for game in progress, got %v", err)
+	}
+
+	// Game out2 must still be active and intact
+	summary, err = s.FindChatGame(t.Context(), chatID)
+	if err != nil || summary.GameID != out2.View.GameID || summary.Phase != uno.TakingTurn {
+		t.Fatalf("game in progress was corrupted: %v", summary)
+	}
+}

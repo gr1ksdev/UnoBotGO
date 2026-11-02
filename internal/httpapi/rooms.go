@@ -319,7 +319,13 @@ func (a *API) previewInvite(w http.ResponseWriter, r *http.Request) {
 	if v.RoomType == ranking.RoomFree {
 		label = "Sala livre"
 	}
-	writeJSON(w, 200, map[string]any{"game_id": v.GameID, "revision": v.Revision, "room_type": v.RoomType, "group": label, "mode": mode, "system": v.GroupConfig.RankingSystem, "players": players, "capacity": 10, "player_count": count, "owner_key": a.References.key("seat", int64(v.OwnerID)), "joined": joined, "can_join": !v.Closed && !v.Locked && (len(v.Players) < 10 || canReenter) && (v.Phase == uno.Lobby || v.Rules.AllowLateJoin), "closed": v.Closed})
+	capacity := 10
+	if v.RoomType == ranking.RoomFree {
+		capacity = 4
+	}
+	started := v.Phase != uno.Lobby
+	canJoin := !v.Closed && !v.Locked && (len(v.Players) < capacity || canReenter) && (!started || v.Rules.AllowLateJoin)
+	writeJSON(w, 200, map[string]any{"game_id": v.GameID, "revision": v.Revision, "phase": v.Phase, "started": started, "room_type": v.RoomType, "group": label, "mode": mode, "system": v.GroupConfig.RankingSystem, "players": players, "capacity": capacity, "player_count": count, "owner_key": a.References.key("seat", int64(v.OwnerID)), "joined": joined, "can_join": canJoin, "closed": v.Closed})
 }
 func (a *API) joinInvite(w http.ResponseWriter, r *http.Request) {
 	var body struct {
@@ -332,6 +338,24 @@ func (a *API) joinInvite(w http.ResponseWriter, r *http.Request) {
 	v, user, err := a.invited(r)
 	if err != nil {
 		apiError(w, 403, "invite_unavailable")
+		return
+	}
+	capacity := 10
+	if v.RoomType == ranking.RoomFree {
+		capacity = 4
+	}
+	canReenter := false
+	for _, p := range v.Players {
+		if int64(p.ID) == user && p.Status == uno.Left {
+			canReenter = true
+		}
+	}
+	if len(v.Players) >= capacity && !canReenter {
+		apiError(w, 409, "admission_failed")
+		return
+	}
+	if v.Phase != uno.Lobby && !v.Rules.AllowLateJoin {
+		apiError(w, 409, "admission_failed")
 		return
 	}
 	actor := game.Actor{PlayerID: uno.PlayerID(user), ChatID: v.ChatID}

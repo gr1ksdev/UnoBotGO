@@ -59,4 +59,16 @@ describe('invite entry screen', () => {
   expect(await screen.findByText('Esta sala está cheia ou não aceita mais participantes.')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Entrar na sala' })).toBeDisabled()
  })
+
+ it('shows dedicated message and blocks join when match has already started', async () => {
+  vi.mocked(globalThis.fetch).mockImplementation(async input => String(input).endsWith('/invites/opaque-token')
+   ? { ok: true, json: async () => ({ ...preview, started: true, can_join: false }) } as Response
+   : { ok: false, json: async () => ({}) } as Response)
+  wrap()
+  expect(await screen.findByRole('heading', { name: 'Esta partida já foi iniciada!' })).toBeInTheDocument()
+  expect(screen.getByText('PARTIDA EM ANDAMENTO')).toBeInTheDocument()
+  expect(screen.getByText('O jogo já começou e não está mais aceitando novos participantes.')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Voltar ao início/ })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Entrar na sala' })).not.toBeInTheDocument()
+ })
 })

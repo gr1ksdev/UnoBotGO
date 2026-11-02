@@ -96,24 +96,133 @@ func (m *manager) create(ctx context.Context, actor Actor, req CreateRequest) (O
 	entry := &managedGame{groupConfig: req.GroupConfig, roomType: req.RoomType, origin: req.Origin, engine: engine, chatID: actor.ChatID, chatName: req.ChatName, creatorID: actor.PlayerID, ownerID: actor.PlayerID, turnStarted: time.Now()}
 	view := publicView(entry, engine.Snapshot())
 	// Entry is still private to this call. Creation publishes only an empty lobby.
-	m.indexMu.Lock()
-	defer m.indexMu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return Outcome{}, err
+	if !req.ReplaceLobby || req.RoomType != ranking.RoomGroup {
+		m.indexMu.Lock()
+		defer m.indexMu.Unlock()
+		if err := ctx.Err(); err != nil {
+			return Outcome{}, err
+		}
+		if req.RoomType == ranking.RoomGroup {
+			if _, exists := m.byChat[actor.ChatID]; exists {
+				return Outcome{}, ErrChatOccupied
+			}
+		}
+		if _, exists := m.byID[id]; exists {
+			return Outcome{}, ErrIDConflict
+		}
+		m.byID[id] = indexRecord{entry: entry, summary: view.summary()}
+		if req.RoomType == ranking.RoomGroup {
+			m.byChat[actor.ChatID] = id
+		}
+		return Outcome{View: view}, nil
 	}
-	if req.RoomType == ranking.RoomGroup {
-		if _, exists := m.byChat[actor.ChatID]; exists {
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return Outcome{}, err
+		}
+		m.indexMu.RLock()
+		activeID, hasActive := m.byChat[actor.ChatID]
+		record := m.byID[activeID]
+		m.indexMu.RUnlock()
+
+		if !hasActive {
+			m.indexMu.Lock()
+			if _, appeared := m.byChat[actor.ChatID]; appeared {
+				m.indexMu.Unlock()
+				continue
+			}
+			if _, exists := m.byID[id]; exists {
+				m.indexMu.Unlock()
+				return Outcome{}, ErrIDConflict
+			}
+			m.byID[id] = indexRecord{entry: entry, summary: view.summary()}
+			m.byChat[actor.ChatID] = id
+			m.indexMu.Unlock()
+			return Outcome{View: view}, nil
+		}
+
+		oldEntry := record.entry
+		if oldEntry == nil {
+			m.indexMu.Lock()
+			if currentID, ok := m.byChat[actor.ChatID]; !ok || currentID != activeID {
+				m.indexMu.Unlock()
+				continue
+			}
+			delete(m.byChat, actor.ChatID)
+			m.indexMu.Unlock()
+			continue
+		}
+
+		if !lockMutexContext(ctx, &oldEntry.mu) {
+			return Outcome{}, ctx.Err()
+		}
+		if err := ctx.Err(); err != nil {
+			oldEntry.mu.Unlock()
+			return Outcome{}, err
+		}
+
+		if oldEntry.engine == nil || oldEntry.engine.Snapshot().Phase != uno.Lobby {
+			oldEntry.mu.Unlock()
 			return Outcome{}, ErrChatOccupied
 		}
-	}
-	if _, exists := m.byID[id]; exists {
-		return Outcome{}, ErrIDConflict
-	}
-	m.byID[id] = indexRecord{entry: entry, summary: view.summary()}
-	if req.RoomType == ranking.RoomGroup {
+
+		m.indexMu.Lock()
+		currentID, stillActive := m.byChat[actor.ChatID]
+		if !stillActive || currentID != activeID {
+			m.indexMu.Unlock()
+			oldEntry.mu.Unlock()
+			continue
+		}
+
+		if oldEntry.engine == nil || oldEntry.engine.Snapshot().Phase != uno.Lobby {
+			m.indexMu.Unlock()
+			oldEntry.mu.Unlock()
+			return Outcome{}, ErrChatOccupied
+		}
+
+		oldSnapshot := oldEntry.engine.Snapshot()
+		for _, p := range oldSnapshot.Players {
+			if games := m.byPlayer[p.ID]; games != nil {
+				delete(games, activeID)
+				if len(games) == 0 {
+					delete(m.byPlayer, p.ID)
+				}
+			}
+		}
+
+		oldEntry.reset = true
+		oldEntry.engine = nil
+		oldEntry.final = nil
+		oldEntry.ownerID = 0
+		oldEntry.turnStarted = time.Time{}
+
+		delete(m.byID, activeID)
+		m.history = slices.DeleteFunc(m.history, func(hID uno.GameID) bool {
+			return hID == activeID
+		})
+
+		if _, exists := m.byID[id]; exists {
+			delete(m.byChat, actor.ChatID)
+			m.indexMu.Unlock()
+			oldEntry.mu.Unlock()
+			return Outcome{}, ErrIDConflict
+		}
+		m.byID[id] = indexRecord{entry: entry, summary: view.summary()}
 		m.byChat[actor.ChatID] = id
+
+		m.indexMu.Unlock()
+		oldEntry.mu.Unlock()
+
+		for ch := range m.subscribers {
+			select {
+			case ch <- struct{}{}:
+			default:
+			}
+		}
+
+		return Outcome{View: view, ReplacedGameID: activeID}, nil
 	}
-	return Outcome{View: view}, nil
 }
 
 // lockGame returns a locked entry. Caller must unlock it. Already acquired

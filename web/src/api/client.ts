@@ -174,5 +174,5 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
  return response.json() as Promise<T>
 }
 export interface RoomGroup { ref: string; title: string; system: System }
-export interface InvitePreview { game_id: string; revision: number; room_type?: 'group' | 'free'; group: string; mode: string; system: System; players: Seat[]; owner_key: string; capacity: number; joined: boolean; can_join: boolean; closed: boolean }
+export interface InvitePreview { game_id: string; revision: number; phase?: number; started?: boolean; room_type?: 'group' | 'free'; group: string; mode: string; system: System; players: Seat[]; owner_key: string; capacity: number; joined: boolean; can_join: boolean; closed: boolean }
 export interface ConfirmedEvent { id: string; revision: number; type: string; player: string; target?: string; card_id?: string; count?: number }

@@ -198,6 +198,55 @@ describe('v2 resources and consensus', () => {
   expect(recovered.result).toEqual(terminal.result)
   expect(recovered.hand).toEqual(view.hand)
  })
+ it('positions opponents in cross format: 2 opponents on left and right, 3 opponents on left, top, right', () => {
+  const threePlayersView: GameView = {
+   ...view,
+   players: [
+    { key: 'me', name: 'Lucas', count: 7, me: true, current: true, active: true },
+    { key: 'op1', name: 'Esquerda', count: 5, me: false, current: false, active: true },
+    { key: 'op2', name: 'Direita', count: 4, me: false, current: false, active: true },
+   ],
+  }
+  const rendered = render(<MemoryRouter><GameTable view={threePlayersView} connected={true} pending={false} error="" send={vi.fn()} back={vi.fn()} /></MemoryRouter>)
+  expect(rendered.container.querySelector('.seat-wrapper.seat-left')).toBeInTheDocument()
+  expect(rendered.container.querySelector('.seat-wrapper.seat-right')).toBeInTheDocument()
+  expect(rendered.container.querySelector('.seat-wrapper.seat-top')).not.toBeInTheDocument()
+
+  const fourPlayersView: GameView = {
+   ...view,
+   players: [
+    { key: 'me', name: 'Lucas', count: 7, me: true, current: true, active: true },
+    { key: 'op1', name: 'Esquerda', count: 5, me: false, current: false, active: true },
+    { key: 'op2', name: 'Topo', count: 6, me: false, current: false, active: true },
+    { key: 'op3', name: 'Direita', count: 4, me: false, current: false, active: true },
+   ],
+  }
+  rendered.rerender(<MemoryRouter><GameTable view={fourPlayersView} connected={true} pending={false} error="" send={vi.fn()} back={vi.fn()} /></MemoryRouter>)
+  expect(rendered.container.querySelector('.seat-wrapper.seat-left')).toBeInTheDocument()
+  expect(rendered.container.querySelector('.seat-wrapper.seat-top')).toBeInTheDocument()
+  expect(rendered.container.querySelector('.seat-wrapper.seat-right')).toBeInTheDocument()
+ })
+ it('renders modern swap hands target dialog with opponent card counts and keep hand button', () => {
+  const send = vi.fn()
+  const swapView: GameView = {
+   ...view,
+   phase: 4,
+   my_turn: true,
+   players: [
+    { key: 'me', name: 'Lucas', count: 7, me: true, current: true, active: true },
+    { key: 'op1', name: 'Alvo1', count: 3, me: false, current: false, active: true },
+   ],
+  }
+  const rendered = render(<MemoryRouter><GameTable view={swapView} connected={true} pending={false} error="" send={send} back={vi.fn()} /></MemoryRouter>)
+  expect(rendered.container.querySelector<HTMLDialogElement>('.target-sheet')?.open).toBe(true)
+  expect(screen.getByText('Trocar de Mãos')).toBeInTheDocument()
+  expect(screen.getByText('3 cartas')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /Trocar cartas com Alvo1/ }))
+  expect(send).toHaveBeenCalledWith('target', { target: 'op1' })
+
+  fireEvent.click(screen.getByRole('button', { name: /Manter minhas cartas/ }))
+  expect(send).toHaveBeenCalledWith('keep')
+ })
 })
 
 it('keeps touch targets by CardID while new cards reorganize, and disables immediately on turn change', () => {

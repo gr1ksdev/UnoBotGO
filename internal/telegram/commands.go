@@ -473,20 +473,24 @@ func (h *CommandHandler) handleNovoObserved(ctx context.Context, actorID uno.Pla
 		rules = uno.CaseiroRules()
 	}
 	req := game.CreateRequest{
-		GroupConfig: config.Snapshot(),
-		ChatName:    chatTitle,
-		Rules:       rules,
+		GroupConfig:  config.Snapshot(),
+		ChatName:     chatTitle,
+		Rules:        rules,
+		ReplaceLobby: true,
 	}
 	actor := game.Actor{PlayerID: actorID, ChatID: chatID}
 
 	outcome, err := h.service.Create(ctx, actor, req)
 	if err != nil {
 		if errors.Is(err, game.ErrChatOccupied) {
-			h.reply(ctx, int64(chatID), "⚠️ Já existe uma partida aberta ou em andamento neste grupo.\nUse /estado para ver ou /cancelar para encerrar.", nil)
+			h.reply(ctx, int64(chatID), "⚠️ Já existe uma partida iniciada em andamento neste grupo.\nUse /estado para ver ou /cancelar para encerrar.", nil)
 			return
 		}
 		h.reply(ctx, int64(chatID), "❌ Não foi possível criar a partida. Tente novamente.", nil)
 		return
+	}
+	if outcome.ReplacedGameID != "" {
+		h.tokens.InvalidateGame(outcome.ReplacedGameID)
 	}
 
 	h.reply(ctx, int64(chatID), h.renderer.RenderLobby(outcome.View), h.gameMarkup(outcome.View))

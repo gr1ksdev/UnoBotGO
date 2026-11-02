@@ -197,3 +197,76 @@ func TestFreeRoomInviteDoesNotRequireGroupMembership(t *testing.T) {
 		t.Fatal("free room snapshot did not recover", reconnected.Code, reconnected.Body, err)
 	}
 }
+
+func TestFreeRoomCapacityFourAndStartedRejection(t *testing.T) {
+	svc, _ := game.NewService()
+	refs, _ := NewReferences(make([]byte, 32))
+	a := &API{Games: svc, References: refs, Token: "token", MaxAge: time.Hour, BotUsername: func() string { return "ConfiguredBot" }}
+	handler := a.Handler()
+	request := func(method, path, body string, user int64) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("Authorization", "tma "+signed("token", time.Now(), map[string]string{"user": fmt.Sprintf(`{"id":%d,"first_name":"Jogador"}`, user)}))
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	created := request("POST", "/api/v1/rooms", `{"room_type":"free","system":"updated","mode":"classic","request_id":"free-create-cap4"}`, 1)
+	var view liveView
+	_ = json.Unmarshal(created.Body.Bytes(), &view)
+	if view.Capacity != 4 {
+		t.Fatalf("expected capacity 4, got %d", view.Capacity)
+	}
+	invite := request("GET", "/api/v1/rooms/"+string(view.ID)+"/invite", "", 1)
+	var token struct {
+		Token string `json:"token"`
+	}
+	_ = json.Unmarshal(invite.Body.Bytes(), &token)
+
+	// Users 2, 3, 4 join (reaching max capacity of 4)
+	for u := int64(2); u <= 4; u++ {
+		cur, _ := svc.PublicView(t.Context(), view.ID)
+		j := request("POST", "/api/v1/invites/"+token.Token+"/join", fmt.Sprintf(`{"request_id":"free-join-%d","expected_revision":%d}`, u, cur.Revision), u)
+		if j.Code != 200 {
+			t.Fatalf("user %d failed to join: %d", u, j.Code)
+		}
+	}
+
+	// 5th user tries to join -> rejected (409)
+	cur, _ := svc.PublicView(t.Context(), view.ID)
+	overflow := request("POST", "/api/v1/invites/"+token.Token+"/join", fmt.Sprintf(`{"request_id":"free-join-5","expected_revision":%d}`, cur.Revision), 5)
+	if overflow.Code != 409 {
+		t.Fatalf("expected 409 on 5th participant, got %d", overflow.Code)
+	}
+
+	// Preview should report can_join: false, capacity: 4, started: false
+	preview := request("GET", "/api/v1/invites/"+token.Token, "", 5)
+	var previewData struct {
+		Capacity int  `json:"capacity"`
+		CanJoin  bool `json:"can_join"`
+		Started  bool `json:"started"`
+	}
+	_ = json.Unmarshal(preview.Body.Bytes(), &previewData)
+	if previewData.Capacity != 4 || previewData.CanJoin || previewData.Started {
+		t.Fatalf("unexpected preview when full: %+v", previewData)
+	}
+
+	// Now owner starts the game
+	_, err := svc.ApplyWeb(t.Context(), game.Actor{PlayerID: 1}, view.ID, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: cur.Revision}, "start-cap4-1234")
+	if err != nil {
+		t.Fatalf("failed to start: %v", err)
+	}
+
+	// Preview now reports started: true, can_join: false
+	previewAfterStart := request("GET", "/api/v1/invites/"+token.Token, "", 6)
+	_ = json.Unmarshal(previewAfterStart.Body.Bytes(), &previewData)
+	if !previewData.Started || previewData.CanJoin {
+		t.Fatalf("expected started true and can_join false, got: %+v", previewData)
+	}
+
+	// Joining started game returns 409
+	curAfterStart, _ := svc.PublicView(t.Context(), view.ID)
+	joinStarted := request("POST", "/api/v1/invites/"+token.Token+"/join", fmt.Sprintf(`{"request_id":"free-join-started","expected_revision":%d}`, curAfterStart.Revision), 6)
+	if joinStarted.Code != 409 {
+		t.Fatalf("expected 409 on joining started game, got %d", joinStarted.Code)
+	}
+}

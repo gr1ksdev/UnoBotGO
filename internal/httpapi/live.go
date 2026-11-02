@@ -106,7 +106,11 @@ func (a *API) project(ctx context.Context, id uno.GameID, user int64) (liveView,
 	if err != nil {
 		return liveView{}, err
 	}
-	out := liveView{Capacity: 10, OwnerKey: a.References.key("seat", int64(v.OwnerID)), ID: id, Revision: v.Revision, Phase: v.Phase, Group: v.ChatName, RoomType: string(v.RoomType), Mode: "classic", System: string(v.GroupConfig.RankingSystem), Players: []seat{}, Hand: []game.CardView{}, Top: v.TopCard, ActiveColor: v.ActiveColor, Direction: v.Direction, CloseReason: v.CloseReason, Closed: v.Closed, Owner: int64(v.OwnerID) == user, MyTurn: int64(v.CurrentTurn) == user, CanBluff: v.CanCallBluff && int64(v.CurrentTurn) == user, ServerTime: a.now()}
+	capacity := 10
+	if v.RoomType == "free" {
+		capacity = 4
+	}
+	out := liveView{Capacity: capacity, OwnerKey: a.References.key("seat", int64(v.OwnerID)), ID: id, Revision: v.Revision, Phase: v.Phase, Group: v.ChatName, RoomType: string(v.RoomType), Mode: "classic", System: string(v.GroupConfig.RankingSystem), Players: []seat{}, Hand: []game.CardView{}, Top: v.TopCard, ActiveColor: v.ActiveColor, Direction: v.Direction, CloseReason: v.CloseReason, Closed: v.Closed, Owner: int64(v.OwnerID) == user, MyTurn: int64(v.CurrentTurn) == user, CanBluff: v.CanCallBluff && int64(v.CurrentTurn) == user, ServerTime: a.now()}
 	if v.Rematch != nil {
 		r := v.Rematch
 		out.Rematch = &rematchState{Revision: r.Revision, Required: []string{}, Accepted: []string{}, NextGameID: r.NextGameID, Ready: r.Ready}

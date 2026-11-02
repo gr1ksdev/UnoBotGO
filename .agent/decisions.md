@@ -1,3 +1,128 @@
+# Decisão: redesign visual completo e correção de orientação do modal de Trocar Mãos no WebApp
+
+## Data
+2026-11-02
+
+## Contexto
+Ao jogar a carta "Troca de Mãos" no WebApp, o modal de seleção de alvo (`Phase == 4`) era exibido com estilos HTML legados (caixa opaca `#19383f` sem glassmorphism, sem tipografia customizada, com botões cinzas contendo apenas nomes sem foto e sem indicação de quantidade de cartas). Além da estética defasada em relação ao padrão v2 da mesa, o modal parecia invertido/desalinhado ("de cabeça pra baixo").
+
+## Decisão tomada
+1. **Redesign visual alinhado ao padrão v2:**
+   - O modal `.target-sheet` passa a usar superfície escura glassmorphism (`#0c1c24f2`, `backdrop-filter: blur(16px)`), borda ciano neon (`#00bcc444`), sombra profunda e badge circular com ícone `🔀` no topo.
+   - Tipografia `MatchoLexend` para o título ("Trocar de Mãos") e texto explicativo claro.
+2. **Cards de oponentes com dados estratégicos:**
+   - Cada oponente ativo é renderizado em uma linha interativa (`.target-player-row`) com `PlayerAvatar` (foto ou inicial), nome truncado com reticências e **contagem de cartas atual** com ícone de cartas (`Icon name="cards"`), permitindo que o jogador tome uma decisão tática inteligente.
+   - Indicador de ação com pílula "Trocar" no canto direito.
+3. **Ação secundária destacada:**
+   - O botão "Manter minhas cartas ({me.count})" é desacoplado dos alvos e exibido como um botão secundário outline na base do modal.
+4. **Isolamento de orientação e rotação:**
+   - Aplicação de `rotation: 0` explícito no `surface.current` e isolamento de transforms de animações GSAP de cor, garantindo orientação vertical estável e previsível.
+5. **Recompilação dos assets estáticos:**
+   - Frontend recompilado via Vite para `web/dist`, atualizando os bundles embutidos no binário Go.
+
+## Motivo
+Elevar a usabilidade, a fidelidade visual e a clareza estratégica no momento crucial da jogada da carta Troca de Mãos.
+
+## Impacto
+Interface moderna, intuitiva e coesa com o tema v2. Cobertura de testes unitários expandida para 143 testes. Zero breaking changes.
+
+---
+
+# Decisão: posições da mesa no WebApp distribuídas em lados opostos para 3 jogadores
+
+## Data
+2026-11-02
+
+## Contexto
+Ao jogar uma partida no WebApp com 3 jogadores no total (o usuário local mais 2 oponentes), a interface agrupava os 2 oponentes no topo ou em assentos assimétricos, deixando a sensação visual de "dois em cima e um embaixo". O usuário solicitou que, com 3 jogadores, as posições fiquem com 1 jogador em cada lado (esquerda e direita), mantendo o jogador local embaixo e o topo livre.
+
+## Decisão tomada
+1. **Distribuição dos assentos para 3 jogadores (`opponents.length === 2`):**
+   - Em `web/src/pages/Game.tsx`, o primeiro oponente é atribuído à classe `seat-left` e o segundo à classe `seat-right`. O assento `seat-top` não é instanciado.
+   - O jogador local permanece centralizado na base (`.local-player`).
+2. **Consistência para 2 e 4 jogadores:**
+   - 2 jogadores (`opponents.length === 1`): oponente no topo (`seat-top`) e jogador local na base (`.local-player`).
+   - 4 jogadores (`opponents.length >= 3`): oponentes em `seat-left`, `seat-top`, `seat-right` e jogador local na base, formando a cruz completa.
+3. **Refinamento de layout e responsividade:**
+   - Em `web/src/game-v2.css`, as posições laterais foram alinhadas verticalmente a 43% com largura restrita (70px padrão, 56px para telas estreitas <= 380px) e ellipsis de nome, prevenindo colisões visuais com a pilha de cartas central.
+4. **Recompilação dos assets estáticos:**
+   - O frontend foi recompilado com Vite para `web/dist`, garantindo que o binário Go (`web/embed.go`) sirva os arquivos atualizados em qualquer ambiente de execução ou deploy.
+
+## Motivo
+Garantir equilíbrio estético, simetria e conforto visual em partidas com 3 jogadores, respeitando o fluxo natural de turnos e as proporções de tela de smartphones.
+
+## Impacto
+Partidas de 3 jogadores passam a ter assentos perfeitamente opostos nas laterais. Nenhuma quebra de compatibilidade no backend ou em outros layouts.
+
+---
+
+# Decisão: capacidade de 4 jogadores, mesa em cruz, lista no convite e bloqueio de partida iniciada no WebApp
+
+## Data
+2026-10-31
+
+## Contexto
+O modo de jogo via WebApp (WebSocket / salas livres) anteriormente suportava até 6 ou 10 jogadores, com todos os oponentes dispostos em fila horizontal no topo da tela. O usuário solicitou:
+1. Limitar a capacidade para 4 jogadores.
+2. Posicionar os 4 jogadores ao redor da mesa no formato de cruz centralizada (um em cima, um embaixo, um na esquerda, um na direita).
+3. Mostrar a lista de jogadores que já estão na sala na mensagem de compartilhamento com o link da mesa.
+4. Exibir uma tela/mensagem explícita de partida já iniciada caso alguém tente entrar pelo convite ou pela URL após o início do jogo.
+
+## Decisão tomada
+1. **Capacidade máxima de 4 jogadores:**
+   - Em `internal/httpapi/live.go` e `internal/httpapi/rooms.go`, partidas do tipo `free` passam a ter `capacity: 4`, rejeitando novas admissões que ultrapassem 4 jogadores.
+   - No frontend (`Game.tsx` e `ShareRoom.tsx`), a capacidade padrão do lobby é 4.
+2. **Layout em cruz (Top, Bottom, Left, Right):**
+   - No `Game.tsx`, os oponentes são organizados em `.table-cross-seats` nas classes `.seat-top`, `.seat-left`, `.seat-right`, mantendo o jogador local centralizado em `.local-player` (Bottom).
+   - O posicionamento em `game-v2.css` centraliza os assentos horizontalmente no topo e na base, e verticalmente nas laterais esquerda e direita (alinhados com o centro da mesa a 45%).
+   - Como o `TableScene.ts` descobre dinamicamente a posição dos avatares `[data-player-key]`, a cena PixiJS e as cartas animadas voam para as quatro extremidades perfeitamente.
+3. **Descrição com lista de participantes no convite:**
+   - `ShareRoom.tsx` recebe os jogadores da sala e formata o texto com os participantes atuais (`Jogadores na sala (X/4): • Jogador 1 • Jogador 2...`), compatível com cópia no clipboard, `navigator.share` e `openTelegramLink`.
+4. **Tela de bloqueio para partidas iniciadas:**
+   - `previewInvite` expõe `started: v.Phase != uno.Lobby`.
+   - `Invite.tsx` exibe card dedicado (`Esta partida já foi iniciada!`) quando o jogo já começou, bloqueando novas entradas.
+   - `Game.tsx` bloqueia visualização de espectadores não participantes com aviso de partida em andamento.
+
+## Motivo
+Garantir experiência de jogo mais equilibrada e focada para 4 participantes, melhorar a visibilidade social dos convites e prevenir entradas acidentais ou confusas em partidas em andamento.
+
+## Impacto
+Salas WebApp operam com 4 jogadores no layout de cruz centralizada. Partidas de grupo via Telegram mantêm sua capacidade original de 10 participantes. Zero quebras de compatibilidade.
+
+---
+
+# Decisão: substituição segura de lobby abandonado via /novo com proteção de partidas ativas
+
+## Data
+2026-10-31
+
+## Contexto
+Quando um grupo possuía um lobby aberto que não foi iniciado (`Phase == uno.Lobby`) e os jogadores abandonavam ou esqueciam a partida, uma nova chamada para `/novo` era barrada com `ErrChatOccupied`, instruindo o uso de `/estado` ou `/cancelar`. Usuários comuns que não eram administradores do grupo nem criadores/donos da partida anterior não tinham permissão para usar `/cancelar` ou `/reset`, deixando o grupo travado no lobby antigo. O usuário solicitou que, quando um jogo perdido não tiver sido iniciado, um novo `/novo` crie diretamente um novo lobby limpo, mas com a exigência estrita de que partidas já em andamento continuem 100% protegidas contra substituição.
+
+## Decisão tomada
+1. Estendido `game.CreateRequest` com o campo `ReplaceLobby bool` e `game.Outcome` com `ReplacedGameID uno.GameID`.
+2. Em `internal/game/manager.go` (`create`):
+   - Se `req.ReplaceLobby` for verdadeiro para partidas de grupo (`ranking.RoomGroup`) e já houver uma sessão vinculada ao chat:
+     - Adquire o lock da sessão existente (`oldEntry.mu`) respeitando rigorosamente a hierarquia de locking (`entry.mu -> indexMu`).
+     - Inspeciona `oldEntry.engine.Snapshot().Phase`:
+       - Se `Phase != uno.Lobby` (partida já iniciada/em andamento), libera o lock e retorna imediatamente `ErrChatOccupied`. A partida em andamento permanece intacta.
+       - Se `Phase == uno.Lobby`, adquire `m.indexMu.Lock()`, desvincula os jogadores anteriores de `m.byPlayer`, descarta a entrada antiga (`oldEntry.reset = true`), remove do índice `m.byID` e substitui o vínculo em `m.byChat` pelo novo jogo.
+3. Em `internal/telegram/commands.go` (`handleNovoObserved`):
+   - Ativa `ReplaceLobby: true` na criação de partidas via `/novo`.
+   - Se houver `ReplacedGameID`, invalida imediatamente seus tokens em `h.tokens.InvalidateGame`.
+   - Se `Create` retornar `ErrChatOccupied`, responde: `"⚠️ Já existe uma partida iniciada em andamento neste grupo.\nUse /estado para ver ou /cancelar para encerrar."`.
+4. Cobertura de testes:
+   - `TestCreateReplaceLobby` em `internal/game/service_test.go`.
+   - `TestNovoCommandReplacesUnstartedLobbyAndProtectsStartedGame` em `internal/telegram/commands_test.go`.
+
+## Motivo
+Garantir usabilidade e autonomia para grupos sem exigir intervenção administrativa para limpar lobbies abandonados, mantendo ao mesmo tempo integridade total de concorrência e blindagem de partidas que estão efetivamente em andamento.
+
+## Impacto
+Lobbies não iniciados são automaticamente limpos e reiniciados com `/novo`. Partidas em andamento continuam protegidas contra qualquer recriação acidental. Zero quebras de compatibilidade com outros endpoints ou chamadas de criação.
+
+---
+
 # Decisão: webhook como transporte de produção e polling com long polling real
 
 ## Data

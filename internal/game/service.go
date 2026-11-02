@@ -22,17 +22,19 @@ type Actor struct {
 }
 
 type CreateRequest struct {
-	ChatName    string
-	RoomType    ranking.RoomType
-	Origin      string
-	Rules       uno.Rules
-	GroupConfig groups.Snapshot
+	ChatName     string
+	RoomType     ranking.RoomType
+	Origin       string
+	Rules        uno.Rules
+	GroupConfig  groups.Snapshot
+	ReplaceLobby bool
 }
 
 type Outcome struct {
-	Completed *ranking.Result
-	View      PublicGameView
-	Events    []uno.Event
+	Completed      *ranking.Result
+	View           PublicGameView
+	Events         []uno.Event
+	ReplacedGameID uno.GameID
 }
 
 type ResetResult struct {
