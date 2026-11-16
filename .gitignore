@@ -16,3 +16,10 @@ mockup*.png
 .reports/desempenho-local/
 .reports/diagnostico-fluidez/
 .reports/experiencia-local/
+
+# Upstream de referência (jh0ker/mau_mau_bot). Não faz parte deste projeto.
+mau_mau_bot/
+
+# Artefatos internos de desenvolvimento
+.agent/
+.opencode/

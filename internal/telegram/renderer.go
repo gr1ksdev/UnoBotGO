@@ -190,11 +190,7 @@ func (r *Renderer) RenderLobby(view game.PublicGameView) string {
 	var sb strings.Builder
 	sb.WriteString("🎮 <b>Partida de UNO</b>\n\n")
 	sb.WriteString(fmt.Sprintf("Responsável: %s\n", r.PlayerLink(view.OwnerID, view)))
-	rulesDesc := "Clássico"
-	if view.Rules.StackWildDrawFourOnTwo || view.Rules.StackDrawTwoOnWildFour {
-		rulesDesc = "Caseiro"
-	}
-	sb.WriteString(fmt.Sprintf("Regras: %s\n\n", rulesDesc))
+	sb.WriteString("Regras: Caseiro\n\n")
 
 	sb.WriteString(fmt.Sprintf("Jogadores inscritos (%d/10):\n", len(view.Players)))
 	if len(view.Players) == 0 {
@@ -208,7 +204,7 @@ func (r *Renderer) RenderLobby(view game.PublicGameView) string {
 	if view.Locked {
 		sb.WriteString("\n🔒 Esta partida está trancada e não aceita novos jogadores.")
 	} else {
-		sb.WriteString("\nClique em /entrar para participar.")
+		sb.WriteString("\nUse /entrar para participar.")
 	}
 	if len(view.Players) >= 2 {
 		sb.WriteString("\nUse /iniciar para começar!")
@@ -242,20 +238,28 @@ func (r *Renderer) renderPlacements(view game.PublicGameView) string {
 
 // RenderPublicState displays the next decision and the actual turn sequence,
 // starting at the current player and walking in the engine's direction.
+// renderClosedState renders the final summary of a finished game.
+func (r *Renderer) renderClosedState(view game.PublicGameView) string {
+	var sb strings.Builder
+	sb.WriteString("🏆 <b>Partida encerrada</b>")
+	switch view.CloseReason {
+	case game.Cancelled:
+		sb.WriteString("\nCancelada pelo responsável.")
+	case game.Departure:
+		sb.WriteString("\nEncerrada após desistência de jogadores.")
+	}
+	if len(view.Placements) > 0 {
+		sb.WriteString("\n\n" + r.renderPlacements(view))
+	}
+	return sb.String()
+}
+
+// RenderPublicState renders the detailed public state. It is requested on
+// demand; the running flow only announces the action and the next turn.
 func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 	var sb strings.Builder
 	if view.Closed || view.Phase == uno.Finished {
-		sb.WriteString("🏆 <b>Partida encerrada</b>")
-		switch view.CloseReason {
-		case game.Cancelled:
-			sb.WriteString("\nCancelada pelo responsável.")
-		case game.Departure:
-			sb.WriteString("\nEncerrada após desistência de jogadores.")
-		}
-		if len(view.Placements) > 0 {
-			sb.WriteString("\n\n" + r.renderPlacements(view))
-		}
-		return sb.String()
+		return r.renderClosedState(view)
 	}
 	if view.TopCard != nil {
 		sb.WriteString(fmt.Sprintf("🃏 Topo: <b>%s</b>\n", CardRepr(*view.TopCard)))
@@ -279,7 +283,7 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 		sb.WriteString(fmt.Sprintf("🎨 <b>Aguardando %s escolher a cor!</b>\n", r.PlayerLink(view.ColorChooserID, view)))
 	default:
 		if view.CurrentTurn > 0 {
-			sb.WriteString(fmt.Sprintf("🎯 Vez: 👉 %s\n", r.PlayerLink(view.CurrentTurn, view)))
+			sb.WriteString(fmt.Sprintf("Vez de: %s\n", r.PlayerLink(view.CurrentTurn, view)))
 		}
 	}
 	parts := make([]string, 0, len(view.Order))
@@ -311,6 +315,27 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 		sb.WriteString("👥 " + strings.Join(parts, " → "))
 	}
 	return strings.TrimSpace(sb.String())
+}
+
+// RenderTurn names the player whose decision is pending. A closed game has no
+// pending decision and therefore no turn line.
+func (r *Renderer) RenderTurn(view game.PublicGameView) string {
+	if view.Closed {
+		return ""
+	}
+	var responsible uno.PlayerID
+	switch view.Phase {
+	case uno.ChoosingColor:
+		responsible = view.ColorChooserID
+	case uno.ChoosingPlayer:
+		responsible = view.PlayerChooserID
+	default:
+		responsible = view.CurrentTurn
+	}
+	if responsible <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("Vez de: %s", r.PlayerLink(responsible, view))
 }
 
 // RenderActionConfirmation renders the confirmation of an accepted action to the group.
@@ -353,10 +378,11 @@ func (r *Renderer) RenderActionConfirmation(actorID uno.PlayerID, action uno.Act
 			}
 			resolvedSwap = true
 			sb.WriteString(fmt.Sprintf("%s jogou 🔀 <b>Trocar cartas</b>!\n", actorLink))
+			colour := fmt.Sprintf("Cor: %s <b>%s</b>", ColorIcon(action.Color), ColorNamePT(action.Color))
 			if event.Type == uno.HandsSwapped {
-				sb.WriteString(fmt.Sprintf("🔄 %s trocou as mãos com %s.", actorLink, r.PlayerLink(event.TargetID, outcome.View)))
+				sb.WriteString(fmt.Sprintf("🔄 %s trocou as mãos com %s. %s", actorLink, r.PlayerLink(event.TargetID, outcome.View), colour))
 			} else {
-				sb.WriteString(fmt.Sprintf("➡️ %s manteve sua mão.", actorLink))
+				sb.WriteString(fmt.Sprintf("➡️ %s manteve sua mão. %s", actorLink, colour))
 			}
 			break
 		}
@@ -397,7 +423,11 @@ func (r *Renderer) RenderActionConfirmation(actorID uno.PlayerID, action uno.Act
 	}
 
 	sb.WriteString("\n\n")
-	sb.WriteString(r.RenderPublicState(outcome.View))
+	if outcome.View.Closed || outcome.View.Phase == uno.Finished {
+		sb.WriteString(r.renderClosedState(outcome.View))
+	} else if turn := r.RenderTurn(outcome.View); turn != "" {
+		sb.WriteString(turn)
+	}
 	return sb.String()
 }
 
@@ -446,17 +476,6 @@ func (r *Renderer) RenderHelp(botUsername string) string {
 	return sb.String()
 }
 
-func groupModeSummary(mode groups.Mode) (string, string) {
-	switch mode {
-	case groups.Caseiro:
-		return "🎮 Caseiro", "Permite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4."
-	case groups.Classic:
-		fallthrough
-	default:
-		return "🎮 Clássico", "Regras padrão do bot, sem as combinações extras do modo Caseiro."
-	}
-}
-
 func groupRankingSummary(system groups.RankingSystem) (string, string) {
 	switch system {
 	case groups.Updated:
@@ -468,73 +487,29 @@ func groupRankingSummary(system groups.RankingSystem) (string, string) {
 	}
 }
 
-func groupPrivacySummary(private bool) (string, string) {
-	if private {
-		return "🔒 Anônimo", "Este grupo aparece como Grupo anônimo no Ranking Global, ocultando nome, foto e membros."
-	}
-	return "🌐 Público", "O grupo e seus membros aparecem normalmente com nome e foto no Ranking Global."
-}
-
 // RenderGroupConfig formats the current group configuration for the /config command.
 func (r *Renderer) RenderGroupConfig(config groups.Config) string {
-	modeLabel := "Clássico"
-	if config.DefaultGameMode == groups.Caseiro {
-		modeLabel = "Caseiro"
-	}
 	rankLabel := "Legado"
 	if config.RankingSystem == groups.Updated {
 		rankLabel = "Atualizado"
 	}
-	privacyLabel := "Público"
-	if config.RankingPrivate {
-		privacyLabel = "Anônimo"
-	}
-
-	modeTitle, modeDesc := groupModeSummary(config.DefaultGameMode)
 	rankTitle, rankDesc := groupRankingSummary(config.RankingSystem)
-	privTitle, privDesc := groupPrivacySummary(config.RankingPrivate)
 
 	return fmt.Sprintf("⚙️ <b>Configuração do Grupo</b>\n\n"+
-		"<b>Modo padrão de partida:</b> %s\n"+
-		"<b>Sistema de ranking:</b> %s\n"+
-		"<b>Privacidade no ranking:</b> %s\n\n"+
-		"<blockquote><b>%s</b>\n%s</blockquote>\n\n"+
-		"────────────\n\n"+
-		"<blockquote><b>%s</b>\n%s</blockquote>\n\n"+
-		"────────────\n\n"+
+		"<b>Modo de partida:</b> Caseiro\n"+
+		"<b>Sistema de ranking:</b> %s\n\n"+
 		"<blockquote><b>%s</b>\n%s</blockquote>\n\n"+
 		"<i>Selecione abaixo para alterar.\nAs mudanças afetarão apenas as próximas partidas criadas.</i>",
-		modeLabel, rankLabel, privacyLabel,
-		modeTitle, modeDesc,
-		rankTitle, rankDesc,
-		privTitle, privDesc)
+		rankLabel, rankTitle, rankDesc)
 }
 
 // RenderGroupWelcome formats the introductory message when the bot joins a group.
 func (r *Renderer) RenderGroupWelcome(config groups.Config) string {
-	modeLabel := "Clássico"
-	if config.DefaultGameMode == groups.Caseiro {
-		modeLabel = "Caseiro"
-	}
 	rankLabel := "Legado"
 	if config.RankingSystem == groups.Updated {
 		rankLabel = "Atualizado"
 	}
 	return fmt.Sprintf("👋 <b>Olá! Obrigado por adicionar o UnoBotGO ao grupo!</b>\n\n"+
-		"O bot já está pronto para jogar. Por padrão, as partidas usam o modo <b>%s</b> e o ranking <b>%s</b>.\n\n"+
-		"Use /novo para iniciar uma partida ou clique no botão abaixo para personalizar as opções do grupo.", modeLabel, rankLabel)
-}
-
-func (r *Renderer) RenderUserPrivacy(enabled bool) string {
-	if enabled {
-		return "🔒 <b>Privacidade ativada</b>\n\nVocê aparecerá como Anônimo no Ranking Global.\nSeu nome, foto e identificador não serão exibidos."
-	}
-	return "🔓 <b>Privacidade desativada</b>\n\nSeu perfil voltará a aparecer normalmente no Ranking Global."
-}
-
-func (r *Renderer) RenderGroupPrivacy(enabled bool) string {
-	if enabled {
-		return "🔒 <b>Privacidade do grupo ativada</b>\n\nEste grupo aparecerá como Grupo anônimo no Ranking Global.\nO nome do grupo, foto e membros não serão exibidos publicamente."
-	}
-	return "🔓 <b>Privacidade do grupo desativada</b>\n\nO grupo e seus membros voltarão a aparecer normalmente no Ranking Global."
+		"O bot já está pronto para jogar. As partidas usam o modo <b>Caseiro</b> e o ranking <b>%s</b>.\n\n"+
+		"Use /novo para iniciar uma partida ou clique no botão abaixo para personalizar as opções do grupo.", rankLabel)
 }

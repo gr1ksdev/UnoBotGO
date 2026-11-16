@@ -2,7 +2,6 @@ package game
 
 import (
 	"context"
-	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/ranking"
 	"github.com/malbs/UnoGoBot/internal/uno"
 	"strconv"
@@ -24,7 +23,7 @@ func (s *Service) ObservePlayer(ctx context.Context, actor Actor, id uno.GameID,
 		return err
 	}
 	defer entry.mu.Unlock()
-	if actor.PlayerID <= 0 || (entry.roomType == ranking.RoomFree && actor.ChatID != 0) || (entry.roomType == ranking.RoomGroup && actor.ChatID != entry.chatID) {
+	if actor.PlayerID <= 0 || (actor.ChatID != 0 && actor.ChatID != entry.chatID) {
 		return ErrForbidden
 	}
 	if entry.final != nil {
@@ -71,11 +70,7 @@ func finalResult(entry *managedGame, state uno.State) *ranking.Result {
 	if state.Phase != uno.Finished || state.FinishReason == uno.FinishedByCancellation || entry.startedAt.IsZero() {
 		return nil
 	}
-	mode := groups.Classic
-	if state.Rules.AllowSwapHands || state.Rules.StackWildDrawFourOnTwo || state.Rules.StackDrawTwoOnWildFour {
-		mode = groups.Caseiro
-	}
-	r := ranking.Result{RoomType: entry.roomType, Origin: entry.origin, GameID: string(state.ID), ChatID: int64(entry.chatID), GameMode: mode, RankingSystem: entry.groupConfig.RankingSystem, ConfigRevision: entry.groupConfig.ConfigRevision, StartedAt: entry.startedAt, FinishedAt: time.Now().UTC(), FinalRevision: state.Revision, FinishReason: string(state.FinishReason)}
+	r := ranking.Result{RoomType: ranking.RoomGroup, Origin: "inline", GameID: string(state.ID), ChatID: int64(entry.chatID), GameMode: ranking.GameModeHouse, RankingSystem: entry.groupConfig.RankingSystem, ConfigRevision: entry.groupConfig.ConfigRevision, StartedAt: entry.startedAt, FinishedAt: time.Now().UTC(), FinalRevision: state.Revision, FinishReason: string(state.FinishReason)}
 	for _, player := range state.Players {
 		h := entry.participants[player.ID]
 		name := h.DisplayName

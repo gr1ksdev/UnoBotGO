@@ -171,7 +171,7 @@ func TestKeepHandInlineFlowStaleColorAndMultigroup(t *testing.T) {
 			for _, m := range api.SentMessages {
 				if strings.Contains(m.Text, "manteve sua mão") {
 					foundKeep = true
-					if !strings.Contains(m.Text, "🎨 Cor:") || strings.Contains(m.Text, "trocou as mãos") {
+					if !strings.Contains(m.Text, "Cor:") || strings.Contains(m.Text, "trocou as mãos") {
 						t.Fatal(m.Text)
 					}
 				}
@@ -189,7 +189,7 @@ func TestSwapRendererUsesResolvedEvents(t *testing.T) {
 	v.ActiveColor = uno.Blue
 	for _, kind := range []uno.EventType{uno.HandsSwapped, uno.HandKept} {
 		text := plainGameplay(r.RenderActionConfirmation(11, uno.Action{Type: uno.ChooseColor, Color: uno.Blue}, game.Outcome{View: v, Events: []uno.Event{{Type: kind, PlayerID: 11, TargetID: 22}}}))
-		requireGameplay(t, text, "Freddy jogou", "Trocar cartas", "🎨 Cor: 💙 Azul")
+		requireGameplay(t, text, "Freddy jogou", "Trocar cartas", "Cor: 💙 Azul")
 		if kind == uno.HandKept {
 			requireGameplay(t, text, "Freddy manteve sua mão.")
 			if strings.Contains(text, "trocou as mãos") {

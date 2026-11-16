@@ -7,13 +7,13 @@ import (
 	"github.com/malbs/UnoGoBot/internal/groups"
 )
 
-const groupColumns = `chat_id,default_game_mode,ranking_system,installed_by_user_id,config_revision,created_at,updated_at`
+const groupColumns = `chat_id,ranking_system,installed_by_user_id,config_revision,created_at,updated_at`
 
 type scanner interface{ Scan(...any) error }
 
 func scanGroup(row scanner) (groups.Config, error) {
 	var c groups.Config
-	err := row.Scan(&c.ChatID, &c.DefaultGameMode, &c.RankingSystem, &c.InstalledByUserID, &c.Revision, &c.CreatedAt, &c.UpdatedAt)
+	err := row.Scan(&c.ChatID, &c.RankingSystem, &c.InstalledByUserID, &c.Revision, &c.CreatedAt, &c.UpdatedAt)
 	return c, err
 }
 
@@ -31,20 +31,6 @@ func (s *Store) GetOrCreateGroupConfig(ctx context.Context, chatID int64) (group
 	}
 	return c, nil
 }
-func (s *Store) SetDefaultGameMode(ctx context.Context, chatID int64, mode groups.Mode) (groups.Config, error) {
-	if chatID == 0 || !mode.Valid() {
-		return groups.Config{}, groups.ErrInvalid
-	}
-	c, err := scanGroup(s.pool.QueryRow(ctx, `INSERT INTO group_configs(chat_id,default_game_mode) VALUES($1,$2)
- ON CONFLICT(chat_id) DO UPDATE SET default_game_mode=EXCLUDED.default_game_mode,
- config_revision=group_configs.config_revision+CASE WHEN group_configs.default_game_mode<>EXCLUDED.default_game_mode THEN 1 ELSE 0 END,
- updated_at=CASE WHEN group_configs.default_game_mode<>EXCLUDED.default_game_mode THEN now() ELSE group_configs.updated_at END RETURNING `+groupColumns, chatID, mode))
-	if err != nil {
-		return groups.Config{}, operationError(ctx, "set default game mode")
-	}
-	return c, nil
-}
-
 func (s *Store) SetRankingSystem(ctx context.Context, chatID int64, system groups.RankingSystem) (groups.Config, error) {
 	if chatID == 0 || !system.Valid() {
 		return groups.Config{}, groups.ErrInvalid
@@ -128,36 +114,4 @@ func (s *Store) ObserveGroupTitle(ctx context.Context, chatID int64, title strin
 		return operationError(ctx, "observe group title")
 	}
 	return nil
-}
-
-func (s *Store) SetRankingPrivate(ctx context.Context, chatID int64, private bool) (groups.Config, error) {
-	if chatID == 0 {
-		return groups.Config{}, groups.ErrInvalid
-	}
-	var c groups.Config
-	err := s.pool.QueryRow(ctx, `INSERT INTO group_configs(chat_id,ranking_private) VALUES($1,$2)
- ON CONFLICT(chat_id) DO UPDATE SET ranking_private=EXCLUDED.ranking_private,
- config_revision=group_configs.config_revision+CASE WHEN group_configs.ranking_private<>EXCLUDED.ranking_private THEN 1 ELSE 0 END,
- updated_at=CASE WHEN group_configs.ranking_private<>EXCLUDED.ranking_private THEN now() ELSE group_configs.updated_at END RETURNING `+groupColumns+`,ranking_private`, chatID, private).
-		Scan(&c.ChatID, &c.DefaultGameMode, &c.RankingSystem, &c.InstalledByUserID, &c.Revision, &c.CreatedAt, &c.UpdatedAt, &c.RankingPrivate)
-	if err != nil {
-		return groups.Config{}, operationError(ctx, "set ranking private")
-	}
-	return c, nil
-}
-
-func (s *Store) ToggleRankingPrivate(ctx context.Context, chatID int64) (groups.Config, error) {
-	if chatID == 0 {
-		return groups.Config{}, groups.ErrInvalid
-	}
-	var c groups.Config
-	err := s.pool.QueryRow(ctx, `INSERT INTO group_configs(chat_id,ranking_private) VALUES($1,true)
- ON CONFLICT(chat_id) DO UPDATE SET ranking_private=NOT group_configs.ranking_private,
- config_revision=group_configs.config_revision+1,
- updated_at=now() RETURNING `+groupColumns+`,ranking_private`, chatID).
-		Scan(&c.ChatID, &c.DefaultGameMode, &c.RankingSystem, &c.InstalledByUserID, &c.Revision, &c.CreatedAt, &c.UpdatedAt, &c.RankingPrivate)
-	if err != nil {
-		return groups.Config{}, operationError(ctx, "toggle ranking private")
-	}
-	return c, nil
 }

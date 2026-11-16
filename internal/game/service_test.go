@@ -547,63 +547,133 @@ func TestResetChatHonorsContextWhileWaitingForGame(t *testing.T) {
 	}
 }
 
-func TestFreeRoomAuthorizationReceiptAndRematch(t *testing.T) {
+func TestGroupRoomAuthorizationReceiptAndRematch(t *testing.T) {
 	s := testService(t)
-	created, err := s.Create(t.Context(), Actor{PlayerID: 1}, CreateRequest{RoomType: "free", Origin: "webapp", GroupConfig: groups.Snapshot{RankingSystem: groups.Updated, ConfigRevision: 1}, Rules: uno.BotRules()})
-	if err != nil || created.View.RoomType != "free" || created.View.ChatID != 0 {
+	created, err := s.Create(t.Context(), Actor{PlayerID: 1, ChatID: 42}, CreateRequest{GroupConfig: groups.Snapshot{RankingSystem: groups.Updated, ConfigRevision: 1}, Rules: uno.BotRules()})
+	if err != nil || created.View.ChatID != 42 {
 		t.Fatal(created, err)
 	}
 	id := created.View.GameID
 	for _, player := range []uno.PlayerID{1, 2} {
 		v, _ := s.PublicView(t.Context(), id)
-		if _, err := s.ApplyWeb(t.Context(), Actor{PlayerID: player}, id, uno.Action{Type: uno.JoinGame, PlayerID: player, Revision: v.Revision}, fmt.Sprintf("free-join-%02d", player)); err != nil {
+		if _, err := s.ApplyWeb(t.Context(), Actor{PlayerID: player, ChatID: 42}, id, uno.Action{Type: uno.JoinGame, PlayerID: player, Revision: v.Revision}, fmt.Sprintf("room-join-%02d", player)); err != nil {
 			t.Fatal(err)
 		}
 	}
 	v, _ := s.PublicView(t.Context(), id)
-	if _, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 3}, id, uno.Action{Type: uno.StartGame, PlayerID: 3, Revision: v.Revision}, "forged-start"); !errors.Is(err, ErrForbidden) {
-		t.Fatal("non-owner started free room", err)
+	if _, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 3, ChatID: 99}, id, uno.Action{Type: uno.StartGame, PlayerID: 3, Revision: v.Revision}, "forged-start"); !errors.Is(err, ErrForbidden) {
+		t.Fatal("room accepted a foreign chat identity", err)
 	}
-	if _, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 1, ChatID: 42}, id, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: v.Revision}, "wrong-chat-start"); !errors.Is(err, ErrForbidden) {
-		t.Fatal("free room accepted group identity", err)
+	if _, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 3}, id, uno.Action{Type: uno.StartGame, PlayerID: 3, Revision: v.Revision}, "no-chat-start"); !errors.Is(err, ErrForbidden) {
+		t.Fatal("room accepted an action without chat context", err)
 	}
-	started, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 1}, id, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: v.Revision}, "free-start-0001")
+	started, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 1, ChatID: 42}, id, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: v.Revision}, "room-start-0001")
 	if err != nil || started.View.Phase != uno.TakingTurn {
 		t.Fatal(started, err)
 	}
-	retry, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 1}, id, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: v.Revision}, "free-start-0001")
+	retry, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 1, ChatID: 42}, id, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: v.Revision}, "room-start-0001")
 	if err != nil || retry.View.Revision != started.View.Revision {
-		t.Fatal("duplicate WebApp command mutated room", retry, err)
+		t.Fatal("duplicate command mutated the room", retry, err)
 	}
 	turn := started.View.CurrentTurn
-	turnActor := Actor{PlayerID: turn}
+	turnActor := Actor{PlayerID: turn, ChatID: 42}
 	drawAction := uno.Action{Type: uno.DrawCard, PlayerID: turn, Revision: started.View.Revision}
-	drawn, err := s.ApplyWeb(t.Context(), turnActor, id, drawAction, "free-draw-0001")
+	drawn, err := s.ApplyWeb(t.Context(), turnActor, id, drawAction, "room-draw-0001")
 	if err != nil {
 		t.Fatal(err)
 	}
-	drawRetry, err := s.ApplyWeb(t.Context(), turnActor, id, drawAction, "free-draw-0001")
+	drawRetry, err := s.ApplyWeb(t.Context(), turnActor, id, drawAction, "room-draw-0001")
 	if err != nil || drawRetry.View.Revision != drawn.View.Revision {
 		t.Fatal("duplicate purchase advanced twice", drawRetry, err)
 	}
 	current, _ := s.PublicView(t.Context(), id)
-	closed, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 1}, id, uno.Action{Type: uno.LeaveGame, PlayerID: 1, Revision: current.Revision}, "free-leave-0001")
-	if err != nil || !closed.View.Closed || closed.Completed == nil || closed.Completed.RoomType != "free" || closed.Completed.ChatID != 0 {
+	closed, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 1, ChatID: 42}, id, uno.Action{Type: uno.LeaveGame, PlayerID: 1, Revision: current.Revision}, "room-leave-0001")
+	if err != nil || !closed.View.Closed || closed.Completed == nil || closed.Completed.ChatID != 42 {
 		t.Fatal(closed, err)
 	}
-	if _, err := s.VoteRematch(t.Context(), Actor{PlayerID: 1}, id, closed.View.Revision, true, "free-vote-0001"); !errors.Is(err, ErrResultPending) {
+	if _, err := s.VoteRematch(t.Context(), Actor{PlayerID: 1, ChatID: 42}, id, closed.View.Revision, true, "room-vote-0001"); !errors.Is(err, ErrResultPending) {
 		t.Fatal(err)
 	}
 	s.AcknowledgeResult(id)
-	if _, err := s.VoteRematch(t.Context(), Actor{PlayerID: 1}, id, closed.View.Revision, true, "free-vote-0002"); err != nil {
+	if _, err := s.VoteRematch(t.Context(), Actor{PlayerID: 1, ChatID: 42}, id, closed.View.Revision, true, "room-vote-0002"); err != nil {
 		t.Fatal(err)
 	}
-	rematch, err := s.VoteRematch(t.Context(), Actor{PlayerID: 2}, id, closed.View.Revision, true, "free-vote-0003")
+	rematch, err := s.VoteRematch(t.Context(), Actor{PlayerID: 2, ChatID: 42}, id, closed.View.Revision, true, "room-vote-0003")
 	if err != nil || rematch.Rematch == nil || rematch.Rematch.NextGameID == "" {
 		t.Fatal(rematch, err)
 	}
 	fresh, err := s.PublicView(t.Context(), rematch.Rematch.NextGameID)
-	if err != nil || fresh.RoomType != "free" || fresh.ChatID != 0 || len(fresh.Players) != 2 {
+	if err != nil || fresh.ChatID != 42 || len(fresh.Players) != 2 {
 		t.Fatal(fresh, err)
+	}
+}
+
+func TestCreateReplaceLobby(t *testing.T) {
+	s, err := NewService()
+	if err != nil {
+		t.Fatal(err)
+	}
+	chatID := ChatID(-1234)
+
+	// 1. Create first lobby
+	out1, err := s.Create(t.Context(), Actor{PlayerID: 10, ChatID: chatID}, CreateRequest{ChatName: "Lobby1", Rules: uno.BotRules()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	join(t, s, out1.View, 20)
+
+	games, err := s.FindPlayerGames(t.Context(), Actor{PlayerID: 20})
+	if err != nil || len(games) != 1 {
+		t.Fatalf("expected player 20 to have 1 game, got %v", games)
+	}
+
+	// 2. Create second lobby without ReplaceLobby -> ErrChatOccupied
+	_, err = s.Create(t.Context(), Actor{PlayerID: 30, ChatID: chatID}, CreateRequest{ChatName: "Lobby2", Rules: uno.BotRules()})
+	if !errors.Is(err, ErrChatOccupied) {
+		t.Fatalf("expected ErrChatOccupied, got %v", err)
+	}
+
+	// 3. Create second lobby with ReplaceLobby: true -> succeeds and replaces old lobby
+	out2, err := s.Create(t.Context(), Actor{PlayerID: 30, ChatID: chatID}, CreateRequest{ChatName: "Lobby2", Rules: uno.BotRules(), ReplaceLobby: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out2.ReplacedGameID != out1.View.GameID {
+		t.Fatalf("expected ReplacedGameID %s, got %s", out1.View.GameID, out2.ReplacedGameID)
+	}
+	if out2.View.GameID == out1.View.GameID {
+		t.Fatal("expected new game ID")
+	}
+
+	// Player 20 should no longer be indexed in FindPlayerGames
+	games, err = s.FindPlayerGames(t.Context(), Actor{PlayerID: 20})
+	if err != nil || len(games) != 0 {
+		t.Fatalf("expected player 20 to have 0 games after lobby replacement, got %v", games)
+	}
+
+	// Active chat game must now be out2
+	summary, err := s.FindChatGame(t.Context(), chatID)
+	if err != nil || summary.GameID != out2.View.GameID {
+		t.Fatalf("expected active game to be %s, got %v", out2.View.GameID, summary)
+	}
+
+	// 4. Start out2 with 2 players
+	join(t, s, out2.View, 30)
+	join(t, s, out2.View, 40)
+	started := act(t, s, out2.View.GameID, Actor{PlayerID: 30, ChatID: chatID}, uno.Action{Type: uno.StartGame})
+	if started.View.Phase != uno.TakingTurn {
+		t.Fatalf("failed to start game: %v", started.View.Phase)
+	}
+
+	// 5. Trying to ReplaceLobby on an already started game MUST fail with ErrChatOccupied
+	_, err = s.Create(t.Context(), Actor{PlayerID: 50, ChatID: chatID}, CreateRequest{ChatName: "Lobby3", Rules: uno.BotRules(), ReplaceLobby: true})
+	if !errors.Is(err, ErrChatOccupied) {
+		t.Fatalf("expected ErrChatOccupied for game in progress, got %v", err)
+	}
+
+	// Game out2 must still be active and intact
+	summary, err = s.FindChatGame(t.Context(), chatID)
+	if err != nil || summary.GameID != out2.View.GameID || summary.Phase != uno.TakingTurn {
+		t.Fatalf("game in progress was corrupted: %v", summary)
 	}
 }

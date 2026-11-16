@@ -12,6 +12,18 @@ import (
 
 var _ ranking.ReadRepository = (*Store)(nil)
 
+// eligibleMonthlyLatest selects the latest scored, eligible participation of
+// each user inside the requested month. It supplies the tie-breakers.
+const eligibleMonthlyLatest = `
+ SELECT DISTINCT ON (p.user_id) p.user_id,p.position,g.finished_at
+ FROM completed_games g JOIN completed_game_players p ON p.game_id=g.game_id
+ WHERE g.chat_id=$1 AND g.scoring_status='scored'
+ AND g.finished_at >= $2::timestamptz AND g.finished_at < $3::timestamptz
+ AND p.position IS NOT NULL
+ AND ((p.final_status='went_out' AND p.went_out) OR (p.final_status='playing' AND NOT p.went_out))
+ ORDER BY p.user_id,g.finished_at DESC,g.game_id DESC
+`
+
 // ListGroupRanking reads config, exact total and a bounded ordered prefix for the
 // month of 'at' (in America/Sao_Paulo) in one statement/snapshot. Zero-score
 // completed players are valid standings. Each user's latest scored, eligible

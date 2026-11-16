@@ -15,7 +15,7 @@ import (
 	"github.com/mymmrac/telego"
 )
 
-func TestSharedWebhookUsesDerivedSecretAndPreservesPendingUpdates(t *testing.T) {
+func TestWebhookUsesDerivedSecretAndPreservesPendingUpdates(t *testing.T) {
 	master := bytes.Repeat([]byte{42}, 32)
 	secret, err := config.DeriveWebhookSecret(master)
 	if err != nil {
@@ -25,13 +25,10 @@ func TestSharedWebhookUsesDerivedSecretAndPreservesPendingUpdates(t *testing.T) 
 	svc, _ := game.NewService()
 	b := New(api, svc, nil, nil, time.Minute, nil)
 	b.SetTransport(TransportConfig{Mode: TransportWebhook, WebhookURL: "https://example.com/telegram", WebhookSecret: secret})
-	handler := b.WebhookHandler()
-	// Starting twice must re-register, including after secret rotation.
+	// Registering twice must re-register, including after secret rotation.
 	for _, key := range [][]byte{master, bytes.Repeat([]byte{43}, 32)} {
 		derived, _ := config.DeriveWebhookSecret(key)
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		if err := b.runSharedWebhook(ctx, TransportConfig{WebhookURL: "https://example.com/telegram", WebhookSecret: derived}); err != nil {
+		if err := b.registerWebhook(context.Background(), TransportConfig{WebhookURL: "https://example.com/telegram", WebhookSecret: derived}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -46,6 +43,7 @@ func TestSharedWebhookUsesDerivedSecretAndPreservesPendingUpdates(t *testing.T) 
 			t.Fatal("webhook behavior changed")
 		}
 	}
+	handler := b.webhookHandler(secret)
 	for _, tc := range []struct {
 		header string
 		status int

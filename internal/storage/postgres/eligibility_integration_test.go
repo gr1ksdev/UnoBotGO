@@ -17,7 +17,7 @@ import (
 func eligibleResult(t *testing.T, system groups.RankingSystem, n, abandoned int, reason string) ranking.Result {
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Microsecond)
-	r := ranking.Result{GameID: "eligibility", ChatID: 42, GameMode: groups.Classic, RankingSystem: system, ConfigRevision: 1, StartedAt: now.Add(-time.Minute), FinishedAt: now, FinalRevision: 100, FinishReason: reason}
+	r := ranking.Result{GameID: "eligibility", ChatID: 42, GameMode: ranking.GameModeClassic, RankingSystem: system, ConfigRevision: 1, StartedAt: now.Add(-time.Minute), FinishedAt: now, FinalRevision: 100, FinishReason: reason}
 	for i := 1; i <= n; i++ {
 		status := "went_out"
 		if i == n {

@@ -12,7 +12,7 @@ const (
 	InlineTokenTTL            = 2 * time.Minute
 	InlineTokenLimit          = 20000
 	InlineTokenUserLimit      = 512
-	InitDataMaxAge            = time.Hour
 	MigrationTimeout          = 2 * time.Minute
+	ShutdownTimeout           = 12 * time.Second
 	WebhookDropPendingUpdates = false
 )

@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"flag"
-	"github.com/malbs/UnoGoBot/internal/app"
-	"github.com/malbs/UnoGoBot/internal/config"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/malbs/UnoGoBot/internal/app"
+	"github.com/malbs/UnoGoBot/internal/config"
 )
 
 func main() {
@@ -17,9 +17,8 @@ func main() {
 		os.Exit(1)
 	}
 }
+
 func run() error {
-	dev := flag.Bool("dev", false, "allow Vite development without embedded frontend; authentication still required")
-	flag.Parse()
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -28,5 +27,5 @@ func run() error {
 	slog.SetDefault(logger)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return app.Run(ctx, cfg, *dev, logger)
+	return app.Run(ctx, cfg, logger)
 }

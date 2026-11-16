@@ -26,7 +26,7 @@ func TestMinimalConfigAndInternalPolicies(t *testing.T) {
 	if cfg.Token != env["TOKEN"] || cfg.DatabaseURL != env["DATABASE_URL"] || cfg.TelegramMode != "polling" || cfg.WebAddr != ":8080" || cfg.TurnTimeout != 2*time.Minute || len(cfg.MiniAppSecret) != 32 || cfg.WebhookURL != "" {
 		t.Fatal("unexpected minimal configuration")
 	}
-	if LogLevel != slog.LevelInfo || HistoryLimit != 100 || InlineTokenTTL != 2*time.Minute || InlineTokenLimit != 20000 || InlineTokenUserLimit != 512 || InitDataMaxAge != time.Hour || MigrationTimeout != 2*time.Minute {
+	if LogLevel != slog.LevelInfo || HistoryLimit != 100 || InlineTokenTTL != 2*time.Minute || InlineTokenLimit != 20000 || InlineTokenUserLimit != 512 || MigrationTimeout != 2*time.Minute {
 		t.Fatal("fixed policies changed")
 	}
 }

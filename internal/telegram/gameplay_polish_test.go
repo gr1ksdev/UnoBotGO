@@ -44,14 +44,14 @@ func TestGameplayCardColorAndPenalty(t *testing.T) {
 					v.DrawCounter = 6
 				}
 				text := plainGameplay(r.RenderPublicState(v))
-				requireGameplay(t, text, "🃏 Topo:", "🎯 Vez: 👉 Mezi", "👥 Mezi → Jeesttin → Freddy")
+				requireGameplay(t, text, "🃏 Topo:", "Vez de: Mezi", "👥 Mezi → Jeesttin → Freddy")
 				if strings.Contains(text, "🎨 Cor:") != colorless {
 					t.Fatalf("wrong color visibility: %s", text)
 				}
 				if v.DrawCounter > 0 {
 					requireGameplay(t, text, "⚠️ Compra acumulada: 6 cartas")
 				}
-				for _, obsolete := range []string{"Cor ativa", "Carta no topo", "Jogadores em jogo", "Penalidade acumulada", "Colocações:", " | ", "Vez de:"} {
+				for _, obsolete := range []string{"Cor ativa", "Carta no topo", "Jogadores em jogo", "Penalidade acumulada", "Colocações:", " | "} {
 					if strings.Contains(text, obsolete) {
 						t.Fatalf("obsolete %q: %s", obsolete, text)
 					}
@@ -92,7 +92,10 @@ func TestGameplayActionEffectResultAndFinish(t *testing.T) {
 	out.View.Order = []uno.PlayerID{22, 33}
 	out.View.Players[0].Active = false
 	text := plainGameplay(r.RenderActionConfirmation(11, uno.Action{Type: uno.PlayCard}, out))
-	requireGameplay(t, text, "Freddy jogou 💛 🔄 Inverter!\n🔄 O sentido foi invertido.\n🚫 Jeesttin foi pulado.\n🥇 Freddy terminou em 1º lugar!", "🏅 Classificação: 🥇 Freddy", "🎯 Vez: 👉 Mezi", "👥 Mezi → Jeesttin")
+	requireGameplay(t, text, "Freddy jogou 💛 🔄 Inverter!\n🔄 O sentido foi invertido.\n🚫 Jeesttin foi pulado.\n🥇 Freddy terminou em 1º lugar!", "Vez de: Mezi")
+	if strings.Contains(text, "🏅 Classificação") || strings.Contains(text, "👥") {
+		t.Fatalf("running confirmation carried the detailed state: %s", text)
+	}
 	// Without a DirectionChanged event a Skip must not invent a reversal.
 	out.Events = []uno.Event{{Type: uno.PlayerSkipped, PlayerID: 33}}
 	out.View.TopCard = &uno.Card{Color: uno.Red, Rank: uno.Skip}
@@ -144,12 +147,12 @@ func TestGameplayChoicesMentionsEscapingAndPlacements(t *testing.T) {
 	v.DrawCounter = 4
 	text := r.RenderActionConfirmation(22, uno.Action{Type: uno.ChooseColor, Color: uno.Yellow}, game.Outcome{View: v})
 	assertMentionTargets(t, text, r.userCache, 33, 999)
-	requireGameplay(t, plainGameplay(text), "Mezi escolheu 💛 Amarelo!", "🎨 Cor: 💛 Amarelo", "Compra acumulada: 4 cartas")
+	requireGameplay(t, plainGameplay(text), "Mezi escolheu 💛 Amarelo!", "Vez de: Jeesttin")
 	v.TopCard = &uno.Card{Color: uno.NoColor, Rank: uno.SwapHands}
 	v.DrawCounter = 0
 	text = r.RenderActionConfirmation(22, uno.Action{Type: uno.ChooseColor, Color: uno.Yellow}, game.Outcome{View: v, Events: []uno.Event{{Type: uno.HandsSwapped, PlayerID: 22, TargetID: 11}}})
 	assertMentionTargets(t, text, r.userCache, 33, 999)
-	requireGameplay(t, text, "trocou as mãos", "🎨 Cor:")
+	requireGameplay(t, text, "trocou as mãos", "Cor:")
 	v.Placements = []uno.Placement{{PlayerID: 11, Position: 1}, {PlayerID: 22, Position: 2}}
 	v.Order = []uno.PlayerID{33}
 	v.Players[0].Active = false

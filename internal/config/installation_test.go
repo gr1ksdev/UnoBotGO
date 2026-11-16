@@ -28,7 +28,7 @@ func TestMinimalConfigAndPolicies(t *testing.T) {
 	if cfg.TelegramMode != "polling" || cfg.TurnTimeout != 2*time.Minute || cfg.WebAddr != ":8080" || cfg.WebhookURL != "" {
 		t.Fatal("incorrect defaults")
 	}
-	if LogLevel != slog.LevelInfo || HistoryLimit != 100 || InlineTokenTTL != 2*time.Minute || InlineTokenLimit != 20000 || InlineTokenUserLimit != 512 || InitDataMaxAge != time.Hour || MigrationTimeout != 2*time.Minute || WebhookDropPendingUpdates {
+	if LogLevel != slog.LevelInfo || HistoryLimit != 100 || InlineTokenTTL != 2*time.Minute || InlineTokenLimit != 20000 || InlineTokenUserLimit != 512 || MigrationTimeout != 2*time.Minute || WebhookDropPendingUpdates {
 		t.Fatal("application policies changed")
 	}
 }

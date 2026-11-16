@@ -78,12 +78,12 @@ func TestMigrations(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `INSERT INTO group_configs(chat_id) VALUES(42)`); err != nil {
 		t.Fatal(err)
 	}
-	var mode, system string
-	if err := s.pool.QueryRow(ctx, `SELECT default_game_mode,ranking_system FROM group_configs WHERE chat_id=42`).Scan(&mode, &system); err != nil {
+	var system string
+	if err := s.pool.QueryRow(ctx, `SELECT ranking_system FROM group_configs WHERE chat_id=42`).Scan(&system); err != nil {
 		t.Fatal(err)
 	}
-	if mode != "caseiro" || system != "updated" {
-		t.Fatalf("unexpected defaults %s %s", mode, system)
+	if system != "updated" {
+		t.Fatalf("unexpected default ranking system %s", system)
 	}
 	if _, err := s.pool.Exec(ctx, `UPDATE schema_migrations SET checksum='tampered'`); err != nil {
 		t.Fatal(err)

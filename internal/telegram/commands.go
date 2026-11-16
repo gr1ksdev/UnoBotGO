@@ -17,10 +17,7 @@ import (
 
 type CommandHandler struct {
 	rankingService *ranking.Service
-	miniAppURL     string
-	playAppURL     string
 	knownUsers     groups.UserRepository
-	userPrivacy    UserPrivacyRepository
 	finalize       func(context.Context, game.Outcome) func()
 	groupConfigs   groups.Repository
 	groupsService  *groups.Service
@@ -80,36 +77,14 @@ func makeGameButtons(view game.PublicGameView) *telego.InlineKeyboardMarkup {
 	if view.GameID == "" || view.Closed || view.Phase == uno.Finished {
 		return nil
 	}
-	if view.Phase == uno.Lobby {
-		isCaseiro := view.Rules.StackWildDrawFourOnTwo || view.Rules.StackDrawTwoOnWildFour
-		classicText := "🎻 Clássico"
-		caseiroText := "🏠 Caseiro"
-		if isCaseiro {
-			caseiroText = "✅ 🏠 Caseiro"
-		} else {
-			classicText = "✅ 🎻 Clássico"
-		}
-		return &telego.InlineKeyboardMarkup{
-			InlineKeyboard: [][]telego.InlineKeyboardButton{
-				{
-					{
-						Text:         classicText,
-						CallbackData: fmt.Sprintf("mode_classic_%s", view.GameID),
-					},
-					{
-						Text:         caseiroText,
-						CallbackData: fmt.Sprintf("mode_caseiro_%s", view.GameID),
-					},
-				},
-			},
-		}
-	}
 	return &telego.InlineKeyboardMarkup{
 		InlineKeyboard: [][]telego.InlineKeyboardButton{
 			{
 				{
-					Text:                         "🃏 Suas cartas",
-					SwitchInlineQueryCurrentChat: stringPtr(fmt.Sprintf("g_%s_%d", view.GameID, view.Revision)),
+					Text: "🃏 Suas cartas",
+					// An empty inline query keeps the chat input free of any
+					// internal identifier; the bot resolves the game itself.
+					SwitchInlineQueryCurrentChat: stringPtr(""),
 				},
 			},
 		},
@@ -130,14 +105,6 @@ func makePrivateStartButtons(botUsername string) *telego.InlineKeyboardMarkup {
 }
 
 func makeGroupConfigButtons(config groups.Config) *telego.InlineKeyboardMarkup {
-	classicText := "Clássico"
-	caseiroText := "Caseiro"
-	if config.DefaultGameMode == groups.Caseiro {
-		caseiroText = "✅ Caseiro"
-	} else {
-		classicText = "✅ Clássico"
-	}
-
 	legacyText := "Legado"
 	updatedText := "Atualizado"
 	if config.RankingSystem == groups.Updated {
@@ -146,26 +113,8 @@ func makeGroupConfigButtons(config groups.Config) *telego.InlineKeyboardMarkup {
 		legacyText = "✅ Legado"
 	}
 
-	publicText := "Público"
-	anonText := "Anônimo"
-	if config.RankingPrivate {
-		anonText = "✅ Anônimo"
-	} else {
-		publicText = "✅ Público"
-	}
-
 	return &telego.InlineKeyboardMarkup{
 		InlineKeyboard: [][]telego.InlineKeyboardButton{
-			{
-				{
-					Text:         classicText,
-					CallbackData: fmt.Sprintf("cfg_mode_classic_%d", config.ChatID),
-				},
-				{
-					Text:         caseiroText,
-					CallbackData: fmt.Sprintf("cfg_mode_caseiro_%d", config.ChatID),
-				},
-			},
 			{
 				{
 					Text:         legacyText,
@@ -174,16 +123,6 @@ func makeGroupConfigButtons(config groups.Config) *telego.InlineKeyboardMarkup {
 				{
 					Text:         updatedText,
 					CallbackData: fmt.Sprintf("cfg_rank_updated_%d", config.ChatID),
-				},
-			},
-			{
-				{
-					Text:         publicText,
-					CallbackData: fmt.Sprintf("cfg_privacy_public_%d", config.ChatID),
-				},
-				{
-					Text:         anonText,
-					CallbackData: fmt.Sprintf("cfg_privacy_anon_%d", config.ChatID),
 				},
 			},
 		},
@@ -261,10 +200,6 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 			h.reply(ctx, msg.Chat.ID, h.renderer.RenderHelp(h.botUsername), nil)
 		case "ranking":
 			h.handlePrivateRanking(ctx, msg.Chat.ID, int64(actorID))
-		case "privacidade":
-			h.handlePrivatePrivacy(ctx, msg.Chat.ID, int64(actorID))
-		case "play", "jogar":
-			h.handlePrivatePlay(ctx, msg.Chat.ID)
 		default:
 			h.reply(ctx, msg.Chat.ID, "⚠️ Este comando só pode ser utilizado em grupos. Adicione o bot a um grupo para jogar!\n\nUse /help para mais instruções.", nil)
 		}
@@ -282,30 +217,18 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		_ = h.service.ObservePlayer(ctx, game.Actor{PlayerID: actorID, ChatID: chatID}, summary.GameID, observedName(*msg.From), msg.From.Username)
 	}
 	// Group command handling
-	if h.handleDebugCommand(ctx, msg, cmdName, fields) {
-		return
-	}
 	switch cmdName {
 	case "ranking":
 		h.handleRanking(ctx, msg.Chat.ID)
-	case "play", "jogar":
-		h.handleGroupPlay(ctx, msg.Chat.ID)
 	case "novo":
-		mode := ""
-		if len(fields) > 1 {
-			mode = "classic"
-			if strings.EqualFold(fields[1], "caseiro") {
-				mode = "caseiro"
-			}
-		}
-		h.handleNovoObserved(ctx, actorID, chatID, msg.Chat.Title, mode, msg.From)
+		h.handleNovoObserved(ctx, actorID, chatID, msg.Chat.Title, msg.From)
 	case "trancar", "destrancar":
 		h.handleRoomLock(ctx, actorID, chatID, cmdName == "trancar")
 	case "entrar", "join":
 		h.handleEntrar(ctx, actorID, chatID)
 	case "start":
 		if len(fields) > 1 && fields[1] == "true" {
-			h.reply(ctx, msg.Chat.ID, "👋 <b>UnoBotGO adicionado!</b>\n\nUse /novo para criar uma partida ou /help para conhecer os comandos.", nil)
+			h.reply(ctx, int64(msg.Chat.ID), "👋 <b>UnoBotGO adicionado!</b>\n\nUse /novo para criar uma partida ou /help para conhecer os comandos.", nil)
 			return
 		}
 		h.handleIniciar(ctx, actorID, chatID)
@@ -321,10 +244,8 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		h.HandleReset(ctx, msg, nil)
 	case "config":
 		h.handleConfig(ctx, msg)
-	case "privacidade":
-		h.handleGroupPrivacy(ctx, msg)
 	case "ajuda", "help":
-		h.reply(ctx, msg.Chat.ID, h.renderer.RenderHelp(h.botUsername), nil)
+		h.reply(ctx, int64(msg.Chat.ID), h.renderer.RenderHelp(h.botUsername), nil)
 	}
 }
 
@@ -446,10 +367,7 @@ func (h *CommandHandler) HandleReset(ctx context.Context, msg *telego.Message, r
 	h.reply(ctx, msg.Chat.ID, "♻️ <b>Estado deste grupo resetado.</b> Tarefas e botões antigos foram invalidados. Use /novo para iniciar uma nova partida.", nil)
 }
 
-func (h *CommandHandler) handleNovo(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID, chatTitle, mode string) {
-	h.handleNovoObserved(ctx, actorID, chatID, chatTitle, mode, nil)
-}
-func (h *CommandHandler) handleNovoObserved(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID, chatTitle, mode string, user *telego.User) {
+func (h *CommandHandler) handleNovoObserved(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID, chatTitle string, user *telego.User) {
 	config := groups.Defaults(int64(chatID))
 	if h.groupConfigs != nil {
 		var err error
@@ -465,28 +383,25 @@ func (h *CommandHandler) handleNovoObserved(ctx context.Context, actorID uno.Pla
 			h.logger.Warn("failed to observe group user", "chat_id", chatID, "error", err)
 		}
 	}
-	if mode == "" {
-		mode = string(config.DefaultGameMode)
-	}
-	rules := uno.BotRules()
-	if strings.EqualFold(mode, "caseiro") {
-		rules = uno.CaseiroRules()
-	}
 	req := game.CreateRequest{
-		GroupConfig: config.Snapshot(),
-		ChatName:    chatTitle,
-		Rules:       rules,
+		GroupConfig:  config.Snapshot(),
+		ChatName:     chatTitle,
+		Rules:        uno.CaseiroRules(),
+		ReplaceLobby: true,
 	}
 	actor := game.Actor{PlayerID: actorID, ChatID: chatID}
 
 	outcome, err := h.service.Create(ctx, actor, req)
 	if err != nil {
 		if errors.Is(err, game.ErrChatOccupied) {
-			h.reply(ctx, int64(chatID), "⚠️ Já existe uma partida aberta ou em andamento neste grupo.\nUse /estado para ver ou /cancelar para encerrar.", nil)
+			h.reply(ctx, int64(chatID), "⚠️ Já existe uma partida iniciada em andamento neste grupo.\nUse /estado para ver ou /cancelar para encerrar.", nil)
 			return
 		}
 		h.reply(ctx, int64(chatID), "❌ Não foi possível criar a partida. Tente novamente.", nil)
 		return
+	}
+	if outcome.ReplacedGameID != "" {
+		h.tokens.InvalidateGame(outcome.ReplacedGameID)
 	}
 
 	h.reply(ctx, int64(chatID), h.renderer.RenderLobby(outcome.View), h.gameMarkup(outcome.View))
@@ -865,64 +780,3 @@ func (h *CommandHandler) HandleMyChatMember(ctx context.Context, update *telego.
 	buttons := makeGroupWelcomeButtons(chatID)
 	h.reply(ctx, chatID, text, buttons)
 }
-
-func (h *CommandHandler) handlePrivatePrivacy(ctx context.Context, chatID int64, actorID int64) {
-	if h.userPrivacy == nil {
-		h.reply(ctx, chatID, "❌ Configuração de privacidade não disponível no momento.", nil)
-		return
-	}
-	private, err := h.userPrivacy.ToggleUserRankingPrivacy(ctx, actorID)
-	if err != nil {
-		h.logger.WarnContext(ctx, "failed to toggle user ranking privacy", "user_id", actorID, "error", err)
-		h.reply(ctx, chatID, "❌ Não foi possível alterar sua privacidade no momento.", nil)
-		return
-	}
-	h.reply(ctx, chatID, h.renderer.RenderUserPrivacy(private), nil)
-}
-
-func (h *CommandHandler) handleGroupPrivacy(ctx context.Context, msg *telego.Message) {
-	if msg == nil || msg.From == nil {
-		return
-	}
-	chatID := msg.Chat.ID
-	actorID := msg.From.ID
-
-	svc := h.getGroupsService()
-	if svc == nil {
-		h.reply(ctx, chatID, "❌ Configuração não disponível no momento.", nil)
-		return
-	}
-
-	_, allowed, err := svc.CanConfigureUser(ctx, chatID, actorID)
-	if err != nil && !errors.Is(err, groups.ErrForbidden) {
-		h.logger.WarnContext(ctx, "failed to check privacy permissions", "chat_id", chatID, "user_id", actorID, "error", err)
-	}
-
-	if !allowed {
-		h.reply(ctx, chatID, "⚠️ Somente administradores ou quem adicionou o bot pode alterar esta configuração.", nil)
-		return
-	}
-
-	updated, err := svc.ToggleRankingPrivate(ctx, chatID, actorID)
-	if err != nil {
-		h.logger.WarnContext(ctx, "failed to toggle group ranking privacy", "chat_id", chatID, "user_id", actorID, "error", err)
-		h.reply(ctx, chatID, "❌ Não foi possível alterar a privacidade do grupo no momento.", nil)
-		return
-	}
-	h.reply(ctx, chatID, h.renderer.RenderGroupPrivacy(updated.RankingPrivate), nil)
-}
-
-func (h *CommandHandler) handlePrivatePlay(ctx context.Context, chatID int64) {
-	h.reply(ctx, chatID, "🎮 <b>Jogar UNO</b>\n\nAbra o WebApp para criar, entrar ou gerenciar suas salas de UNO!", h.playMarkup())
-}
-
-func (h *CommandHandler) handleGroupPlay(ctx context.Context, chatID int64) {
-	if summary, err := h.service.FindChatGame(ctx, game.ChatID(chatID)); err == nil && summary.GameID != "" {
-		if view, err := h.service.PublicView(ctx, summary.GameID); err == nil && !view.Closed {
-			h.reply(ctx, chatID, "🎮 <b>Partida no grupo</b>\n\nToque no botão abaixo para abrir a partida no WebApp:", h.gameMarkup(view))
-			return
-		}
-	}
-	h.reply(ctx, chatID, "🎮 <b>Jogar UNO</b>\n\nAbra o WebApp para jogar ou criar uma nova partida:", h.playMarkup())
-}
-

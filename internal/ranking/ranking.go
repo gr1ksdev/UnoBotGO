@@ -23,6 +23,17 @@ const (
 	RoomFree  RoomType = "free"
 )
 
+// GameMode is the persisted mode label. Only the house rules exist; the
+// classic label is preserved for historical results.
+type GameMode string
+
+const (
+	GameModeHouse   GameMode = "caseiro"
+	GameModeClassic GameMode = "classic"
+)
+
+func (m GameMode) Valid() bool { return m == GameModeHouse || m == GameModeClassic }
+
 var ErrInvalid = errors.New("ranking: invalid completed result")
 var ErrConflict = errors.New("ranking: GameID already contains a different result")
 var ErrNeedsProductDecision = errors.New("ranking: scoring policy requires product decision")
@@ -79,7 +90,7 @@ type Result struct {
 	RoomType              RoomType
 	GameID                string
 	ChatID                int64
-	GameMode              groups.Mode
+	GameMode              GameMode
 	RankingSystem         groups.RankingSystem
 	ConfigRevision        int64
 	StartedAt, FinishedAt time.Time

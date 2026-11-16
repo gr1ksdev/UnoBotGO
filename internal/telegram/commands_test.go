@@ -854,3 +854,97 @@ func TestCancelGameByAdminAndCreator(t *testing.T) {
 		t.Fatalf("expected creator cancel message, got: %s", lastMsg)
 	}
 }
+
+func TestNovoCommandReplacesUnstartedLobbyAndProtectsStartedGame(t *testing.T) {
+	mockAPI := newMockBotAPI()
+	svc, err := game.NewService()
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	renderer := NewRenderer(NewUserCache(100))
+	tokens := NewTokenStore(1000, 100, time.Now, nil)
+	cmdHandler := NewCommandHandler(mockAPI, svc, renderer, tokens, "unobot", nil)
+	ctx := context.Background()
+
+	chatID := int64(-4001)
+
+	// 1. User 10 creates first lobby
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup", Title: "UNO Replace Test"},
+		From: &telego.User{ID: 10, FirstName: "Alice"},
+		Text: "/novo@unobot",
+	})
+	firstGame, err := svc.FindChatGame(ctx, game.ChatID(chatID))
+	if err != nil {
+		t.Fatalf("failed to find chat game: %v", err)
+	}
+
+	// User 20 enters
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup", Title: "UNO Replace Test"},
+		From: &telego.User{ID: 20, FirstName: "Bob"},
+		Text: "/entrar@unobot",
+	})
+
+	// 2. User 30 sends /novo on unstarted lobby -> must create fresh clean lobby
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup", Title: "UNO Replace Test"},
+		From: &telego.User{ID: 30, FirstName: "Charlie"},
+		Text: "/novo@unobot",
+	})
+
+	secondGame, err := svc.FindChatGame(ctx, game.ChatID(chatID))
+	if err != nil {
+		t.Fatalf("failed to find chat game after replace: %v", err)
+	}
+	if secondGame.GameID == firstGame.GameID {
+		t.Fatalf("expected new game ID after /novo on unstarted lobby, but got same ID %s", firstGame.GameID)
+	}
+
+	// Verify clean lobby message was sent
+	lastMsg := mockAPI.LastSentMessage()
+	if !strings.Contains(lastMsg, "Partida de UNO") || !strings.Contains(lastMsg, "Nenhum jogador inscrito ainda") {
+		t.Fatalf("expected lobby message, got: %s", lastMsg)
+	}
+
+	// 3. Players join the second game and start it
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup", Title: "UNO Replace Test"},
+		From: &telego.User{ID: 30, FirstName: "Charlie"},
+		Text: "/entrar@unobot",
+	})
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup", Title: "UNO Replace Test"},
+		From: &telego.User{ID: 40, FirstName: "David"},
+		Text: "/entrar@unobot",
+	})
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup", Title: "UNO Replace Test"},
+		From: &telego.User{ID: 30, FirstName: "Charlie"},
+		Text: "/iniciar@unobot",
+	})
+
+	startedGame, err := svc.FindChatGame(ctx, game.ChatID(chatID))
+	if err != nil || startedGame.Phase == uno.Lobby {
+		t.Fatalf("expected game to be started, got: %+v, err: %v", startedGame, err)
+	}
+
+	// 4. User 50 sends /novo while match is in progress -> MUST NOT REPLACE!
+	cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup", Title: "UNO Replace Test"},
+		From: &telego.User{ID: 50, FirstName: "Eve"},
+		Text: "/novo@unobot",
+	})
+
+	blockedMsg := mockAPI.LastSentMessage()
+	if !strings.Contains(blockedMsg, "Já existe uma partida iniciada em andamento") {
+		t.Fatalf("expected blocked message for game in progress, got: %s", blockedMsg)
+	}
+
+	// Verify started game is completely intact
+	afterGame, err := svc.FindChatGame(ctx, game.ChatID(chatID))
+	if err != nil || afterGame.GameID != startedGame.GameID || afterGame.Phase == uno.Lobby {
+		t.Fatalf("game in progress was corrupted: %+v", afterGame)
+	}
+}

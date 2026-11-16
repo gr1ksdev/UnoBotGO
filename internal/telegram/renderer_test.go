@@ -281,7 +281,7 @@ func TestRendererMentionTargetsFollowResultingTurn(t *testing.T) {
 				}}
 				confirmation := r.RenderActionConfirmation(11, uno.Action{Type: action, Color: uno.Blue}, out)
 				assertMentionTargets(t, confirmation, cache, tc.real, 999)
-				if (tc.closed || tc.phase == uno.Finished) && strings.Contains(confirmation, "🎯 Vez:") {
+				if (tc.closed || tc.phase == uno.Finished) && strings.Contains(confirmation, "Vez de:") {
 					t.Fatalf("turn after closure: %s", confirmation)
 				}
 			}
@@ -342,17 +342,15 @@ func TestGameButtonsRespectLifecycle(t *testing.T) {
 			}
 			continue
 		}
-		if phase == uno.Lobby {
-			if markup == nil || len(markup.InlineKeyboard) != 1 || len(markup.InlineKeyboard[0]) != 2 {
-				t.Fatalf("expected lobby mode buttons: %+v", markup)
-			}
-			if markup.InlineKeyboard[0][0].CallbackData != "mode_classic_context" || markup.InlineKeyboard[0][1].CallbackData != "mode_caseiro_context" {
-				t.Fatalf("unexpected lobby callback data: %+v", markup)
-			}
-		} else {
-			if markup == nil || len(markup.InlineKeyboard) != 1 || len(markup.InlineKeyboard[0]) != 1 || *markup.InlineKeyboard[0][0].SwitchInlineQueryCurrentChat != "g_context_0" {
-				t.Fatalf("contextual hand button changed: %+v", markup)
-			}
+		if markup == nil || len(markup.InlineKeyboard) != 1 || len(markup.InlineKeyboard[0]) != 1 {
+			t.Fatalf("expected a single hand button: %+v", markup)
+		}
+		button := markup.InlineKeyboard[0][0]
+		if button.Text != "🃏 Suas cartas" {
+			t.Fatalf("unexpected button text: %+v", button)
+		}
+		if button.SwitchInlineQueryCurrentChat == nil || *button.SwitchInlineQueryCurrentChat != "" {
+			t.Fatalf("hand button exposed an internal identifier: %+v", button)
 		}
 		v.Closed = true
 		if makeGameButtons(v) != nil {
@@ -365,169 +363,59 @@ func TestRenderer_RenderGroupConfig(t *testing.T) {
 	r := NewRenderer(nil)
 
 	tests := []struct {
-		name                 string
-		cfg                  groups.Config
-		wantModeHeader       string
-		wantRankHeader       string
-		wantPrivacyHeader    string
-		wantModeBlock        string
-		wantRankBlock        string
-		wantPrivacyBlock     string
-		unwantModeSummary    string
-		unwantRankSummary    string
-		unwantPrivacySummary string
+		name           string
+		system         groups.RankingSystem
+		wantRankHeader string
+		wantRankBlock  string
+		unwantSummary  string
 	}{
 		{
-			name: "Classic + Legacy (Public)",
-			cfg: groups.Config{
-				DefaultGameMode: groups.Classic,
-				RankingSystem:   groups.Legacy,
-				RankingPrivate:  false,
-			},
-			wantModeHeader:       "<b>Modo padrão de partida:</b> Clássico",
-			wantRankHeader:       "<b>Sistema de ranking:</b> Legado",
-			wantPrivacyHeader:    "<b>Privacidade no ranking:</b> Público",
-			wantModeBlock:        "<blockquote><b>🎮 Clássico</b>\nRegras padrão do bot, sem as combinações extras do modo Caseiro.</blockquote>",
-			wantRankBlock:        "<blockquote><b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.</blockquote>",
-			wantPrivacyBlock:     "<blockquote><b>🌐 Público</b>\nO grupo e seus membros aparecem normalmente com nome e foto no Ranking Global.</blockquote>",
-			unwantModeSummary:    "🎮 Caseiro",
-			unwantRankSummary:    "🏆 Atualizado",
-			unwantPrivacySummary: "🔒 Anônimo",
+			name:           "Legacy",
+			system:         groups.Legacy,
+			wantRankHeader: "<b>Sistema de ranking:</b> Legado",
+			wantRankBlock:  "<blockquote><b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.</blockquote>",
+			unwantSummary:  "🏆 Atualizado",
 		},
 		{
-			name: "Classic + Updated (Public)",
-			cfg: groups.Config{
-				DefaultGameMode: groups.Classic,
-				RankingSystem:   groups.Updated,
-				RankingPrivate:  false,
-			},
-			wantModeHeader:       "<b>Modo padrão de partida:</b> Clássico",
-			wantRankHeader:       "<b>Sistema de ranking:</b> Atualizado",
-			wantPrivacyHeader:    "<b>Privacidade no ranking:</b> Público",
-			wantModeBlock:        "<blockquote><b>🎮 Clássico</b>\nRegras padrão do bot, sem as combinações extras do modo Caseiro.</blockquote>",
-			wantRankBlock:        "<blockquote><b>🏆 Atualizado</b>\nA pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe.</blockquote>",
-			wantPrivacyBlock:     "<blockquote><b>🌐 Público</b>\nO grupo e seus membros aparecem normalmente com nome e foto no Ranking Global.</blockquote>",
-			unwantModeSummary:    "🎮 Caseiro",
-			unwantRankSummary:    "🏆 Legado",
-			unwantPrivacySummary: "🔒 Anônimo",
-		},
-		{
-			name: "Caseiro + Legacy (Public)",
-			cfg: groups.Config{
-				DefaultGameMode: groups.Caseiro,
-				RankingSystem:   groups.Legacy,
-				RankingPrivate:  false,
-			},
-			wantModeHeader:       "<b>Modo padrão de partida:</b> Caseiro",
-			wantRankHeader:       "<b>Sistema de ranking:</b> Legado",
-			wantPrivacyHeader:    "<b>Privacidade no ranking:</b> Público",
-			wantModeBlock:        "<blockquote><b>🎮 Caseiro</b>\nPermite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4.</blockquote>",
-			wantRankBlock:        "<blockquote><b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.</blockquote>",
-			wantPrivacyBlock:     "<blockquote><b>🌐 Público</b>\nO grupo e seus membros aparecem normalmente com nome e foto no Ranking Global.</blockquote>",
-			unwantModeSummary:    "🎮 Clássico",
-			unwantRankSummary:    "🏆 Atualizado",
-			unwantPrivacySummary: "🔒 Anônimo",
-		},
-		{
-			name: "Caseiro + Updated (Public)",
-			cfg: groups.Config{
-				DefaultGameMode: groups.Caseiro,
-				RankingSystem:   groups.Updated,
-				RankingPrivate:  false,
-			},
-			wantModeHeader:       "<b>Modo padrão de partida:</b> Caseiro",
-			wantRankHeader:       "<b>Sistema de ranking:</b> Atualizado",
-			wantPrivacyHeader:    "<b>Privacidade no ranking:</b> Público",
-			wantModeBlock:        "<blockquote><b>🎮 Caseiro</b>\nPermite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4.</blockquote>",
-			wantRankBlock:        "<blockquote><b>🏆 Atualizado</b>\nA pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe.</blockquote>",
-			wantPrivacyBlock:     "<blockquote><b>🌐 Público</b>\nO grupo e seus membros aparecem normalmente com nome e foto no Ranking Global.</blockquote>",
-			unwantModeSummary:    "🎮 Clássico",
-			unwantRankSummary:    "🏆 Legado",
-			unwantPrivacySummary: "🔒 Anônimo",
-		},
-		{
-			name: "Caseiro + Updated (Private)",
-			cfg: groups.Config{
-				DefaultGameMode: groups.Caseiro,
-				RankingSystem:   groups.Updated,
-				RankingPrivate:  true,
-			},
-			wantModeHeader:       "<b>Modo padrão de partida:</b> Caseiro",
-			wantRankHeader:       "<b>Sistema de ranking:</b> Atualizado",
-			wantPrivacyHeader:    "<b>Privacidade no ranking:</b> Anônimo",
-			wantModeBlock:        "<blockquote><b>🎮 Caseiro</b>\nPermite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4.</blockquote>",
-			wantRankBlock:        "<blockquote><b>🏆 Atualizado</b>\nA pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe.</blockquote>",
-			wantPrivacyBlock:     "<blockquote><b>🔒 Anônimo</b>\nEste grupo aparece como Grupo anônimo no Ranking Global, ocultando nome, foto e membros.</blockquote>",
-			unwantModeSummary:    "🎮 Clássico",
-			unwantRankSummary:    "🏆 Legado",
-			unwantPrivacySummary: "🌐 Público",
+			name:           "Updated",
+			system:         groups.Updated,
+			wantRankHeader: "<b>Sistema de ranking:</b> Atualizado",
+			wantRankBlock:  "<blockquote><b>🏆 Atualizado</b>\nA pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe.</blockquote>",
+			unwantSummary:  "🏆 Legado",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := r.RenderGroupConfig(tc.cfg)
+			got := r.RenderGroupConfig(groups.Config{ChatID: 42, RankingSystem: tc.system})
 
 			if !strings.Contains(got, "⚙️ <b>Configuração do Grupo</b>") {
 				t.Fatalf("missing title in: %s", got)
 			}
-			if !strings.Contains(got, tc.wantModeHeader) {
-				t.Fatalf("missing mode header %q in: %s", tc.wantModeHeader, got)
+			if !strings.Contains(got, "<b>Modo de partida:</b> Caseiro") {
+				t.Fatalf("missing mode header in: %s", got)
 			}
 			if !strings.Contains(got, tc.wantRankHeader) {
 				t.Fatalf("missing rank header %q in: %s", tc.wantRankHeader, got)
 			}
-			if !strings.Contains(got, tc.wantPrivacyHeader) {
-				t.Fatalf("missing privacy header %q in: %s", tc.wantPrivacyHeader, got)
-			}
-			if !strings.Contains(got, tc.wantModeBlock) {
-				t.Fatalf("missing mode blockquote %q in: %s", tc.wantModeBlock, got)
-			}
 			if !strings.Contains(got, tc.wantRankBlock) {
 				t.Fatalf("missing rank blockquote %q in: %s", tc.wantRankBlock, got)
 			}
-			if !strings.Contains(got, tc.wantPrivacyBlock) {
-				t.Fatalf("missing privacy blockquote %q in: %s", tc.wantPrivacyBlock, got)
+			if strings.Contains(got, tc.unwantSummary) {
+				t.Fatalf("unexpected rank summary %q in: %s", tc.unwantSummary, got)
 			}
-			if strings.Contains(got, tc.unwantModeSummary) {
-				t.Fatalf("unexpected mode summary %q in: %s", tc.unwantModeSummary, got)
+			if strings.Contains(got, "Clássico") {
+				t.Fatalf("classic mode resurfaced in: %s", got)
 			}
-			if strings.Contains(got, tc.unwantRankSummary) {
-				t.Fatalf("unexpected rank summary %q in: %s", tc.unwantRankSummary, got)
-			}
-			if strings.Contains(got, tc.unwantPrivacySummary) {
-				t.Fatalf("unexpected privacy summary %q in: %s", tc.unwantPrivacySummary, got)
+			if strings.Contains(got, "Privacidade") {
+				t.Fatalf("privacy resurfaced in: %s", got)
 			}
 
-			// Exactly 3 blockquotes
-			if count := strings.Count(got, "<blockquote>"); count != 3 {
-				t.Fatalf("expected 3 <blockquote> tags, got %d in: %s", count, got)
+			if count := strings.Count(got, "<blockquote>"); count != 1 {
+				t.Fatalf("expected 1 <blockquote> tag, got %d in: %s", count, got)
 			}
-			if count := strings.Count(got, "</blockquote>"); count != 3 {
-				t.Fatalf("expected 3 </blockquote> tags, got %d in: %s", count, got)
-			}
-
-			// Separators between the 3 blockquotes
-			const separator = "\n\n────────────\n\n"
-			if count := strings.Count(got, separator); count != 2 {
-				t.Fatalf("expected 2 separators %q, got %d in: %s", separator, count, got)
-			}
-
-			sepIdx := strings.Index(got, "────────────")
-			firstBlockEnd := strings.Index(got, "</blockquote>")
-			secondBlockStart := strings.LastIndex(got, "<blockquote>")
-			if firstBlockEnd == -1 || secondBlockStart == -1 || sepIdx == -1 {
-				t.Fatalf("malformed structure in: %s", got)
-			}
-			if !(firstBlockEnd < sepIdx && sepIdx < secondBlockStart) {
-				t.Fatalf("separator is not strictly between blockquotes: end1=%d sep=%d start2=%d",
-					firstBlockEnd, sepIdx, secondBlockStart)
-			}
-
-			// Footer text
-			expectedFooter := "<i>Selecione abaixo para alterar.\nAs mudanças afetarão apenas as próximas partidas criadas.</i>"
-			if !strings.HasSuffix(got, expectedFooter) {
-				t.Fatalf("unexpected footer, want suffix %q, got: %s", expectedFooter, got)
+			if count := strings.Count(got, "</blockquote>"); count != 1 {
+				t.Fatalf("expected 1 </blockquote> tag, got %d in: %s", count, got)
 			}
 		})
 	}

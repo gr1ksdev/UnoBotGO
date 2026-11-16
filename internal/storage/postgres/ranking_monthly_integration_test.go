@@ -283,7 +283,7 @@ func TestMonthlyMigrationBackfillIdempotency(t *testing.T) {
 	}
 
 	// 2. Set up group config
-	if _, err = s.pool.Exec(ctx, `INSERT INTO group_configs(chat_id, default_game_mode, ranking_system, config_revision) VALUES(42, 'classic', 'updated', 1)`); err != nil {
+	if _, err = s.pool.Exec(ctx, `INSERT INTO group_configs(chat_id, ranking_system, config_revision) VALUES(42, 'updated', 1)`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -361,7 +361,7 @@ func TestUserMonthlyRankingsIntegration(t *testing.T) {
 	}
 
 	// 1. Setup groups: 101 (updated, titled), 102 (updated, untitled fallback), 103 (legacy, titled)
-	if _, err := s.pool.Exec(ctx, `INSERT INTO group_configs(chat_id, default_game_mode, ranking_system, title)
+	if _, err := s.pool.Exec(ctx, `INSERT INTO group_configs(chat_id, ranking_system, title)
 VALUES(101, 'classic', 'updated', 'UNO da Galera'),
       (102, 'classic', 'updated', ''),
       (103, 'classic', 'legacy', 'Jogatina BR'),

@@ -133,7 +133,7 @@ func TestWebAppNormalTwoPlayerFinishAndFinalActionRetry(t *testing.T) {
 			t.Fatal("finished game retained turn")
 		}
 		prepared, err := ranking.Prepare(*out.Completed)
-		if err != nil || prepared.Origin != "webapp" || len(prepared.Players) != 2 {
+		if err != nil || prepared.Origin != "inline" || len(prepared.Players) != 2 {
 			t.Fatal(err, prepared)
 		}
 		for _, player := range prepared.Players {

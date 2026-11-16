@@ -12,7 +12,7 @@ import (
 
 func finalFixture(n, abandoned int) Result {
 	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
-	r := Result{GameID: "final", ChatID: 42, GameMode: groups.Classic, RankingSystem: groups.Updated, ConfigRevision: 1, StartedAt: now.Add(-time.Minute), FinishedAt: now, FinalRevision: 100, FinishReason: "completed"}
+	r := Result{GameID: "final", ChatID: 42, GameMode: GameModeHouse, RankingSystem: groups.Updated, ConfigRevision: 1, StartedAt: now.Add(-time.Minute), FinishedAt: now, FinalRevision: 100, FinishReason: "completed"}
 	for i := 1; i <= n; i++ {
 		status := "went_out"
 		if i == n {

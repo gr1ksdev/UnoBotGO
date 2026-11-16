@@ -101,9 +101,9 @@ func TestSharedWebhookUsesDerivedSecret(t *testing.T) {
 		api := newMockBotAPI()
 		svc, _ := game.NewService()
 		b := New(api, svc, nil, nil, time.Minute, nil)
-		b.SetTransport(TransportConfig{Mode: TransportWebhook, WebhookURL: "https://bot.example/telegram", WebhookSecret: secret})
+		b.SetTransport(TransportConfig{Mode: TransportWebhook, WebhookURL: "https://bot.example/telegram", WebhookSecret: secret, ListenAddr: "127.0.0.1:0"})
 		ctx, cancel := context.WithCancel(t.Context())
-		b.UseSharedHTTP(cancel)
+		b.SetReadyCallback(cancel)
 		if err := b.Run(ctx); err != nil {
 			t.Fatal(err)
 		}
@@ -115,7 +115,7 @@ func TestSharedWebhookUsesDerivedSecret(t *testing.T) {
 			request.Header.Set(telego.WebhookSecretTokenHeader, token)
 			request.Header.Set("Content-Type", "application/json")
 			recorder := httptest.NewRecorder()
-			b.WebhookHandler().ServeHTTP(recorder, request)
+			b.webhookHandler(secret).ServeHTTP(recorder, request)
 			want := http.StatusForbidden
 			if token == secret {
 				want = http.StatusOK

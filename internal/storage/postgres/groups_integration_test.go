@@ -17,26 +17,8 @@ func TestGroupDefaultsAndPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.DefaultGameMode != groups.Caseiro || c.RankingSystem != groups.Updated || c.Revision != 1 {
+	if c.RankingSystem != groups.Updated || c.Revision != 1 {
 		t.Fatalf("wrong defaults %+v", c)
-	}
-	changed, err := s.SetDefaultGameMode(ctx, 42, groups.Classic)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c, err = s.GetOrCreateGroupConfig(ctx, 42)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c.DefaultGameMode != groups.Classic || c.RankingSystem != groups.Updated || c.Revision != 2 {
-		t.Fatalf("not persisted %+v", c)
-	}
-	again, err := s.SetDefaultGameMode(ctx, 42, groups.Classic)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if again.Revision != changed.Revision {
-		t.Fatal("no-op changed revision")
 	}
 
 	// SetRankingSystem
@@ -44,8 +26,15 @@ func TestGroupDefaultsAndPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rankChanged.RankingSystem != groups.Legacy || rankChanged.Revision != 3 {
+	if rankChanged.RankingSystem != groups.Legacy || rankChanged.Revision != 2 {
 		t.Fatalf("unexpected rank config: %+v", rankChanged)
+	}
+	again, err := s.SetRankingSystem(ctx, 42, groups.Legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Revision != rankChanged.Revision {
+		t.Fatal("no-op changed revision")
 	}
 
 	rankAgain, err := s.SetRankingSystem(ctx, 42, groups.Legacy)
@@ -108,13 +97,13 @@ func TestUpdatedDefaultMigrationPreservesExistingGroups(t *testing.T) {
 
 	// Caso B pós-0008: grupo Legacy existente DEVE permanecer Legacy com mesma revisão e modo.
 	afterLegacy, err := s.GetOrCreateGroupConfig(ctx, 100)
-	if err != nil || afterLegacy.RankingSystem != groups.Legacy || afterLegacy.Revision != beforeLegacy.Revision || afterLegacy.DefaultGameMode != beforeLegacy.DefaultGameMode {
+	if err != nil || afterLegacy.RankingSystem != groups.Legacy || afterLegacy.Revision != beforeLegacy.Revision {
 		t.Fatalf("existing legacy group was converted or altered: before=%+v after=%+v", beforeLegacy, afterLegacy)
 	}
 
 	// Caso C pós-0008: grupo Updated existente DEVE permanecer Updated com mesma revisão e modo.
 	afterUpdated, err := s.GetOrCreateGroupConfig(ctx, 200)
-	if err != nil || afterUpdated.RankingSystem != groups.Updated || afterUpdated.Revision != beforeUpdated.Revision || afterUpdated.DefaultGameMode != beforeUpdated.DefaultGameMode {
+	if err != nil || afterUpdated.RankingSystem != groups.Updated || afterUpdated.Revision != beforeUpdated.Revision {
 		t.Fatalf("existing updated group was altered: before=%+v after=%+v", beforeUpdated, afterUpdated)
 	}
 
@@ -127,9 +116,6 @@ func TestUpdatedDefaultMigrationPreservesExistingGroups(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := s.ObserveGroupTitle(ctx, 103, "Novo grupo"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.SetDefaultGameMode(ctx, 104, groups.Caseiro); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []int64{102, 103, 104} {

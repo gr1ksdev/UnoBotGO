@@ -9,7 +9,6 @@ import (
 	"io"
 	"log/slog"
 	"mime"
-	"net"
 	"net/http"
 	"net/url"
 	"sync/atomic"
@@ -42,7 +41,6 @@ type Bot struct {
 	resultRepository ranking.Repository
 	groupConfigs     groups.Repository
 	knownUsers       groups.UserRepository
-	userPrivacy      UserPrivacyRepository
 	groupsService    *groups.Service
 	api              BotAPI
 	service          *game.Service
@@ -58,15 +56,9 @@ type Bot struct {
 	turnTimeout      time.Duration
 	transport        TransportConfig
 	dedupe           *updateDeduper
-	externalHTTP     bool
+	ready            atomic.Bool
 	onReady          func()
 	retrySleep       func(context.Context, time.Duration) error
-}
-
-type UserPrivacyRepository interface {
-	GetUserRankingPrivacy(ctx context.Context, userID int64) (bool, error)
-	SetUserRankingPrivacy(ctx context.Context, userID int64, private bool) error
-	ToggleUserRankingPrivacy(ctx context.Context, userID int64) (bool, error)
 }
 
 func (b *Bot) SetGroupConfigs(repository groups.Repository) {
@@ -75,15 +67,24 @@ func (b *Bot) SetGroupConfigs(repository groups.Repository) {
 	b.updateGroupsService()
 }
 
-func (b *Bot) SetUserPrivacy(repository UserPrivacyRepository) {
-	b.userPrivacy = repository
-	b.cmdHandler.userPrivacy = repository
-}
-
 func (b *Bot) SetKnownUsers(repository groups.UserRepository) {
 	b.knownUsers = repository
 	b.cmdHandler.knownUsers = repository
 	b.cbHandler.knownUsers = repository
+}
+
+// SetReadyCallback registers a hook invoked once the transport is serving
+// updates. It never receives payloads and must not block.
+func (b *Bot) SetReadyCallback(onReady func()) {
+	b.onReady = onReady
+}
+
+// markReady flips the readiness probe and notifies the observer.
+func (b *Bot) markReady() {
+	b.ready.Store(true)
+	if b.onReady != nil {
+		b.onReady()
+	}
 }
 
 func (b *Bot) updateGroupsService() {
@@ -137,8 +138,6 @@ func (b *Bot) Run(ctx context.Context) error {
 	b.usernamePublic.Store(me.Username)
 	b.renderer.SetBotID(me.ID)
 	b.cmdHandler.botUsername = me.Username
-	b.cmdHandler.miniAppURL = miniAppLaunchURL(me.Username)
-	b.cmdHandler.playAppURL = miniAppPlayURL(me.Username)
 	b.logger.Info("connected to telegram bot", "username", me.Username, "id", me.ID)
 	if !me.SupportsInlineQueries {
 		return ErrInlineModeDisabled
@@ -149,12 +148,9 @@ func (b *Bot) Run(ctx context.Context) error {
 	cfg := b.transport.normalized()
 	b.transport = cfg
 	if cfg.Mode == TransportWebhook {
-		if b.externalHTTP {
-			return b.runSharedWebhook(ctx, cfg)
-		}
 		return b.runWebhook(ctx, cfg)
 	}
-	return b.runPolling(ctx)
+	return b.runPolling(ctx, cfg)
 }
 func (b *Bot) registerCommands(ctx context.Context) error {
 	registrations := []telego.SetMyCommandsParams{
@@ -309,7 +305,7 @@ func (b *Bot) startWebhookMonitor(ctx context.Context) {
 	}()
 }
 
-func (b *Bot) runPolling(ctx context.Context) error {
+func (b *Bot) runPolling(ctx context.Context, cfg TransportConfig) error {
 	info, err := b.api.GetWebhookInfo(ctx)
 	if err != nil {
 		return fmt.Errorf("check webhook info: %w", err)
@@ -320,6 +316,15 @@ func (b *Bot) runPolling(ctx context.Context) error {
 		}
 		b.logger.Info("deleted existing webhook before polling")
 	}
+	health, err := startHealthServer(cfg.ListenAddr, &b.ready, "", nil)
+	if err != nil {
+		return fmt.Errorf("start health server: %w", err)
+	}
+	defer func() {
+		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		health.Shutdown(shutdown)
+	}()
 	updates, err := b.api.UpdatesViaLongPolling(
 		ctx,
 		longPollingParams(),
@@ -329,9 +334,7 @@ func (b *Bot) runPolling(ctx context.Context) error {
 		return fmt.Errorf("start long polling: %w", err)
 	}
 	b.logger.Info("started long polling updates", "username", b.username)
-	if b.onReady != nil {
-		b.onReady()
-	}
+	b.markReady()
 	b.startScheduler(ctx)
 	for {
 		select {
@@ -357,46 +360,24 @@ func (b *Bot) runWebhook(ctx context.Context, cfg TransportConfig) error {
 	if path == "" {
 		path = "/"
 	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok\n"))
-	})
-	mux.Handle(path, b.webhookHandler(cfg.WebhookSecret))
-	server := &http.Server{Addr: cfg.ListenAddr, Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second}
-	listener, err := net.Listen("tcp", cfg.ListenAddr)
+	health, err := startHealthServer(cfg.ListenAddr, &b.ready, path, b.webhookHandler(cfg.WebhookSecret))
 	if err != nil {
 		return fmt.Errorf("start webhook server: %w", err)
 	}
-	serveErr := make(chan error, 1)
-	go func() { serveErr <- server.Serve(listener) }()
-	select {
-	case err := <-serveErr:
-		if !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("webhook server: %w", err)
-		}
-	case <-ctx.Done():
-		_ = listener.Close()
-		b.dispatcher.Stop(10 * time.Second)
-		return nil
-	default:
-	}
+	defer func() {
+		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		health.Shutdown(shutdown)
+	}()
 	if err := b.registerWebhook(ctx, cfg); err != nil {
-		_ = server.Shutdown(context.Background())
 		b.dispatcher.Stop(10 * time.Second)
 		return err
 	}
 	b.logger.Info("started webhook server", "addr", cfg.ListenAddr, "path", path)
+	b.markReady()
 	b.startScheduler(ctx)
 	b.startWebhookMonitor(ctx)
 	<-ctx.Done()
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	_ = server.Shutdown(shutdownCtx)
 	b.dispatcher.Stop(10 * time.Second)
 	return nil
 }

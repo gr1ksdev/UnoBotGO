@@ -36,21 +36,6 @@ func (m *mockGroupRepo) GetOrCreateGroupConfig(ctx context.Context, chatID int64
 	return c, nil
 }
 
-func (m *mockGroupRepo) SetDefaultGameMode(ctx context.Context, chatID int64, mode groups.Mode) (groups.Config, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	c, ok := m.configs[chatID]
-	if !ok {
-		c = groups.Defaults(chatID)
-	}
-	if c.DefaultGameMode != mode {
-		c.DefaultGameMode = mode
-		c.Revision++
-	}
-	m.configs[chatID] = c
-	return c, nil
-}
-
 func (m *mockGroupRepo) SetRankingSystem(ctx context.Context, chatID int64, system groups.RankingSystem) (groups.Config, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -77,34 +62,6 @@ func (m *mockGroupRepo) SetInstalledBy(ctx context.Context, chatID int64, instal
 		c = groups.Defaults(chatID)
 	}
 	c.InstalledByUserID = &installerID
-	c.Revision++
-	m.configs[chatID] = c
-	return c, nil
-}
-
-func (m *mockGroupRepo) SetRankingPrivate(ctx context.Context, chatID int64, private bool) (groups.Config, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	c, ok := m.configs[chatID]
-	if !ok {
-		c = groups.Defaults(chatID)
-	}
-	if c.RankingPrivate != private {
-		c.RankingPrivate = private
-		c.Revision++
-	}
-	m.configs[chatID] = c
-	return c, nil
-}
-
-func (m *mockGroupRepo) ToggleRankingPrivate(ctx context.Context, chatID int64) (groups.Config, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	c, ok := m.configs[chatID]
-	if !ok {
-		c = groups.Defaults(chatID)
-	}
-	c.RankingPrivate = !c.RankingPrivate
 	c.Revision++
 	m.configs[chatID] = c
 	return c, nil
@@ -229,78 +186,35 @@ func TestConfig_DefaultsAndNeverBlocked(t *testing.T) {
 	}
 }
 
-// 2: /novo sem argumento usa DefaultGameMode do grupo (Classic vs Caseiro).
-func TestConfig_NovoUsesGroupDefault(t *testing.T) {
-	h := newTestHarness()
-	ctx := t.Context()
-	chatID := int64(-1002)
-
-	// Set group default to Caseiro
-	_, err := h.groupRepo.SetDefaultGameMode(ctx, chatID, groups.Caseiro)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	h.cmdHandler.HandleMessage(ctx, &telego.Message{
-		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
-		From: &telego.User{ID: 10, FirstName: "Player1"},
-		Text: "/novo@unobot",
-	})
-
-	summary, err := h.svc.FindChatGame(ctx, game.ChatID(chatID))
-	if err != nil {
-		t.Fatal(err)
-	}
-	view, _ := h.svc.PublicView(ctx, summary.GameID)
-	if !view.Rules.AllowSwapHands {
-		t.Error("expected Caseiro rules for group default Caseiro")
-	}
-}
-
-// 3 & 4: /novo com override explícito ("classico" / "caseiro") afeta apenas a partida e não altera GroupConfig.
-func TestConfig_NovoOverridesPreserveGroupConfig(t *testing.T) {
+// 3 & 4: O modo é único. Argumentos de /novo são ignorados e o GroupConfig permanece intacto.
+func TestConfig_NovoArgumentsAreIgnored(t *testing.T) {
 	h := newTestHarness()
 	ctx := t.Context()
 	chatID := int64(-1003)
 
-	// Default is Caseiro
-	_, _ = h.groupRepo.SetDefaultGameMode(ctx, chatID, groups.Caseiro)
-
-	// /novo classico forces Classic for this match only
-	h.cmdHandler.HandleMessage(ctx, &telego.Message{
-		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
-		From: &telego.User{ID: 10, FirstName: "Player1"},
-		Text: "/novo@unobot classico",
-	})
-
-	summary, _ := h.svc.FindChatGame(ctx, game.ChatID(chatID))
-	view, _ := h.svc.PublicView(ctx, summary.GameID)
-	if view.Rules.AllowSwapHands {
-		t.Error("expected Classic rules on /novo classico override")
-	}
-
-	cfg, _ := h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if cfg.DefaultGameMode != groups.Caseiro {
-		t.Errorf("group default should stay Caseiro, got %v", cfg.DefaultGameMode)
-	}
-
-	// Cancel match
-	h.cmdHandler.HandleMessage(ctx, &telego.Message{
-		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
-		From: &telego.User{ID: 10, FirstName: "Player1"},
-		Text: "/cancelar@unobot",
-	})
-
-	// Next /novo without args returns to Caseiro
-	h.cmdHandler.HandleMessage(ctx, &telego.Message{
-		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
-		From: &telego.User{ID: 10, FirstName: "Player1"},
-		Text: "/novo@unobot",
-	})
-	summary2, _ := h.svc.FindChatGame(ctx, game.ChatID(chatID))
-	view2, _ := h.svc.PublicView(ctx, summary2.GameID)
-	if !view2.Rules.AllowSwapHands {
-		t.Error("subsequent /novo should revert to group default (Caseiro)")
+	for _, text := range []string{"/novo@unobot", "/novo@unobot classico", "/novo@unobot caseiro"} {
+		h.cmdHandler.HandleMessage(ctx, &telego.Message{
+			Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+			From: &telego.User{ID: 10, FirstName: "Player1"},
+			Text: text,
+		})
+		summary, err := h.svc.FindChatGame(ctx, game.ChatID(chatID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		view, _ := h.svc.PublicView(ctx, summary.GameID)
+		if !view.Rules.AllowSwapHands {
+			t.Fatalf("expected house rules for %q", text)
+		}
+		cfg, _ := h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
+		if cfg.RankingSystem != groups.Updated {
+			t.Errorf("group config altered: %+v", cfg)
+		}
+		h.cmdHandler.HandleMessage(ctx, &telego.Message{
+			Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+			From: &telego.User{ID: 10, FirstName: "Player1"},
+			Text: "/cancelar@unobot",
+		})
 	}
 }
 
@@ -319,13 +233,7 @@ func TestConfig_ActiveGamePreservesSnapshotOnConfigChange(t *testing.T) {
 	})
 	summary, _ := h.svc.FindChatGame(ctx, game.ChatID(chatID))
 
-	// While game is active in lobby or running, admin switches default mode to Classic and ranking to Legacy
-	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
-		ID:      "cb1",
-		From:    telego.User{ID: 10, FirstName: "Admin"},
-		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 99},
-		Data:    fmt.Sprintf("cfg_mode_classic_%d", chatID),
-	})
+	// While game is active in lobby or running, admin switches the ranking to Legacy
 	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
 		ID:      "cb2",
 		From:    telego.User{ID: 10, FirstName: "Admin"},
@@ -335,7 +243,7 @@ func TestConfig_ActiveGamePreservesSnapshotOnConfigChange(t *testing.T) {
 
 	// Check that GroupConfig was updated in storage
 	cfg, _ := h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if cfg.DefaultGameMode != groups.Classic || cfg.RankingSystem != groups.Legacy {
+	if cfg.RankingSystem != groups.Legacy {
 		t.Fatalf("expected updated config in repo, got %+v", cfg)
 	}
 
@@ -372,60 +280,21 @@ func TestConfig_AdminCanOpenAndModify(t *testing.T) {
 		t.Fatalf("unexpected message text: %s", lastMsg.Text)
 	}
 	markup, ok := lastMsg.ReplyMarkup.(*telego.InlineKeyboardMarkup)
-	if !ok || markup == nil || len(markup.InlineKeyboard) != 3 {
-		t.Fatalf("expected 3 rows of config buttons, got %+v", lastMsg.ReplyMarkup)
+	if !ok || markup == nil || len(markup.InlineKeyboard) != 1 {
+		t.Fatalf("expected 1 row of config buttons, got %+v", lastMsg.ReplyMarkup)
 	}
 
-	// Admin clicks Caseiro button
-	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
-		ID:      "cb_mode",
-		From:    telego.User{ID: adminID, FirstName: "Creator"},
-		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
-		Data:    fmt.Sprintf("cfg_mode_caseiro_%d", chatID),
-	})
-
-	cfg, _ := h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if cfg.DefaultGameMode != groups.Caseiro {
-		t.Errorf("expected Caseiro mode after click, got %v", cfg.DefaultGameMode)
-	}
-
-	// Admin clicks Updated ranking button
+	// Admin clicks Legacy ranking button
 	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
 		ID:      "cb_rank",
 		From:    telego.User{ID: adminID, FirstName: "Creator"},
 		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
-		Data:    fmt.Sprintf("cfg_rank_updated_%d", chatID),
+		Data:    fmt.Sprintf("cfg_rank_legacy_%d", chatID),
 	})
 
-	cfg, _ = h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if cfg.RankingSystem != groups.Updated {
-		t.Errorf("expected Updated ranking after click, got %v", cfg.RankingSystem)
-	}
-
-	// Admin clicks Anon privacy button
-	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
-		ID:      "cb_priv_anon",
-		From:    telego.User{ID: adminID, FirstName: "Creator"},
-		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
-		Data:    fmt.Sprintf("cfg_privacy_anon_%d", chatID),
-	})
-
-	cfg, _ = h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if !cfg.RankingPrivate {
-		t.Errorf("expected RankingPrivate true after clicking anon, got false")
-	}
-
-	// Admin clicks Public privacy button
-	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
-		ID:      "cb_priv_pub",
-		From:    telego.User{ID: adminID, FirstName: "Creator"},
-		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
-		Data:    fmt.Sprintf("cfg_privacy_public_%d", chatID),
-	})
-
-	cfg, _ = h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if cfg.RankingPrivate {
-		t.Errorf("expected RankingPrivate false after clicking public, got true")
+	cfg, _ := h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
+	if cfg.RankingSystem != groups.Legacy {
+		t.Errorf("expected Legacy ranking after click, got %v", cfg.RankingSystem)
 	}
 }
 
@@ -454,7 +323,7 @@ func TestConfig_NonAdminCannotModify(t *testing.T) {
 		ID:      "cb_unauth",
 		From:    telego.User{ID: regularUserID, FirstName: "Bob"},
 		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
-		Data:    fmt.Sprintf("cfg_mode_classic_%d", chatID),
+		Data:    fmt.Sprintf("cfg_rank_legacy_%d", chatID),
 	})
 
 	lastAnswer := h.api.AnsweredCallbacks[len(h.api.AnsweredCallbacks)-1]
@@ -463,26 +332,8 @@ func TestConfig_NonAdminCannotModify(t *testing.T) {
 	}
 
 	cfg, _ := h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if cfg.DefaultGameMode != groups.Caseiro {
+	if cfg.RankingSystem != groups.Updated {
 		t.Errorf("unauthorized user altered config: %+v", cfg)
-	}
-
-	// Regular user tries privacy callback
-	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
-		ID:      "cb_unauth_priv",
-		From:    telego.User{ID: regularUserID, FirstName: "Bob"},
-		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
-		Data:    fmt.Sprintf("cfg_privacy_anon_%d", chatID),
-	})
-
-	lastAnswer = h.api.AnsweredCallbacks[len(h.api.AnsweredCallbacks)-1]
-	if !lastAnswer.ShowAlert || !strings.Contains(lastAnswer.Text, "Somente administradores ou quem adicionou o bot") {
-		t.Fatalf("expected alert refusing privacy callback, got: %+v", lastAnswer)
-	}
-
-	cfg, _ = h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if cfg.RankingPrivate {
-		t.Errorf("unauthorized user altered privacy: %+v", cfg)
 	}
 }
 
@@ -510,16 +361,16 @@ func TestConfig_InstallerStillMemberCanConfigure(t *testing.T) {
 		t.Fatalf("expected installer to view config, got: %s", lastMsg.Text)
 	}
 
-	// Installer changes mode
+	// Installer changes the ranking system
 	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
 		ID:      "cb_installer",
 		From:    telego.User{ID: installerID, FirstName: "Installer"},
 		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
-		Data:    fmt.Sprintf("cfg_mode_caseiro_%d", chatID),
+		Data:    fmt.Sprintf("cfg_rank_legacy_%d", chatID),
 	})
 
 	cfg, _ := h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if cfg.DefaultGameMode != groups.Caseiro {
+	if cfg.RankingSystem != groups.Legacy {
 		t.Errorf("expected installer change to take effect: %+v", cfg)
 	}
 }
@@ -591,7 +442,7 @@ func TestConfig_CallbackRechecksAuthorization(t *testing.T) {
 		ID:      "cb_demoted",
 		From:    telego.User{ID: userID, FirstName: "DemotedUser"},
 		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
-		Data:    fmt.Sprintf("cfg_mode_caseiro_%d", chatID),
+		Data:    fmt.Sprintf("cfg_rank_legacy_%d", chatID),
 	})
 
 	lastAnswer := h.api.AnsweredCallbacks[len(h.api.AnsweredCallbacks)-1]
@@ -610,9 +461,8 @@ func TestConfig_CallbackInvalidValueRejected(t *testing.T) {
 
 	invalidPayloads := []string{
 		"cfg_invalid",
-		"cfg_mode_badmode_-1014",
 		"cfg_rank_badrank_-1014",
-		fmt.Sprintf("cfg_mode_caseiro_%d", -99999), // wrong chat ID
+		fmt.Sprintf("cfg_rank_legacy_%d", -99999), // wrong chat ID
 		"cfg_open",
 	}
 
@@ -631,36 +481,40 @@ func TestConfig_CallbackInvalidValueRejected(t *testing.T) {
 	}
 }
 
-// 15 & 16: Trocar Classic ↔ Caseiro não altera RankingSystem, e trocar Legacy ↔ Updated não altera DefaultGameMode.
-func TestConfig_OrthogonalChanges(t *testing.T) {
+// 15 & 16: Trocar o sistema de ranking não altera o modo da partida.
+func TestConfig_RankingChangeKeepsHouseMode(t *testing.T) {
 	h := newTestHarness()
 	ctx := t.Context()
 	chatID := int64(-1015)
 	adminID := int64(10)
 	h.api.ChatMembers[adminID] = &telego.ChatMemberOwner{Status: telego.MemberStatusCreator}
 
-	// Change mode to Caseiro
-	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
-		ID:      "cb1",
-		From:    telego.User{ID: adminID},
-		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
-		Data:    fmt.Sprintf("cfg_mode_caseiro_%d", chatID),
-	})
-	cfg, _ := h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if cfg.DefaultGameMode != groups.Caseiro || cfg.RankingSystem != groups.Updated {
-		t.Fatalf("mode change altered ranking: %+v", cfg)
-	}
-
-	// Change ranking to Updated
 	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
 		ID:      "cb2",
 		From:    telego.User{ID: adminID},
 		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
 		Data:    fmt.Sprintf("cfg_rank_legacy_%d", chatID),
 	})
-	cfg, _ = h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
-	if cfg.DefaultGameMode != groups.Caseiro || cfg.RankingSystem != groups.Legacy {
-		t.Fatalf("ranking change altered mode: %+v", cfg)
+	cfg, _ := h.groupRepo.GetOrCreateGroupConfig(ctx, chatID)
+	if cfg.RankingSystem != groups.Legacy {
+		t.Fatalf("ranking change did not take effect: %+v", cfg)
+	}
+
+	h.cmdHandler.HandleMessage(ctx, &telego.Message{
+		Chat: telego.Chat{ID: chatID, Type: "supergroup"},
+		From: &telego.User{ID: adminID, FirstName: "Creator"},
+		Text: "/novo@unobot",
+	})
+	summary, err := h.svc.FindChatGame(ctx, game.ChatID(chatID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, _ := h.svc.PublicView(ctx, summary.GameID)
+	if !view.Rules.AllowSwapHands {
+		t.Fatal("ranking change altered the house rules")
+	}
+	if view.GroupConfig.RankingSystem != groups.Legacy {
+		t.Fatalf("new game did not freeze the ranking system: %v", view.GroupConfig.RankingSystem)
 	}
 }
 
@@ -785,7 +639,6 @@ func TestConfig_PersistedSurvivesRestart(t *testing.T) {
 	ctx := context.Background()
 
 	// Initial bot instance sets configuration
-	_, _ = groupRepo.SetDefaultGameMode(ctx, chatID, groups.Caseiro)
 	_, _ = groupRepo.SetRankingSystem(ctx, chatID, groups.Updated)
 	_, _ = groupRepo.SetInstalledBy(ctx, chatID, 88)
 
@@ -851,7 +704,7 @@ func TestConfig_KnownUserObservedAtInteractionPoints(t *testing.T) {
 		ID:      "cb_obs",
 		From:    telego.User{ID: 300, FirstName: "CallbackUser", Username: "cb300"},
 		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
-		Data:    fmt.Sprintf("cfg_mode_caseiro_%d", chatID),
+		Data:    fmt.Sprintf("cfg_rank_legacy_%d", chatID),
 	})
 	key3 := fmt.Sprintf("%d:%d", chatID, 300)
 	if u, ok := h.userRepo.users[key3]; !ok || u.DisplayName != "CallbackUser" {
@@ -920,7 +773,7 @@ func TestConfig_WelcomeButtonOpensConfig(t *testing.T) {
 	if !strings.Contains(edited.Text, "Configuração do Grupo") {
 		t.Fatalf("expected config text in edited message, got: %s", edited.Text)
 	}
-	if edited.ReplyMarkup == nil || len(edited.ReplyMarkup.InlineKeyboard) != 3 {
+	if edited.ReplyMarkup == nil || len(edited.ReplyMarkup.InlineKeyboard) != 1 {
 		t.Fatalf("expected 3 rows of config buttons, got %+v", edited.ReplyMarkup)
 	}
 }
@@ -955,8 +808,8 @@ func TestConfig_FirstConfigInGroupWithoutExistingConfig_ObservesUser(t *testing.
 	if !exists {
 		t.Fatal("expected group config to be created")
 	}
-	if cfg.DefaultGameMode != groups.Caseiro || cfg.RankingSystem != groups.Updated {
-		t.Fatalf("expected defaults Caseiro + Updated, got mode=%v rank=%v", cfg.DefaultGameMode, cfg.RankingSystem)
+	if cfg.RankingSystem != groups.Updated {
+		t.Fatalf("expected default Updated ranking, got %v", cfg.RankingSystem)
 	}
 
 	// 2. Usuário deve ter sido observado com sucesso (sem erro de foreign key)
@@ -1011,8 +864,8 @@ func TestConfig_FirstConfigInGroupWithoutExistingConfig_NonAdmin_ObservesUserAnd
 	if !exists {
 		t.Fatal("expected group config to be created")
 	}
-	if cfg.DefaultGameMode != groups.Caseiro || cfg.RankingSystem != groups.Updated {
-		t.Fatalf("expected defaults Caseiro + Updated, got mode=%v rank=%v", cfg.DefaultGameMode, cfg.RankingSystem)
+	if cfg.RankingSystem != groups.Updated {
+		t.Fatalf("expected default Updated ranking, got %v", cfg.RankingSystem)
 	}
 
 	// 2. Usuário comum deve ter sido observado com sucesso
@@ -1053,23 +906,23 @@ func TestConfig_CallbackInNewlyCreatedGroup_ObservesUser(t *testing.T) {
 	}
 	h.groupRepo.mu.Unlock()
 
-	// Callback de alteração de modo acionado
+	// Callback de alteração do sistema de ranking acionado
 	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
 		ID:      "cb_new_group",
 		From:    telego.User{ID: adminID, FirstName: "AdminCb", Username: "admin_cb"},
 		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 200},
-		Data:    fmt.Sprintf("cfg_mode_caseiro_%d", chatID),
+		Data:    fmt.Sprintf("cfg_rank_legacy_%d", chatID),
 	})
 
-	// 1. Group config deve existir e ter sido alterada para Caseiro
+	// 1. Group config deve existir e ter sido alterada para Legacy
 	h.groupRepo.mu.Lock()
 	cfg, exists := h.groupRepo.configs[chatID]
 	h.groupRepo.mu.Unlock()
 	if !exists {
 		t.Fatal("expected group config to be created")
 	}
-	if cfg.DefaultGameMode != groups.Caseiro {
-		t.Fatalf("expected Caseiro mode after callback, got %v", cfg.DefaultGameMode)
+	if cfg.RankingSystem != groups.Legacy {
+		t.Fatalf("expected Legacy ranking after callback, got %v", cfg.RankingSystem)
 	}
 
 	// 2. Usuário do callback observado com sucesso
@@ -1085,7 +938,7 @@ func TestConfig_CallbackInNewlyCreatedGroup_ObservesUser(t *testing.T) {
 	}
 }
 
-// Tests dynamic updates of summaries in /config message when mode or ranking is changed via callback.
+// Tests dynamic updates of the /config summary when the ranking changes.
 func TestConfig_DynamicCallbackUpdates(t *testing.T) {
 	ctx := t.Context()
 	h := newTestHarness()
@@ -1095,7 +948,6 @@ func TestConfig_DynamicCallbackUpdates(t *testing.T) {
 
 	h.groupRepo.configs[chatID] = groups.Config{
 		ChatID:            chatID,
-		DefaultGameMode:   groups.Classic,
 		RankingSystem:     groups.Legacy,
 		InstalledByUserID: &adminID,
 	}
@@ -1112,80 +964,29 @@ func TestConfig_DynamicCallbackUpdates(t *testing.T) {
 	}
 	initialMsg := h.api.SentMessages[len(h.api.SentMessages)-1]
 
-	// Verify initial text (Classic + Updated)
-	if !strings.Contains(initialMsg.Text, "<b>Modo padrão de partida:</b> Clássico") {
-		t.Fatalf("expected Classic mode header in: %s", initialMsg.Text)
+	if !strings.Contains(initialMsg.Text, "<b>Modo de partida:</b> Caseiro") {
+		t.Fatalf("expected Caseiro mode header in: %s", initialMsg.Text)
 	}
-	if !strings.Contains(initialMsg.Text, "<blockquote><b>🎮 Clássico</b>\nRegras padrão do bot, sem as combinações extras do modo Caseiro.</blockquote>") {
-		t.Fatalf("expected Classic summary in: %s", initialMsg.Text)
+	if !strings.Contains(initialMsg.Text, "<b>Sistema de ranking:</b> Legado") {
+		t.Fatalf("expected Legacy ranking header in: %s", initialMsg.Text)
 	}
 	if !strings.Contains(initialMsg.Text, "<blockquote><b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.</blockquote>") {
 		t.Fatalf("expected Legacy summary in: %s", initialMsg.Text)
 	}
-	if strings.Contains(initialMsg.Text, "🎮 Caseiro") {
-		t.Fatalf("unexpected Caseiro in initial message: %s", initialMsg.Text)
-	}
 	if strings.Contains(initialMsg.Text, "🏆 Atualizado") {
 		t.Fatalf("unexpected Updated in initial message: %s", initialMsg.Text)
 	}
-	if strings.Count(initialMsg.Text, "<blockquote>") != 3 {
-		t.Fatalf("expected 3 blockquotes, got %d", strings.Count(initialMsg.Text, "<blockquote>"))
-	}
-	if strings.Count(initialMsg.Text, "\n\n────────────\n\n") != 2 {
-		t.Fatalf("expected 2 separators in: %s", initialMsg.Text)
+	if strings.Count(initialMsg.Text, "<blockquote>") != 1 {
+		t.Fatalf("expected 1 blockquote, got %d", strings.Count(initialMsg.Text, "<blockquote>"))
 	}
 
 	// Verify config was not altered merely by opening /config
 	cfgInitial := h.groupRepo.configs[chatID]
-	if cfgInitial.DefaultGameMode != groups.Classic || cfgInitial.RankingSystem != groups.Legacy {
+	if cfgInitial.RankingSystem != groups.Legacy {
 		t.Fatalf("opening /config mutated state: %+v", cfgInitial)
 	}
 
-	// 2. Change mode to Caseiro via callback
-	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
-		ID:      "cb_mode_caseiro",
-		From:    telego.User{ID: adminID, FirstName: "Admin"},
-		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
-		Data:    fmt.Sprintf("cfg_mode_caseiro_%d", chatID),
-	})
-
-	if len(h.api.EditedMessages) == 0 {
-		t.Fatal("expected edited message after mode callback")
-	}
-	editedAfterMode := h.api.EditedMessages[len(h.api.EditedMessages)-1]
-
-	// Check ParseMode is HTML
-	if editedAfterMode.ParseMode != telego.ModeHTML {
-		t.Fatalf("expected ParseMode HTML, got %s", editedAfterMode.ParseMode)
-	}
-
-	// Main text and summary updated to Caseiro
-	if !strings.Contains(editedAfterMode.Text, "<b>Modo padrão de partida:</b> Caseiro") {
-		t.Fatalf("expected Caseiro mode header in: %s", editedAfterMode.Text)
-	}
-	if !strings.Contains(editedAfterMode.Text, "<blockquote><b>🎮 Caseiro</b>\nPermite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4.</blockquote>") {
-		t.Fatalf("expected Caseiro summary in: %s", editedAfterMode.Text)
-	}
-	// Old Classic summary must disappear
-	if strings.Contains(editedAfterMode.Text, "🎮 Clássico") {
-		t.Fatalf("old Classic summary did not disappear after mode change: %s", editedAfterMode.Text)
-	}
-	// Ranking still Legacy
-	if !strings.Contains(editedAfterMode.Text, "<blockquote><b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.</blockquote>") {
-		t.Fatalf("expected Legacy summary preserved in: %s", editedAfterMode.Text)
-	}
-	if strings.Contains(editedAfterMode.Text, "🏆 Atualizado") {
-		t.Fatalf("unexpected Updated summary in: %s", editedAfterMode.Text)
-	}
-	// Exactly 3 blockquotes and 2 separators preserved
-	if strings.Count(editedAfterMode.Text, "<blockquote>") != 3 {
-		t.Fatalf("expected 3 blockquotes in edited message, got %d", strings.Count(editedAfterMode.Text, "<blockquote>"))
-	}
-	if strings.Count(editedAfterMode.Text, "\n\n────────────\n\n") != 2 {
-		t.Fatalf("expected 2 separators in edited message: %s", editedAfterMode.Text)
-	}
-
-	// 3. Change ranking to Updated via callback
+	// 2. Change ranking to Updated via callback
 	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
 		ID:      "cb_rank_updated",
 		From:    telego.User{ID: adminID, FirstName: "Admin"},
@@ -1193,9 +994,16 @@ func TestConfig_DynamicCallbackUpdates(t *testing.T) {
 		Data:    fmt.Sprintf("cfg_rank_updated_%d", chatID),
 	})
 
+	if len(h.api.EditedMessages) == 0 {
+		t.Fatal("expected edited message after ranking callback")
+	}
 	editedAfterRank := h.api.EditedMessages[len(h.api.EditedMessages)-1]
 
-	// Main text and summary updated to Updated
+	// Check ParseMode is HTML
+	if editedAfterRank.ParseMode != telego.ModeHTML {
+		t.Fatalf("expected ParseMode HTML, got %s", editedAfterRank.ParseMode)
+	}
+
 	if !strings.Contains(editedAfterRank.Text, "<b>Sistema de ranking:</b> Atualizado") {
 		t.Fatalf("expected Updated rank header in: %s", editedAfterRank.Text)
 	}
@@ -1206,48 +1014,16 @@ func TestConfig_DynamicCallbackUpdates(t *testing.T) {
 	if strings.Contains(editedAfterRank.Text, "🏆 Legado") {
 		t.Fatalf("old Legacy summary did not disappear after rank change: %s", editedAfterRank.Text)
 	}
-	// Mode still Caseiro
-	if !strings.Contains(editedAfterRank.Text, "<blockquote><b>🎮 Caseiro</b>\nPermite combinações extras entre cartas de compra, como +4 sobre +2 e +2 da cor escolhida sobre +4.</blockquote>") {
-		t.Fatalf("expected Caseiro summary preserved in: %s", editedAfterRank.Text)
+	// House mode is fixed
+	if !strings.Contains(editedAfterRank.Text, "<b>Modo de partida:</b> Caseiro") {
+		t.Fatalf("expected Caseiro mode preserved in: %s", editedAfterRank.Text)
 	}
-	if strings.Contains(editedAfterRank.Text, "🎮 Clássico") {
-		t.Fatalf("unexpected Classic summary in: %s", editedAfterRank.Text)
-	}
-	// Exactly 3 blockquotes and 2 separators preserved
-	if strings.Count(editedAfterRank.Text, "<blockquote>") != 3 {
-		t.Fatalf("expected 3 blockquotes in edited message, got %d", strings.Count(editedAfterRank.Text, "<blockquote>"))
-	}
-	if strings.Count(editedAfterRank.Text, "\n\n────────────\n\n") != 2 {
-		t.Fatalf("expected 2 separators in edited message: %s", editedAfterRank.Text)
+	if strings.Count(editedAfterRank.Text, "<blockquote>") != 1 {
+		t.Fatalf("expected 1 blockquote in edited message, got %d", strings.Count(editedAfterRank.Text, "<blockquote>"))
 	}
 
 	// Buttons preserved
-	if editedAfterRank.ReplyMarkup == nil || len(editedAfterRank.ReplyMarkup.InlineKeyboard) != 3 {
-		t.Fatalf("expected 3 rows of buttons, got %+v", editedAfterRank.ReplyMarkup)
-	}
-
-	// Dynamic click 3: switch privacy to anon
-	h.cbHandler.HandleCallback(ctx, &telego.CallbackQuery{
-		ID:      "cb_priv_anon",
-		From:    telego.User{ID: adminID, FirstName: "Creator"},
-		Message: &telego.Message{Chat: telego.Chat{ID: chatID}, MessageID: 100},
-		Data:    fmt.Sprintf("cfg_privacy_anon_%d", chatID),
-	})
-
-	if len(h.api.EditedMessages) != 3 {
-		t.Fatalf("expected 3 edits, got %d", len(h.api.EditedMessages))
-	}
-	editedAfterPriv := h.api.EditedMessages[2]
-	if !strings.Contains(editedAfterPriv.Text, "🔒 Anônimo") {
-		t.Fatalf("expected anonymous privacy blockquote in: %s", editedAfterPriv.Text)
-	}
-	if strings.Count(editedAfterPriv.Text, "<blockquote>") != 3 {
-		t.Fatalf("expected 3 blockquotes after privacy edit, got %d", strings.Count(editedAfterPriv.Text, "<blockquote>"))
-	}
-	if editedAfterPriv.ReplyMarkup == nil || len(editedAfterPriv.ReplyMarkup.InlineKeyboard) != 3 {
-		t.Fatalf("expected 3 rows of buttons after privacy edit, got %+v", editedAfterPriv.ReplyMarkup)
-	}
-	if editedAfterPriv.ReplyMarkup.InlineKeyboard[2][1].Text != "✅ Anônimo" {
-		t.Fatalf("expected ✅ Anônimo button, got: %s", editedAfterPriv.ReplyMarkup.InlineKeyboard[2][1].Text)
+	if editedAfterRank.ReplyMarkup == nil || len(editedAfterRank.ReplyMarkup.InlineKeyboard) != 1 {
+		t.Fatalf("expected 1 row of buttons, got %+v", editedAfterRank.ReplyMarkup)
 	}
 }
