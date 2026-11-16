@@ -50,6 +50,7 @@ type Bot struct {
 	cmdHandler       *CommandHandler
 	cbHandler        *CallbackHandler
 	inlineHandler    *InlineHandler
+	current          *currentGameTracker
 	logger           *slog.Logger
 	usernamePublic   atomic.Value
 	username         string
@@ -116,11 +117,13 @@ func New(api BotAPI, service *game.Service, tokens *TokenStore, renderer *Render
 	if renderer == nil {
 		renderer = NewRenderer(nil)
 	}
-	b := &Bot{api: api, service: service, tokens: tokens, renderer: renderer, logger: logger, transport: TransportConfig{Mode: TransportPolling, ListenAddr: defaultWebhookListenAddr}, dedupe: newUpdateDeduper(time.Now), retrySleep: waitContext}
+	b := &Bot{api: api, service: service, tokens: tokens, renderer: renderer, logger: logger, transport: TransportConfig{Mode: TransportPolling, ListenAddr: defaultWebhookListenAddr}, dedupe: newUpdateDeduper(time.Now), retrySleep: waitContext, current: newCurrentGameTracker()}
 	b.inlineHandler = NewInlineHandler(api, service, renderer, tokens, tokenTTL, nil, logger)
+	b.inlineHandler.current = b.current
 	b.dispatcher = NewDispatcher(logger, func(ctx context.Context, q *telego.InlineQuery) { b.inlineHandler.HandleInlineQuery(ctx, q) })
 	b.inlineHandler.dispatcher = b.dispatcher
 	b.cmdHandler = NewCommandHandler(api, service, renderer, tokens, "", logger)
+	b.cmdHandler.current = b.current
 	b.cbHandler = NewCallbackHandler(api, service, renderer, tokens, logger)
 	return b
 }

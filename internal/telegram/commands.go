@@ -17,6 +17,7 @@ import (
 
 type CommandHandler struct {
 	rankingService *ranking.Service
+	current        *currentGameTracker
 	knownUsers     groups.UserRepository
 	finalize       func(context.Context, game.Outcome) func()
 	groupConfigs   groups.Repository
@@ -215,6 +216,9 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 	// Observed names stay in RAM during gameplay and are flushed at closure.
 	if summary, err := h.service.FindChatGame(ctx, chatID); err == nil {
 		_ = h.service.ObservePlayer(ctx, game.Actor{PlayerID: actorID, ChatID: chatID}, summary.GameID, observedName(*msg.From), msg.From.Username)
+		// The inline menu resolves the game from here: this is the group the
+		// player is acting in.
+		h.current.Set(actorID, summary.GameID)
 	}
 	// Group command handling
 	switch cmdName {

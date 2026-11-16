@@ -21,6 +21,7 @@ type InlineHandler struct {
 	service    *game.Service
 	renderer   *Renderer
 	tokens     *TokenStore
+	current    *currentGameTracker
 	tokenTTL   time.Duration
 	dispatcher *Dispatcher
 	logger     *slog.Logger
@@ -46,6 +47,7 @@ func NewInlineHandler(
 		service:    service,
 		renderer:   renderer,
 		tokens:     tokens,
+		current:    newCurrentGameTracker(),
 		tokenTTL:   tokenTTL,
 		dispatcher: dispatcher,
 		logger:     logger,
@@ -60,47 +62,24 @@ func (h *InlineHandler) HandleInlineQuery(ctx context.Context, query *telego.Inl
 	actorID := uno.PlayerID(query.From.ID)
 	h.renderer.userCache.Put(actorID, query.From.FirstName, query.From.Username)
 
-	rawQuery := strings.TrimSpace(query.Query)
 	var results []telego.InlineQueryResult
 	var nextOffset string
 
-	if rawQuery == "" {
-		// Empty query: find all active games for user
-		playerGames, err := h.service.FindPlayerGames(ctx, game.Actor{PlayerID: actorID})
-		if err != nil || len(playerGames) == 0 {
-			results = append(results, &telego.InlineQueryResultArticle{
-				Type:        "article",
-				ID:          "no_game",
-				Title:       "Você não está participando de nenhuma partida",
-				Description: "Use /novo para criar ou /entrar em um grupo para jogar.",
-				InputMessageContent: &telego.InputTextMessageContent{
-					MessageText: "Você não está participando de nenhuma partida de UNO no momento. Use /novo para criar ou /entrar em um grupo para jogar!",
-				},
-			})
-		} else if len(playerGames) == 1 {
-			// Single game: open hand directly
-			targetGameID := playerGames[0].GameID
-			results, nextOffset = h.buildPlayerHandResults(ctx, actorID, targetGameID, query.Offset)
-		} else {
-			// Multiple games: render selector
-			results, nextOffset = h.buildGameSelectorResults(ctx, actorID, playerGames, query.Offset)
-		}
-	} else if strings.HasPrefix(rawQuery, "g_") {
-		queryBody := strings.TrimPrefix(rawQuery, "g_")
-		gameIDStr := strings.SplitN(queryBody, "_", 2)[0]
-		targetGameID := uno.GameID(gameIDStr)
-		results, nextOffset = h.buildPlayerHandResults(ctx, actorID, targetGameID, query.Offset)
-	} else {
-		// Unknown query format
+	// The chat input never carries an internal identifier: the bot resolves
+	// the game from the player's current game.
+	targetGameID, found := h.current.resolve(ctx, h.service, actorID)
+	if !found {
 		results = append(results, &telego.InlineQueryResultArticle{
 			Type:        "article",
-			ID:          "invalid_query",
-			Title:       "Consulta não reconhecida",
-			Description: "Abra @bot para listar suas partidas.",
+			ID:          "no_game",
+			Title:       "Você não está participando de nenhuma partida",
+			Description: "Use /novo para criar ou /entrar em um grupo para jogar.",
 			InputMessageContent: &telego.InputTextMessageContent{
-				MessageText: "Consulta não reconhecida. Use @bot para ver suas partidas.",
+				MessageText: "Você não está participando de nenhuma partida de UNO no momento. Use /novo para criar ou /entrar em um grupo para jogar!",
 			},
 		})
+	} else {
+		results, nextOffset = h.buildPlayerHandResults(ctx, actorID, targetGameID, query.Offset)
 	}
 
 	params := &telego.AnswerInlineQueryParams{
@@ -114,68 +93,6 @@ func (h *InlineHandler) HandleInlineQuery(ctx context.Context, query *telego.Inl
 	if err := h.bot.AnswerInlineQuery(ctx, params); err != nil {
 		h.logger.WarnContext(ctx, "failed to answer inline query", "query_id", query.ID, "user_id", actorID, "error", err.Error())
 	}
-}
-
-func (h *InlineHandler) buildGameSelectorResults(
-	ctx context.Context,
-	actorID uno.PlayerID,
-	games []game.GameSummary,
-	offsetStr string,
-) ([]telego.InlineQueryResult, string) {
-	offset := 0
-	if offsetStr != "" {
-		if cursor, err := h.tokens.GetCursor(offsetStr, actorID); err == nil && cursor.Kind == CursorKindGames {
-			offset = cursor.Offset
-		}
-	}
-
-	if offset >= len(games) {
-		return nil, ""
-	}
-
-	end := offset + 45
-	if end > len(games) {
-		end = len(games)
-	}
-
-	results := make([]telego.InlineQueryResult, 0, end-offset)
-	for i := offset; i < end; i++ {
-		g := games[i]
-		chatTitle := g.ChatName
-		if chatTitle == "" {
-			chatTitle = fmt.Sprintf("Grupo %d", g.ChatID)
-		}
-
-		results = append(results, &telego.InlineQueryResultArticle{
-			Type:        "article",
-			ID:          fmt.Sprintf("select_%s", g.GameID),
-			Title:       chatTitle,
-			Description: fmt.Sprintf("Partida ativa | Fase: %v", g.Phase),
-			InputMessageContent: &telego.InputTextMessageContent{
-				MessageText: fmt.Sprintf("Partida em <b>%s</b>", chatTitle),
-				ParseMode:   "HTML",
-			},
-			ReplyMarkup: &telego.InlineKeyboardMarkup{
-				InlineKeyboard: [][]telego.InlineKeyboardButton{
-					{
-						{
-							Text:                         "🃏 Abrir minha mão",
-							SwitchInlineQueryCurrentChat: stringPtr(fmt.Sprintf("g_%s_%d", g.GameID, g.Revision)),
-						},
-					},
-				},
-			},
-		})
-	}
-
-	nextOffset := ""
-	if end < len(games) {
-		if curTok, err := h.tokens.CreateCursorToken(actorID, CursorKindGames, "", 0, end, h.tokenTTL); err == nil {
-			nextOffset = curTok
-		}
-	}
-
-	return results, nextOffset
 }
 
 func (h *InlineHandler) buildPlayerHandResults(
@@ -457,7 +374,7 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 	h.renderer.userCache.Put(actorID, chosen.From.FirstName, chosen.From.Username)
 
 	tokenStr := chosen.ResultID
-	if strings.HasPrefix(tokenStr, "grey_") || strings.HasPrefix(tokenStr, "hdr_") || strings.HasPrefix(tokenStr, "select_") || strings.HasPrefix(tokenStr, "no_") || strings.HasPrefix(tokenStr, "info_") || strings.HasPrefix(tokenStr, "hand_") || strings.HasPrefix(tokenStr, "wait_") {
+	if strings.HasPrefix(tokenStr, "grey_") || strings.HasPrefix(tokenStr, "select_") || strings.HasPrefix(tokenStr, "no_") || strings.HasPrefix(tokenStr, "info_") || strings.HasPrefix(tokenStr, "hand_") || strings.HasPrefix(tokenStr, "wait_") {
 		return true
 	}
 
@@ -466,6 +383,8 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 		h.logger.DebugContext(ctx, "ignoring unconsumed action token in chosen inline result", "status", status, "user_id", actorID)
 		return true
 	}
+	// Playing a card makes this the player's current game.
+	h.current.Set(actorID, actionToken.GameID)
 
 	// Schedule the state change in the designated chat worker queue to ensure in-order execution
 	accepted := h.dispatcher.EnqueueChat(actionToken.ChatID, func(taskCtx context.Context) {

@@ -211,7 +211,7 @@ func TestFinalInlineActionAcrossTransports(t *testing.T) {
 				if _, _, found := b.tokens.GetActionStatus(otherToken); !found {
 					t.Fatal("other game's token invalidated")
 				}
-				b.inlineHandler.HandleInlineQuery(t.Context(), &telego.InlineQuery{ID: "historical", From: telego.User{ID: int64(action.PlayerID)}, Query: "g_" + string(view.GameID)})
+				b.inlineHandler.HandleInlineQuery(t.Context(), &telego.InlineQuery{ID: "historical", From: telego.User{ID: int64(action.PlayerID)}, Query: ""})
 				api.mu.Lock()
 				answer := api.AnsweredInlines[len(api.AnsweredInlines)-1]
 				api.mu.Unlock()
@@ -354,7 +354,8 @@ func TestQueuedActionAfterClosureHasNoContinuation(t *testing.T) {
 			if rejected.ReplyMarkup != nil || strings.Contains(rejected.Text, "Abra Suas cartas") || strings.Contains(rejected.Text, "🎯 Vez:") || strings.Contains(rejected.Text, fmt.Sprintf(`href="tg://user?id=%d"`, view.CurrentTurn)) {
 				t.Fatalf("terminal error invites play: %+v", rejected)
 			}
-			b.inlineHandler.HandleInlineQuery(t.Context(), &telego.InlineQuery{ID: "old", From: telego.User{ID: int64(view.CurrentTurn)}, Query: "g_" + string(view.GameID)})
+			b.current.Set(view.CurrentTurn, view.GameID)
+			b.inlineHandler.HandleInlineQuery(t.Context(), &telego.InlineQuery{ID: "old", From: telego.User{ID: int64(view.CurrentTurn)}, Query: ""})
 			article := api.AnsweredInlines[len(api.AnsweredInlines)-1].Results[0].(*telego.InlineQueryResultArticle)
 			want := "closed_game"
 			if history == 0 {
@@ -379,27 +380,26 @@ func TestInlineContextAndActionBindingAcrossGroups(t *testing.T) {
 		b.inlineHandler.HandleInlineQuery(t.Context(), &telego.InlineQuery{ID: "query", From: telego.User{ID: int64(user)}, Query: q})
 		return api.AnsweredInlines[len(api.AnsweredInlines)-1]
 	}
+	// The empty query resolves the player's current game; it never exposes an
+	// internal identifier and never leaks another group's hand.
+	b.current.Set(first.CurrentTurn, first.GameID)
 	selector := query(first.CurrentTurn, "")
-	if len(selector.Results) != 2 {
-		t.Fatal("missing multigroup selector")
+	if len(selector.Results) == 0 {
+		t.Fatal("missing current game hand")
 	}
 	for _, result := range selector.Results {
-		article, ok := result.(*telego.InlineQueryResultArticle)
-		if !ok || article.ReplyMarkup == nil {
-			t.Fatalf("invalid selector: %T", result)
-		}
-		context := *article.ReplyMarkup.InlineKeyboard[0][0].SwitchInlineQueryCurrentChat
-		if !strings.HasPrefix(context, "g_"+string(first.GameID)) && !strings.HasPrefix(context, "g_"+string(second.GameID)) {
-			t.Fatalf("wrong selector context %s", context)
+		if article, ok := result.(*telego.InlineQueryResultArticle); ok && article.ReplyMarkup != nil {
+			t.Fatalf("group selector resurfaced: %+v", article)
 		}
 	}
-	foreign := query(99, "g_"+string(first.GameID))
-	if len(foreign.Results) != 1 || foreign.Results[0].(*telego.InlineQueryResultArticle).ID != "unavailable_game" {
+	foreign := query(99, "")
+	if len(foreign.Results) != 1 || foreign.Results[0].(*telego.InlineQueryResultArticle).ID != "no_game" {
 		t.Fatal("outsider obtained hand")
 	}
 	var drawToken string
 	for _, view := range []game.PublicGameView{first, second} {
-		answer := query(view.CurrentTurn, "g_"+string(view.GameID))
+		b.current.Set(view.CurrentTurn, view.GameID)
+		answer := query(view.CurrentTurn, "")
 		if answer.CacheTime != 0 || !answer.IsPersonal {
 			t.Fatal("private query cache contract changed")
 		}
@@ -439,7 +439,7 @@ func TestInlineContextAndActionBindingAcrossGroups(t *testing.T) {
 	if unchanged.Revision != first.Revision {
 		t.Fatal("cross-user action accepted")
 	}
-	chosen := &telego.ChosenInlineResult{ResultID: drawToken, From: telego.User{ID: int64(first.CurrentTurn)}, Query: "g_" + string(second.GameID)}
+	chosen := &telego.ChosenInlineResult{ResultID: drawToken, From: telego.User{ID: int64(first.CurrentTurn)}}
 	b.inlineHandler.HandleChosenInlineResult(t.Context(), chosen)
 	flushChat(t, b, first.ChatID)
 	afterFirst, _ := svc.PublicView(t.Context(), first.GameID)
@@ -513,7 +513,8 @@ func TestInlineHandCursorCannotCrossContext(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			b.inlineHandler.HandleInlineQuery(t.Context(), &telego.InlineQuery{ID: tc.name, From: telego.User{ID: int64(first.CurrentTurn)}, Query: "g_" + string(first.GameID), Offset: cursor})
+			b.current.Set(first.CurrentTurn, first.GameID)
+			b.inlineHandler.HandleInlineQuery(t.Context(), &telego.InlineQuery{ID: tc.name, From: telego.User{ID: int64(first.CurrentTurn)}, Query: "", Offset: cursor})
 			results := api.AnsweredInlines[len(api.AnsweredInlines)-1].Results
 			cards := 0
 			for _, result := range results {

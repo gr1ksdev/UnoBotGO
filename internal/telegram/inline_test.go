@@ -75,8 +75,14 @@ func TestInlineHandler_EmptyQuery_ZeroOneMultipleGames(t *testing.T) {
 		t.Fatalf("expected 3 answered inlines, got %d", len(mockAPI.AnsweredInlines))
 	}
 	res2 := mockAPI.AnsweredInlines[2].Results
-	if len(res2) != 2 {
-		t.Fatalf("expected 2 game selector articles, got %d", len(res2))
+	if len(res2) == 0 {
+		t.Fatal("expected the current game hand for a player with several games")
+	}
+	// The menu never exposes an internal identifier.
+	for _, r := range res2 {
+		if article, ok := r.(*telego.InlineQueryResultArticle); ok && strings.HasPrefix(article.ID, "select_") {
+			t.Fatalf("game selector resurfaced: %+v", article)
+		}
 	}
 }
 
