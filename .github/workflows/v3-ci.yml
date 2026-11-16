@@ -1,0 +1,52 @@
+name: v3-ci
+on:
+  pull_request:
+    branches: [v3]
+  push:
+    branches: [v3]
+concurrency:
+  group: v3-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: unobot
+          POSTGRES_PASSWORD: unobot
+          POSTGRES_DB: unobot_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U unobot -d unobot_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://unobot:unobot@localhost:5432/unobot_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test ./...
+      - run: go test -race ./...
+      - run: go test -race -tags integration ./internal/storage/postgres/...
+      - run: go vet ./...
+      - run: go vet -tags integration ./...
+      - run: go build ./...
+      - run: git diff --check
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.v2
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: type=gha,scope=v3-image
+          cache-to: type=gha,mode=max,scope=v3-image

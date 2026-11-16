@@ -451,9 +451,11 @@ func (r *Renderer) RenderHelp(botUsername string) string {
 	sb.WriteString("<b>/destrancar</b> — Permite novas entradas.\n")
 	sb.WriteString("<b>/iniciar</b> — Inicia a partida quando houver pelo menos dois jogadores.\n")
 	sb.WriteString("<b>/estado</b> — Mostra o lobby ou o estado atual da partida.\n")
-	sb.WriteString("<b>/play</b> — Abre o WebApp para jogar UNO. O comando /jogar é um alias.\n")
 	sb.WriteString("<b>/ranking</b> — Mostra o ranking mensal do grupo (ou seus rankings mensais se usado no privado).\n")
+	sb.WriteString("<b>/stats</b> — Mostra suas estatísticas: partidas, vitórias, pontos e colocação.\n")
 	sb.WriteString("<b>/sair</b> — Sai da partida em andamento.\n")
+	sb.WriteString("<b>/pular</b> — Pula o turno do jogador atual (responsável ou admin do grupo).\n")
+	sb.WriteString("<b>/expulsar</b> — Expulsa um jogador da partida (responda à mensagem dele).\n")
 	sb.WriteString("<b>/cancelar</b> — Cancela a partida (criador, responsável ou admin). O comando /kill é um alias.\n")
 	sb.WriteString("<b>/reset</b> — Recupera o grupo e limpa sua partida e histórico.")
 	sb.WriteString("</blockquote>\n\n")
@@ -470,7 +472,7 @@ func (r *Renderer) RenderHelp(botUsername string) string {
 		sb.WriteString("<code>@seubot</code>\n\n")
 	}
 	sb.WriteString("Sua mão privada aparecerá no menu inline. Toque em uma carta jogável (colorida) para jogá-la! ")
-	sb.WriteString("No modo caseiro, a carta 🔀 Trocar cartas permite escolher outro jogador ou manter a mão em <b>Suas cartas</b>, e depois escolher a cor. Se for a última carta, encerra sua participação sem escolhas. ")
+	sb.WriteString("A carta 🔀 Trocar cartas permite escolher outro jogador ou manter a mão em <b>Suas cartas</b>, e depois escolher a cor. Se for a última carta, encerra sua participação sem escolhas. ")
 	sb.WriteString("A confirmação oficial e o estado atualizado serão enviados no grupo da partida.\n\n")
 	sb.WriteString("🇧🇷 Esta é uma versão brasileira desenvolvida em Go (Golang), baseada no @unopybot.")
 

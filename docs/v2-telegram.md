@@ -160,28 +160,28 @@ O scheduler descobre candidatos sem mutação e executa AutoSkip + mensagem dent
 da fila do chat. Isso impede a publicação tardia de um turno obsoleto após vitória.
 O mesmo código é usado por polling e webhook.
 
-### Por que o contexto permanece visível
+### O contexto não é mais visível
 
-`Suas cartas` e o seletor de partidas usam `switch_inline_query_current_chat` com
-`g_<GameID>` (34 caracteres: prefixo + 128 bits em hexadecimal). Esse identificador
-seleciona a partida; não é o token de ação de uso único. A mão exige participação
-validada por `PlayerView`. Tokens de ação permanecem vinculados a usuário, jogo,
-chat, ação, carta/cor, revision e TTL; `ChosenInlineResult` usa o registro do token,
-não a query recebida, para aplicar a ação e escolher o grupo de confirmação.
+Na v2, `Suas cartas` usava `switch_inline_query_current_chat` com
+`g_<GameID>_<revision>` (37 caracteres) e o identificador aparecia no campo de
+texto do chat. Na v3 a query é **vazia**: nada é escrito no campo de texto.
 
-O botão insere a query no campo de texto. Não existe payload oculto equivalente
-nesse mecanismo. `InlineQuery` e `ChosenInlineResult` não fornecem `chat_id`, e
+O bot resolve a partida pelo **jogo atual do jogador**, mantido em memória e
+atualizado quando o jogador age em um grupo ou joga uma carta. É o mesmo modelo
+do bot upstream, que conserva um único jogo corrente por usuário. O seletor de
+partidas e o prefixo `g_` foram removidos.
+
+A restrição é técnica: `InlineQuery` não transporta `chat_id`, e
 `inline_message_id` não permite recuperar o destino por uma API documentada.
 Fontes: [botões](https://core.telegram.org/bots/api#inlinekeyboardbutton),
 [InlineQuery](https://core.telegram.org/bots/api#inlinequery),
 [ChosenInlineResult](https://core.telegram.org/bots/api#choseninlineresult).
 
-Query vazia continua abrindo a mão quando há uma única partida ou o seletor quando
-há várias. Ela não identifica o grupo de origem. Manter o contexto evita seleção
-ambígua para quem joga em vários grupos. Uma representação base64url dos mesmos
-128 bits reduziria o texto, mas continuaria visível e exigiria compatibilidade
-com botões anteriores; não foi introduzida nesta milestone. Não há "última
-partida" global por usuário, mudança de GameID, token ou regra de autorização.
+A mão continua exigindo participação validada por `PlayerView`. Tokens de ação
+permanecem vinculados a usuário, jogo, chat, ação, carta/cor, revision e TTL;
+`ChosenInlineResult` usa o registro do token, não a query recebida, para aplicar
+a ação e escolher o grupo de confirmação. Um menu antigo não redireciona uma
+decisão para outro grupo.
 
 ### Destino dos nomes
 

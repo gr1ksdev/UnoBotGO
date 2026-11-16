@@ -1,5 +1,19 @@
 # UnoBotGO V2 — engine (Milestone 1)
 
+## V3 — modo Caseiro único (2026-11-16)
+
+O Caseiro é o único modo do produto. O grupo não guarda mais um modo padrão e
+`/novo` ignora seus argumentos. A engine continua expondo `ClassicRules()` e
+`BotRules()` para os testes e o simulador; apenas a superfície de produto
+colapsa.
+
+`CaseiroRules()` continua sendo `BotRules()` com quatro ajustes:
+
+- `StackWildDrawFour = false` — `+4` não responde a outro `+4`;
+- `StackWildDrawFourOnTwo = true` — `+4` responde a `+2` pendente;
+- `StackDrawTwoOnWildFour = true` — `+2` da cor escolhida responde a `+4`;
+- `AllowSwapHands = true` — baralho com 109 cartas.
+
 ## Atualização — apresentação e empilhamento Caseiro (2026-09-25)
 
 - O estado público do Telegram indica a direção somente pelas setas entre os
