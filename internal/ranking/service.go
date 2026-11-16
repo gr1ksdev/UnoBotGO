@@ -52,6 +52,7 @@ const MaxRankingEntries = 512
 type ReadRepository interface {
 	ListGroupRanking(ctx context.Context, chatID int64, at time.Time) (GroupRanking, error)
 	ListUserMonthlyRankings(ctx context.Context, userID int64, at time.Time) (UserMonthlyRankings, error)
+	ReadPlayerStats(ctx context.Context, chatID, userID int64, at time.Time) (PlayerStats, error)
 }
 
 type Service struct {

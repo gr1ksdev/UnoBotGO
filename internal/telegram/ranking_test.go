@@ -26,6 +26,10 @@ func (f rankingReadFunc) ListUserMonthlyRankings(ctx context.Context, userID int
 	return ranking.UserMonthlyRankings{UserID: userID}, nil
 }
 
+func (f rankingReadFunc) ReadPlayerStats(ctx context.Context, chatID, userID int64, at time.Time) (ranking.PlayerStats, error) {
+	return ranking.PlayerStats{System: groups.Updated, Games: 2, Wins: 1, BestPosition: 1, AvgPosition: "1.50", Score: 1000}, nil
+}
+
 func TestRenderGroupRankingUniqueSequentialRanks(t *testing.T) {
 	for _, tc := range []struct {
 		scores []ranking.Units
@@ -515,8 +519,9 @@ func TestPrivateRankingCommand_ScopesToSenderAndNoButtons(t *testing.T) {
 }
 
 type mockPrivateRankingRepo struct {
-	onListGroup func(context.Context, int64, time.Time) (ranking.GroupRanking, error)
-	onListUser  func(context.Context, int64, time.Time) (ranking.UserMonthlyRankings, error)
+	onListGroup   func(context.Context, int64, time.Time) (ranking.GroupRanking, error)
+	onListUser    func(context.Context, int64, time.Time) (ranking.UserMonthlyRankings, error)
+	onPlayerStats func(context.Context, int64, int64, time.Time) (ranking.PlayerStats, error)
 }
 
 func (m *mockPrivateRankingRepo) ListGroupRanking(ctx context.Context, id int64, at time.Time) (ranking.GroupRanking, error) {
@@ -531,4 +536,11 @@ func (m *mockPrivateRankingRepo) ListUserMonthlyRankings(ctx context.Context, us
 		return m.onListUser(ctx, userID, at)
 	}
 	return ranking.UserMonthlyRankings{UserID: userID}, nil
+}
+
+func (m *mockPrivateRankingRepo) ReadPlayerStats(ctx context.Context, chatID, userID int64, at time.Time) (ranking.PlayerStats, error) {
+	if m.onPlayerStats != nil {
+		return m.onPlayerStats(ctx, chatID, userID, at)
+	}
+	return ranking.PlayerStats{}, nil
 }

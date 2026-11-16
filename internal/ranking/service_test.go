@@ -28,6 +28,13 @@ func (r *readStub) ListUserMonthlyRankings(_ context.Context, userID int64, at t
 	return UserMonthlyRankings{UserID: userID, MonthName: "Outubro"}, r.err
 }
 
+func (r *readStub) ReadPlayerStats(_ context.Context, chatID, userID int64, at time.Time) (PlayerStats, error) {
+	r.chatID = chatID
+	r.userID = userID
+	r.at = at
+	return PlayerStats{System: groups.Updated, Games: 3, Wins: 1, BestPosition: 1, AvgPosition: "2.00", Score: 1500}, r.err
+}
+
 func TestRankingServiceScopesReadAndPropagatesFailure(t *testing.T) {
 	repo := &readStub{}
 	s := &Service{Repository: repo}

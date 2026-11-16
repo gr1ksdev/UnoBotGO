@@ -202,6 +202,12 @@ func authorize(entry *managedGame, actor Actor, kind uno.ActionType) error {
 		}
 	case uno.PlayCard, uno.DrawCard, uno.PassTurn, uno.ChooseColor, uno.ChoosePlayer, uno.KeepHand, uno.CallBluff:
 		// Inline actions have no chat context. The engine still validates the actor.
+	case uno.ForceSkipTurn, uno.KickPlayer:
+		// Administrative actions over the running game: the owner of the game
+		// or an administrator of the chat.
+		if actor.ChatID == 0 || (!actor.ChatAdmin && actor.PlayerID != entry.ownerID) {
+			return ErrForbidden
+		}
 	default:
 		return uno.ErrInvalidAction
 	}

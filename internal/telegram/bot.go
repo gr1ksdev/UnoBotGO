@@ -165,6 +165,8 @@ func (b *Bot) registerCommands(ctx context.Context) error {
 			Commands: []telego.BotCommand{
 				{Command: "start", Description: "Conhecer o UnoBotGO"},
 				{Command: "help", Description: "Ver comandos e instruções"},
+				{Command: "ranking", Description: "Ver seus rankings mensais"},
+				{Command: "stats", Description: "Ver suas estatísticas"},
 			},
 			Scope: &telego.BotCommandScopeAllPrivateChats{Type: telego.ScopeTypeAllPrivateChats},
 		},
@@ -177,10 +179,13 @@ func (b *Bot) registerCommands(ctx context.Context) error {
 				{Command: "iniciar", Description: "Iniciar a partida"},
 				{Command: "estado", Description: "Ver o estado atual da partida"},
 				{Command: "ranking", Description: "Ver o ranking acumulado do grupo"},
+				{Command: "stats", Description: "Ver suas estatísticas no grupo"},
 				{Command: "sair", Description: "Sair da partida em andamento"},
+				{Command: "pular", Description: "Pular o turno do jogador atual"},
+				{Command: "expulsar", Description: "Expulsar um jogador da partida"},
 				{Command: "cancelar", Description: "Cancelar a partida"},
 				{Command: "reset", Description: "Recuperar e limpar o grupo"},
-				{Command: "config", Description: "Configurar opções de jogo e ranking do grupo"},
+				{Command: "config", Description: "Configurar o ranking do grupo"},
 				{Command: "help", Description: "Ver comandos e instruções"},
 			},
 			Scope: &telego.BotCommandScopeAllGroupChats{Type: telego.ScopeTypeAllGroupChats},
@@ -319,9 +324,11 @@ func (b *Bot) runPolling(ctx context.Context, cfg TransportConfig) error {
 		}
 		b.logger.Info("deleted existing webhook before polling")
 	}
+	// The probe listener is auxiliary: the bot must run even when the
+	// address is unavailable.
 	health, err := startHealthServer(cfg.ListenAddr, &b.ready, "", nil)
 	if err != nil {
-		return fmt.Errorf("start health server: %w", err)
+		b.logger.Warn("health probes unavailable", "addr", cfg.ListenAddr, "error", err.Error())
 	}
 	defer func() {
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)

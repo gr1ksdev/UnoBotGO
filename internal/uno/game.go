@@ -90,14 +90,15 @@ func (g *Game) apply(a Action, autoPassAfterDraw bool) (Result, error) {
 	if g.state.Revision == math.MaxUint64 {
 		return Result{}, ErrInvalidState
 	}
-	if a.PlayerID <= 0 || a.Type < JoinGame || a.Type > KeepHand {
+	if a.PlayerID <= 0 || a.Type < JoinGame || a.Type > KickPlayer {
 		return Result{}, ErrInvalidAction
 	}
-	if (a.Type != PlayCard && a.CardID != "") || (a.Type != ChooseColor && a.Color != NoColor) || (a.Type != StartGame && a.DealerID != 0) || (a.Type != ChoosePlayer && a.TargetID != 0) {
+	if (a.Type != PlayCard && a.CardID != "") || (a.Type != ChooseColor && a.Color != NoColor) || (a.Type != StartGame && a.DealerID != 0) || (a.Type != ChoosePlayer && a.Type != KickPlayer && a.TargetID != 0) {
 		return Result{}, ErrInvalidAction
 	}
 	s := g.state.clone()
-	if a.Type != JoinGame && a.Type != StartGame && a.Type != CancelGame && a.Type != SetRules {
+	// Management actions may come from a requester who is not playing.
+	if a.Type != JoinGame && a.Type != StartGame && a.Type != CancelGame && a.Type != SetRules && a.Type != ForceSkipTurn && a.Type != KickPlayer {
 		p := s.player(a.PlayerID)
 		if p == nil || p.Status != Playing {
 			return Result{}, ErrUnknownPlayer
@@ -340,6 +341,31 @@ func (g *Game) takeAction(s *State, a Action, events *[]Event, autoPassAfterDraw
 	}
 	if a.Type == ChooseColor && s.Pending == nil {
 		return ErrNoColorChoice
+	}
+	if a.Type == ForceSkipTurn {
+		// An administrator may advance the turn of a player who is stuck.
+		if s.Pending != nil {
+			return ErrColorChoiceRequired
+		}
+		if s.Phase != TakingTurn {
+			return ErrInvalidAction
+		}
+		if s.CurrentPlayerID == 0 {
+			return ErrInvalidAction
+		}
+		*events = append(*events, Event{Type: PlayerSkipped, PlayerID: s.CurrentPlayerID, Reason: "admin"})
+		changeTurn(s, s.next(s.CurrentPlayerID, 1), events)
+		return nil
+	}
+	if a.Type == KickPlayer {
+		if a.TargetID == a.PlayerID {
+			return ErrInvalidAction
+		}
+		p := s.player(a.TargetID)
+		if p == nil || p.Status != Playing {
+			return ErrUnknownPlayer
+		}
+		return g.leave(s, a.TargetID, events)
 	}
 	if a.PlayerID != s.CurrentPlayerID {
 		return ErrNotYourTurn

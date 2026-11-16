@@ -201,6 +201,8 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 			h.reply(ctx, msg.Chat.ID, h.renderer.RenderHelp(h.botUsername), nil)
 		case "ranking":
 			h.handlePrivateRanking(ctx, msg.Chat.ID, int64(actorID))
+		case "stats":
+			h.handleStats(ctx, 0, actorID, "")
 		default:
 			h.reply(ctx, msg.Chat.ID, "⚠️ Este comando só pode ser utilizado em grupos. Adicione o bot a um grupo para jogar!\n\nUse /help para mais instruções.", nil)
 		}
@@ -224,10 +226,16 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 	switch cmdName {
 	case "ranking":
 		h.handleRanking(ctx, msg.Chat.ID)
+	case "stats":
+		h.handleStats(ctx, chatID, actorID, msg.Chat.Title)
 	case "novo":
 		h.handleNovoObserved(ctx, actorID, chatID, msg.Chat.Title, msg.From)
 	case "trancar", "destrancar":
 		h.handleRoomLock(ctx, actorID, chatID, cmdName == "trancar")
+	case "pular", "skip":
+		h.handlePular(ctx, actorID, chatID)
+	case "expulsar", "kick":
+		h.handleExpulsar(ctx, msg)
 	case "entrar", "join":
 		h.handleEntrar(ctx, actorID, chatID)
 	case "start":
@@ -680,6 +688,132 @@ func (h *CommandHandler) handleRoomLock(ctx context.Context, actorID uno.PlayerI
 		}
 	}
 	h.reply(ctx, int64(chatID), text, nil)
+}
+
+// handlePular advances the turn of a player who is stuck. Only the owner of
+// the game or an administrator of the chat may ask for it.
+func (h *CommandHandler) handlePular(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID) {
+	summary, err := h.service.FindChatGame(ctx, chatID)
+	if err != nil {
+		h.reply(ctx, int64(chatID), "⚠️ Nenhuma partida ativa encontrada neste grupo.", nil)
+		return
+	}
+	view, err := h.service.PublicView(ctx, summary.GameID)
+	if err != nil {
+		h.reply(ctx, int64(chatID), "⚠️ Não foi possível consultar a partida.", nil)
+		return
+	}
+	actor := game.Actor{PlayerID: actorID, ChatID: chatID}
+	if !h.isChatAdmin(ctx, actorID, chatID) && view.OwnerID != actorID {
+		h.reply(ctx, int64(chatID), "⚠️ Apenas o responsável pela partida ou um administrador pode pular o turno.", nil)
+		return
+	}
+	outcome, err := h.service.Apply(ctx, actor, summary.GameID, uno.Action{Type: uno.ForceSkipTurn, PlayerID: actorID, Revision: view.Revision})
+	if err != nil {
+		if errors.Is(err, game.ErrForbidden) {
+			h.reply(ctx, int64(chatID), "⚠️ Apenas o responsável pela partida ou um administrador pode pular o turno.", nil)
+			return
+		}
+		h.reply(ctx, int64(chatID), "⚠️ Não foi possível pular o turno agora.", nil)
+		return
+	}
+	h.reply(ctx, int64(chatID), h.renderer.RenderActionConfirmation(actorID, uno.Action{Type: uno.ForceSkipTurn}, outcome), nil)
+}
+
+// handleExpulsar removes another participant from the game. The target is the
+// author of the message the command replies to.
+func (h *CommandHandler) handleExpulsar(ctx context.Context, msg *telego.Message) {
+	if msg == nil || msg.From == nil {
+		return
+	}
+	chatID := game.ChatID(msg.Chat.ID)
+	actorID := uno.PlayerID(msg.From.ID)
+	summary, err := h.service.FindChatGame(ctx, chatID)
+	if err != nil {
+		h.reply(ctx, int64(chatID), "⚠️ Nenhuma partida ativa encontrada neste grupo.", nil)
+		return
+	}
+	if msg.ReplyToMessage == nil || msg.ReplyToMessage.From == nil {
+		h.reply(ctx, int64(chatID), "⚠️ Responda à mensagem do jogador que deseja expulsar.", nil)
+		return
+	}
+	target := uno.PlayerID(msg.ReplyToMessage.From.ID)
+	if target == actorID {
+		h.reply(ctx, int64(chatID), "⚠️ Use /sair para sair da partida.", nil)
+		return
+	}
+	view, err := h.service.PublicView(ctx, summary.GameID)
+	if err != nil {
+		h.reply(ctx, int64(chatID), "⚠️ Não foi possível consultar a partida.", nil)
+		return
+	}
+	actor := game.Actor{PlayerID: actorID, ChatID: chatID}
+	if !h.isChatAdmin(ctx, actorID, chatID) && view.OwnerID != actorID {
+		h.reply(ctx, int64(chatID), "⚠️ Apenas o responsável pela partida ou um administrador pode expulsar jogadores.", nil)
+		return
+	}
+	outcome, err := h.service.Apply(ctx, actor, summary.GameID, uno.Action{Type: uno.KickPlayer, PlayerID: actorID, TargetID: target, Revision: view.Revision})
+	if err != nil {
+		switch {
+		case errors.Is(err, game.ErrForbidden):
+			h.reply(ctx, int64(chatID), "⚠️ Apenas o responsável pela partida ou um administrador pode expulsar jogadores.", nil)
+		case errors.Is(err, uno.ErrUnknownPlayer):
+			h.reply(ctx, int64(chatID), "⚠️ Esse jogador não está participando da partida.", nil)
+		default:
+			h.reply(ctx, int64(chatID), "⚠️ Não foi possível expulsar o jogador agora.", nil)
+		}
+		return
+	}
+	h.tokens.InvalidateUserGame(summary.GameID, target)
+	text := fmt.Sprintf("🚫 %s foi expulso da partida.", h.renderer.PlayerLink(target, outcome.View))
+	h.reply(ctx, int64(chatID), text, nil)
+}
+
+// handleStats shows the accumulated history of the requesting player.
+func (h *CommandHandler) handleStats(ctx context.Context, chatID game.ChatID, actorID uno.PlayerID, scope string) {
+	if h.rankingService == nil {
+		h.reply(ctx, int64(chatID), "❌ Estatísticas não disponíveis no momento.", nil)
+		return
+	}
+	readCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	stats, err := h.rankingService.ReadPlayerStats(readCtx, int64(chatID), int64(actorID))
+	if err != nil {
+		h.logger.WarnContext(ctx, "failed to read player stats", "chat_id", chatID, "user_id", actorID, "error", err)
+		h.reply(ctx, int64(chatID), "⚠️ Não foi possível consultar suas estatísticas. Tente novamente.", nil)
+		return
+	}
+	if scope != "" {
+		if group, err := h.rankingService.ListGroupRanking(readCtx, int64(chatID)); err == nil {
+			for i, entry := range group.Entries {
+				if entry.UserID == int64(actorID) {
+					stats.Rank = i + 1
+					stats.Total = int(group.Total)
+					break
+				}
+			}
+		}
+	}
+	h.reply(ctx, int64(chatID), h.renderer.RenderPlayerStats(stats, scope), nil)
+}
+
+// isChatAdmin asks Telegram whether the user administers the chat.
+func (h *CommandHandler) isChatAdmin(ctx context.Context, userID uno.PlayerID, chatID game.ChatID) bool {
+	if h.bot == nil {
+		return false
+	}
+	member, err := h.bot.GetChatMember(ctx, &telego.GetChatMemberParams{
+		ChatID: telego.ChatID{ID: int64(chatID)},
+		UserID: int64(userID),
+	})
+	if err != nil || member == nil {
+		return false
+	}
+	switch member.MemberStatus() {
+	case telego.MemberStatusCreator, telego.MemberStatusAdministrator:
+		return true
+	}
+	return false
 }
 
 func (h *CommandHandler) handleConfig(ctx context.Context, msg *telego.Message) {

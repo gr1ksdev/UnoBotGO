@@ -16,6 +16,12 @@ const (
 	SetRules
 	ChoosePlayer
 	KeepHand
+	// ForceSkipTurn advances the turn of the current player. The requester
+	// may be an administrator who is not playing.
+	ForceSkipTurn
+	// KickPlayer removes another active participant. TargetID names the
+	// participant to remove.
+	KickPlayer
 )
 
 // Action uses only domain IDs. The application authenticates PlayerID and
@@ -30,7 +36,7 @@ type Action struct {
 	Revision uint64
 	CardID   CardID
 	Color    Color
-	TargetID PlayerID // ChoosePlayer only; another active participant.
+	TargetID PlayerID // ChoosePlayer or KickPlayer only; another active participant.
 	DealerID PlayerID
 	Rules    Rules
 }

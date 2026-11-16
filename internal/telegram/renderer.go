@@ -9,6 +9,7 @@ import (
 
 	"github.com/malbs/UnoGoBot/internal/game"
 	"github.com/malbs/UnoGoBot/internal/groups"
+	"github.com/malbs/UnoGoBot/internal/ranking"
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
 
@@ -501,6 +502,35 @@ func (r *Renderer) RenderGroupConfig(config groups.Config) string {
 		"<blockquote><b>%s</b>\n%s</blockquote>\n\n"+
 		"<i>Selecione abaixo para alterar.\nAs mudanças afetarão apenas as próximas partidas criadas.</i>",
 		rankLabel, rankTitle, rankDesc)
+}
+
+// RenderPlayerStats formats the accumulated history of one player.
+func (r *Renderer) RenderPlayerStats(stats ranking.PlayerStats, scope string) string {
+	if !stats.HasHistory() {
+		if scope == "" {
+			return "📊 <b>Suas estatísticas</b>\n\nVocê ainda não tem partidas pontuadas."
+		}
+		return fmt.Sprintf("📊 <b>Suas estatísticas em %s</b>\n\nVocê ainda não tem partidas pontuadas aqui.", scope)
+	}
+	var sb strings.Builder
+	sb.WriteString("📊 <b>Suas estatísticas")
+	if scope != "" {
+		sb.WriteString(" em " + scope)
+	}
+	sb.WriteString("</b>\n\n")
+	sb.WriteString(fmt.Sprintf("Partidas pontuadas: %d\n", stats.Games))
+	sb.WriteString(fmt.Sprintf("Vitórias: %d\n", stats.Wins))
+	sb.WriteString(fmt.Sprintf("Pontos: %s\n", ranking.FormatScore(stats.System, stats.Score)))
+	if stats.BestPosition > 0 {
+		sb.WriteString(fmt.Sprintf("Melhor colocação: %dº\n", stats.BestPosition))
+	}
+	if stats.AvgPosition != "" {
+		sb.WriteString(fmt.Sprintf("Colocação média: %s\n", stats.AvgPosition))
+	}
+	if stats.Rank > 0 && stats.Total > 0 {
+		sb.WriteString(fmt.Sprintf("Posição no ranking: %d de %d\n", stats.Rank, stats.Total))
+	}
+	return strings.TrimRight(sb.String(), "\n")
 }
 
 // RenderGroupWelcome formats the introductory message when the bot joins a group.
