@@ -362,10 +362,10 @@ func TestUserMonthlyRankingsIntegration(t *testing.T) {
 
 	// 1. Setup groups: 101 (updated, titled), 102 (updated, untitled fallback), 103 (legacy, titled)
 	if _, err := s.pool.Exec(ctx, `INSERT INTO group_configs(chat_id, ranking_system, title)
-VALUES(101, 'classic', 'updated', 'UNO da Galera'),
-      (102, 'classic', 'updated', ''),
-      (103, 'classic', 'legacy', 'Jogatina BR'),
-      (104, 'classic', 'updated', 'Antigo Nome')`); err != nil {
+VALUES(101, 'updated', 'UNO da Galera'),
+      (102, 'updated', ''),
+      (103, 'legacy', 'Jogatina BR'),
+      (104, 'updated', 'Antigo Nome')`); err != nil {
 		t.Fatal(err)
 	}
 
