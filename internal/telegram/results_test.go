@@ -99,6 +99,24 @@ func TestSynchronousCommitAndFailureRetention(t *testing.T) {
 	}
 }
 
+func TestRenderPoints_ExplainsDeparture(t *testing.T) {
+	now := time.Now().UTC()
+	result := ranking.Result{
+		GameID: "departure", ChatID: 100, RankingSystem: groups.Updated,
+		PolicyVersion: ranking.PlacementPolicyV1, FinishReason: "departure", FinishedAt: now,
+		Players: []ranking.Player{
+			{UserID: 1, DisplayName: "Winner", Position: 1, FinalStatus: "playing", Score: 1000},
+			{UserID: 2, DisplayName: "Leaver", Position: 0, FinalStatus: "left", Score: 0},
+		},
+	}
+	text := renderPoints(result)
+	for _, want := range []string{"Motivo: desistência de jogadores.", "🥇 Winner · +10,00 pts", "Leaver · fora do ranking"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q in:\n%s", want, text)
+		}
+	}
+}
+
 func TestRenderPoints_FormattingAndEscaping(t *testing.T) {
 	now := time.Now().UTC()
 	legacyResult := ranking.Result{

@@ -635,7 +635,7 @@ func TestCaseiroPenaltyResponses(t *testing.T) {
 	}
 }
 
-func TestCaseiroRejectsWildDrawFourOnWildDrawFour(t *testing.T) {
+func TestCaseiroStacksWildDrawFourOnWildDrawFour(t *testing.T) {
 	g := scenario(t, CaseiroRules(), [][]Card{
 		{card(NoColor, WildDrawFour), card(Blue, Five)},
 		{card(NoColor, WildDrawFour), card(Red, DrawTwo), card(Blue, Nine)},
@@ -649,19 +649,78 @@ func TestCaseiroRejectsWildDrawFourOnWildDrawFour(t *testing.T) {
 		t.Fatalf("expected player 2 with a pending +4 penalty: %+v", s)
 	}
 
-	rejected(t, g, Action{Type: PlayCard, PlayerID: 2, CardID: s.Players[1].Hand[0], Revision: s.Revision}, ErrCardNotPlayable)
-	s = g.Snapshot()
-	if s.CurrentPlayerID != 2 || s.DrawCounter != 4 {
-		t.Fatalf("rejected +4 changed the pending penalty: %+v", s)
+	// A +4 answers a pending +4 regardless of the colour chosen before.
+	second := s.Players[1].Hand[0]
+	if err := g.CanPlay(2, second); err != nil {
+		t.Fatalf("caseiro must allow +4 on a pending +4: %v", err)
 	}
-	if err := g.CanPlay(2, s.Players[1].Hand[1]); err != nil {
+	before := s.Revision
+	res := apply(t, g, Action{Type: PlayCard, PlayerID: 2, CardID: second})
+	s = g.Snapshot()
+	if s.Revision != before+1 || s.CurrentPlayerID != 2 || s.Phase != ChoosingColor {
+		t.Fatalf("stacked +4 must open a colour choice without passing the turn: %+v", s)
+	}
+	if s.Pending == nil || s.Pending.DrawCount != 4 {
+		t.Fatalf("stacked +4 must carry a fresh +4 pending: %+v", s.Pending)
+	}
+	if !hasEvent(res, CardPlayed, 2) || !hasEvent(res, ColorChoiceRequired, 2) {
+		t.Fatalf("missing stack events: %+v", res.Events)
+	}
+
+	apply(t, g, Action{Type: ChooseColor, PlayerID: 2, Color: Blue})
+	s = g.Snapshot()
+	if s.CurrentPlayerID != 3 || s.DrawCounter != 8 {
+		t.Fatalf("stacked +4 must accumulate 8 and pass to player 3: %+v", s)
+	}
+	if s.ActiveColor != Blue {
+		t.Fatalf("the second colour choice must win: %v", s.ActiveColor)
+	}
+
+	// The crossed +2 response still works on a fresh penalty.
+	g2 := scenario(t, CaseiroRules(), [][]Card{
+		{card(NoColor, WildDrawFour), card(Blue, Five)},
+		{card(Red, DrawTwo), card(Blue, Nine)},
+		{card(Green, One)},
+	}, card(Red, Three), nil)
+	apply(t, g2, Action{Type: PlayCard, PlayerID: 1, CardID: g2.Snapshot().Players[0].Hand[0]})
+	apply(t, g2, Action{Type: ChooseColor, PlayerID: 1, Color: Red})
+	if err := g2.CanPlay(2, g2.Snapshot().Players[1].Hand[0]); err != nil {
 		t.Fatalf("matching +2 should still answer +4 in caseiro: %v", err)
 	}
-	apply(t, g, Action{Type: PlayCard, PlayerID: 2, CardID: s.Players[1].Hand[1]})
-	s = g.Snapshot()
-	if s.CurrentPlayerID != 3 || s.DrawCounter != 6 {
-		t.Fatalf("expected crossed +2 response to accumulate 6: %+v", s)
+	apply(t, g2, Action{Type: PlayCard, PlayerID: 2, CardID: g2.Snapshot().Players[1].Hand[0]})
+	s2 := g2.Snapshot()
+	if s2.CurrentPlayerID != 3 || s2.DrawCounter != 6 {
+		t.Fatalf("expected crossed +2 response to accumulate 6: %+v", s2)
 	}
+}
+
+func TestCaseiroStillRefusesWildOnWildOutsidePenalty(t *testing.T) {
+	g := scenario(t, CaseiroRules(), [][]Card{
+		{card(NoColor, WildDrawFour), card(Blue, Five)},
+		{card(NoColor, WildDrawFour), card(Blue, Nine)},
+		{card(NoColor, WildDrawFour), card(Green, One)},
+	}, card(Red, Three), nil)
+
+	// Resolve the +4 penalty first, leaving the +4 as the top card.
+	apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.Snapshot().Players[0].Hand[0]})
+	apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Red})
+	// Player 2 must draw the 4 and loses the turn; player 3 becomes current.
+	draw := g.Snapshot()
+	apply(t, g, Action{Type: DrawCard, PlayerID: draw.CurrentPlayerID})
+	if g.Snapshot().DrawCounter != 0 {
+		t.Fatal("penalty not resolved")
+	}
+	v := g.Snapshot()
+	owner := v.CurrentPlayerID
+	hand := v.Players[owner-1].Hand
+	for _, id := range hand {
+		c, _ := g.state.card(id)
+		if c.Rank == WildDrawFour {
+			rejected(t, g, Action{Type: PlayCard, PlayerID: owner, CardID: id, Revision: v.Revision}, ErrCardNotPlayable)
+			return
+		}
+	}
+	t.Fatal("fixture must give the current player a +4")
 }
 
 func TestSkipTurnAction(t *testing.T) {

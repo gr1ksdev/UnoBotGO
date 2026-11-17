@@ -21,6 +21,12 @@ func (r *configRepo) GetOrCreateGroupConfig(context.Context, int64) (groups.Conf
 	r.calls++
 	return r.config, r.err
 }
+func (r *configRepo) SetCommandLanguage(context.Context, int64, groups.CommandLanguage) (groups.Config, error) {
+	panic("unexpected SetCommandLanguage call")
+}
+func (r *configRepo) ReadCommandLanguage(context.Context, int64) (groups.CommandLanguage, error) {
+	return groups.CommandsPT, nil
+}
 func (r *configRepo) SetRankingSystem(context.Context, int64, groups.RankingSystem) (groups.Config, error) {
 	panic("unexpected SetRankingSystem call")
 }

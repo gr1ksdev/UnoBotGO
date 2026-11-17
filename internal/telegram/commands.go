@@ -27,6 +27,7 @@ type CommandHandler struct {
 	renderer       *Renderer
 	tokens         *TokenStore
 	botUsername    string
+	languages      *languageCache
 	logger         *slog.Logger
 }
 
@@ -66,6 +67,7 @@ func NewCommandHandler(
 		renderer:    renderer,
 		tokens:      tokens,
 		botUsername: strings.ToLower(botUsername),
+		languages:   newLanguageCache(),
 		logger:      logger,
 	}
 }
@@ -77,6 +79,15 @@ func stringPtr(s string) *string {
 func makeGameButtons(view game.PublicGameView) *telego.InlineKeyboardMarkup {
 	if view.GameID == "" || view.Closed || view.Phase == uno.Finished {
 		return nil
+	}
+	if view.Phase == uno.Lobby {
+		// In the lobby there are no cards to show yet: the button starts the
+		// game instead of opening an empty hand.
+		return &telego.InlineKeyboardMarkup{
+			InlineKeyboard: [][]telego.InlineKeyboardButton{{
+				{Text: "▶️ Iniciar", CallbackData: "start_" + string(view.GameID)},
+			}},
+		}
 	}
 	return &telego.InlineKeyboardMarkup{
 		InlineKeyboard: [][]telego.InlineKeyboardButton{
@@ -106,12 +117,19 @@ func makePrivateStartButtons(botUsername string) *telego.InlineKeyboardMarkup {
 }
 
 func makeGroupConfigButtons(config groups.Config) *telego.InlineKeyboardMarkup {
-	legacyText := "Legado"
-	updatedText := "Atualizado"
+	legacyText := "Vitória"
+	updatedText := "Colocação"
 	if config.RankingSystem == groups.Updated {
-		updatedText = "✅ Atualizado"
+		updatedText = "✅ Colocação"
 	} else {
-		legacyText = "✅ Legado"
+		legacyText = "✅ Vitória"
+	}
+
+	ptText, enText := "🇧🇷 Português", "🇺🇸 English"
+	if config.CommandLanguage == groups.CommandsEN {
+		enText = "✅ 🇺🇸 English"
+	} else {
+		ptText = "✅ 🇧🇷 Português"
 	}
 
 	return &telego.InlineKeyboardMarkup{
@@ -124,6 +142,16 @@ func makeGroupConfigButtons(config groups.Config) *telego.InlineKeyboardMarkup {
 				{
 					Text:         updatedText,
 					CallbackData: fmt.Sprintf("cfg_rank_updated_%d", config.ChatID),
+				},
+			},
+			{
+				{
+					Text:         ptText,
+					CallbackData: fmt.Sprintf("cfg_lang_pt_%d", config.ChatID),
+				},
+				{
+					Text:         enText,
+					CallbackData: fmt.Sprintf("cfg_lang_en_%d", config.ChatID),
 				},
 			},
 		},
@@ -192,19 +220,28 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 	chatID := game.ChatID(msg.Chat.ID)
 	isGroup := msg.Chat.Type == "group" || msg.Chat.Type == "supergroup"
 
-	// Private chat command handling
+	// Private chats have no group setting: Portuguese spelling is the default.
 	if !isGroup {
-		switch cmdName {
-		case "start":
+		// /start is a Telegram convention and stays universal in private.
+		if cmdName == "start" {
 			h.reply(ctx, msg.Chat.ID, h.renderer.RenderWelcome(), makePrivateStartButtons(h.botUsername))
-		case "ajuda", "help":
-			h.reply(ctx, msg.Chat.ID, h.renderer.RenderHelp(h.botUsername), nil)
-		case "ranking":
+			return
+		}
+		id, ok := resolveCommand(cmdName, groups.CommandsPT)
+		if !ok {
+			return
+		}
+		switch id {
+		case cmdHelp:
+			h.reply(ctx, msg.Chat.ID, h.renderer.RenderHelp(h.botUsername, groups.CommandsPT), nil)
+		case cmdRanking:
 			h.handlePrivateRanking(ctx, msg.Chat.ID, int64(actorID))
-		case "stats":
+		case cmdStats:
 			h.handleStats(ctx, 0, actorID, "")
 		default:
-			h.reply(ctx, msg.Chat.ID, "⚠️ Este comando só pode ser utilizado em grupos. Adicione o bot a um grupo para jogar!\n\nUse /help para mais instruções.", nil)
+			if _, known := portugueseCommands[strings.ToLower(cmdName)]; known {
+				h.reply(ctx, msg.Chat.ID, fmt.Sprintf("⚠️ Este comando só pode ser utilizado em grupos. Adicione o bot a um grupo para jogar!\n\nUse %s para mais instruções.", commandName(cmdHelp, groups.CommandsPT)), nil)
+			}
 		}
 		return
 	}
@@ -222,42 +259,52 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		// player is acting in.
 		h.current.Set(actorID, summary.GameID)
 	}
-	// Group command handling
-	switch cmdName {
-	case "ranking":
+	// /start true is the Telegram deep link used when the bot is added to a
+	// group. It is protocol traffic, not a user command, so it is universal.
+	if cmdName == "start" && len(fields) > 1 && fields[1] == "true" {
+		lang := h.commandLanguage(ctx, chatID)
+		h.reply(ctx, int64(msg.Chat.ID), fmt.Sprintf("👋 <b>UnoBotGO adicionado!</b>\n\nUse %s para criar uma partida ou %s para conhecer os comandos.",
+			commandName(cmdNew, lang), commandName(cmdHelp, lang)), nil)
+		return
+	}
+
+	lang := h.commandLanguage(ctx, chatID)
+	id, ok := resolveCommand(cmdName, lang)
+	if !ok {
+		// Commands from the other language are ignored silently. The Telegram
+		// command menu only advertises the configured spelling.
+		return
+	}
+
+	switch id {
+	case cmdRanking:
 		h.handleRanking(ctx, msg.Chat.ID)
-	case "stats":
+	case cmdStats:
 		h.handleStats(ctx, chatID, actorID, msg.Chat.Title)
-	case "novo":
+	case cmdNew:
 		h.handleNovoObserved(ctx, actorID, chatID, msg.Chat.Title, msg.From)
-	case "trancar", "destrancar":
-		h.handleRoomLock(ctx, actorID, chatID, cmdName == "trancar")
-	case "pular", "skip":
+	case cmdClose, cmdOpen:
+		h.handleRoomLock(ctx, actorID, chatID, id == cmdClose)
+	case cmdSkip:
 		h.handlePular(ctx, actorID, chatID)
-	case "expulsar", "kick":
+	case cmdKick:
 		h.handleExpulsar(ctx, msg)
-	case "entrar", "join":
+	case cmdJoin:
 		h.handleEntrar(ctx, actorID, chatID)
-	case "start":
-		if len(fields) > 1 && fields[1] == "true" {
-			h.reply(ctx, int64(msg.Chat.ID), "👋 <b>UnoBotGO adicionado!</b>\n\nUse /novo para criar uma partida ou /help para conhecer os comandos.", nil)
-			return
-		}
+	case cmdStart:
 		h.handleIniciar(ctx, actorID, chatID)
-	case "iniciar":
-		h.handleIniciar(ctx, actorID, chatID)
-	case "cancelar", "kill":
+	case cmdKill:
 		h.handleCancelar(ctx, actorID, chatID)
-	case "sair":
+	case cmdLeave:
 		h.handleSair(ctx, actorID, chatID)
-	case "estado":
+	case cmdState:
 		h.handleEstado(ctx, chatID)
-	case "reset":
+	case cmdReset:
 		h.HandleReset(ctx, msg, nil)
-	case "config":
+	case cmdConfig:
 		h.handleConfig(ctx, msg)
-	case "ajuda", "help":
-		h.reply(ctx, int64(msg.Chat.ID), h.renderer.RenderHelp(h.botUsername), nil)
+	case cmdHelp:
+		h.reply(ctx, int64(msg.Chat.ID), h.renderer.RenderHelp(h.botUsername, lang), nil)
 	}
 }
 
@@ -416,7 +463,7 @@ func (h *CommandHandler) handleNovoObserved(ctx context.Context, actorID uno.Pla
 		h.tokens.InvalidateGame(outcome.ReplacedGameID)
 	}
 
-	h.reply(ctx, int64(chatID), h.renderer.RenderLobby(outcome.View), h.gameMarkup(outcome.View))
+	h.reply(ctx, int64(chatID), h.renderer.RenderLobby(outcome.View, h.commandLanguage(ctx, chatID)), h.gameMarkup(outcome.View))
 }
 
 func (h *CommandHandler) handleEntrar(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID) {
@@ -467,7 +514,7 @@ func (h *CommandHandler) handleEntrar(ctx context.Context, actorID uno.PlayerID,
 	}
 
 	if outcome.View.Phase == uno.Lobby {
-		h.reply(ctx, int64(chatID), h.renderer.RenderLobby(outcome.View), h.gameMarkup(outcome.View))
+		h.reply(ctx, int64(chatID), h.renderer.RenderLobby(outcome.View, h.commandLanguage(ctx, chatID)), h.gameMarkup(outcome.View))
 	} else {
 		msg := fmt.Sprintf("✅ %s entrou na partida em andamento!\n\n%s",
 			h.renderer.PlayerLink(actorID, outcome.View),
@@ -475,6 +522,32 @@ func (h *CommandHandler) handleEntrar(ctx context.Context, actorID uno.PlayerID,
 		)
 		h.reply(ctx, int64(chatID), msg, h.gameMarkup(outcome.View))
 	}
+}
+
+// startGame is shared by the text command and the lobby button. It applies
+// the start action and posts the initial top-card sticker.
+func startGame(ctx context.Context, svc *game.Service, bot BotAPI, actorID uno.PlayerID, chatID game.ChatID, gameID uno.GameID, revision uint64) (game.Outcome, error) {
+	actor := game.Actor{PlayerID: actorID, ChatID: chatID}
+	outcome, err := svc.Apply(ctx, actor, gameID, uno.Action{
+		Type:     uno.StartGame,
+		PlayerID: actorID,
+		Revision: revision,
+	})
+	if err != nil {
+		return game.Outcome{}, err
+	}
+	if outcome.View.TopCard != nil {
+		stickerID := GetCardStickerID(*outcome.View.TopCard)
+		if stickerID != "" {
+			if _, err := bot.SendSticker(ctx, &telego.SendStickerParams{
+				ChatID:  telego.ChatID{ID: int64(chatID)},
+				Sticker: telego.InputFile{FileID: stickerID},
+			}); err != nil {
+				slog.Default().WarnContext(ctx, "failed to send initial top card sticker", "chat_id", chatID, "error", err.Error())
+			}
+		}
+	}
+	return outcome, nil
 }
 
 func (h *CommandHandler) handleIniciar(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID) {
@@ -493,14 +566,7 @@ func (h *CommandHandler) handleIniciar(ctx context.Context, actorID uno.PlayerID
 		return
 	}
 
-	actor := game.Actor{PlayerID: actorID, ChatID: chatID}
-	action := uno.Action{
-		Type:     uno.StartGame,
-		PlayerID: actorID,
-		Revision: summary.Revision,
-	}
-
-	outcome, err := h.service.Apply(ctx, actor, summary.GameID, action)
+	outcome, err := startGame(ctx, h.service, h.bot, actorID, chatID, summary.GameID, summary.Revision)
 	if err != nil {
 		switch {
 		case errors.Is(err, game.ErrForbidden):
@@ -511,20 +577,6 @@ func (h *CommandHandler) handleIniciar(ctx context.Context, actorID uno.PlayerID
 			h.reply(ctx, int64(chatID), "❌ Não foi possível iniciar a partida.", nil)
 		}
 		return
-	}
-
-	// Send initial top card sticker to the chat
-	if outcome.View.TopCard != nil {
-		stickerID := GetCardStickerID(*outcome.View.TopCard)
-		if stickerID != "" {
-			_, errSticker := h.bot.SendSticker(ctx, &telego.SendStickerParams{
-				ChatID:  telego.ChatID{ID: int64(chatID)},
-				Sticker: telego.InputFile{FileID: stickerID},
-			})
-			if errSticker != nil {
-				h.logger.WarnContext(ctx, "failed to send initial top card sticker", "chat_id", chatID, "error", errSticker.Error())
-			}
-		}
 	}
 
 	msg := "🚀 <b>Partida iniciada!</b>\n\n" + h.renderer.RenderPublicState(outcome.View)
@@ -656,7 +708,7 @@ func (h *CommandHandler) handleEstado(ctx context.Context, chatID game.ChatID) {
 	}
 
 	if view.Phase == uno.Lobby {
-		h.reply(ctx, int64(chatID), h.renderer.RenderLobby(view), makeGameButtons(view))
+		h.reply(ctx, int64(chatID), h.renderer.RenderLobby(view, h.commandLanguage(ctx, chatID)), makeGameButtons(view))
 	} else {
 		h.reply(ctx, int64(chatID), h.renderer.RenderPublicState(view), makeGameButtons(view))
 	}

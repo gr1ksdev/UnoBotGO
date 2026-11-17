@@ -187,11 +187,10 @@ func (r *Renderer) PlayerLink(id uno.PlayerID, view game.PublicGameView) string 
 }
 
 // RenderLobby returns formatted text for a newly created or joined lobby.
-func (r *Renderer) RenderLobby(view game.PublicGameView) string {
+func (r *Renderer) RenderLobby(view game.PublicGameView, lang groups.CommandLanguage) string {
 	var sb strings.Builder
 	sb.WriteString("🎮 <b>Partida de UNO</b>\n\n")
-	sb.WriteString(fmt.Sprintf("Responsável: %s\n", r.PlayerLink(view.OwnerID, view)))
-	sb.WriteString("Regras: Caseiro\n\n")
+	sb.WriteString(fmt.Sprintf("Responsável: %s\n\n", r.PlayerLink(view.OwnerID, view)))
 
 	sb.WriteString(fmt.Sprintf("Jogadores inscritos (%d/10):\n", len(view.Players)))
 	if len(view.Players) == 0 {
@@ -202,15 +201,28 @@ func (r *Renderer) RenderLobby(view game.PublicGameView) string {
 		}
 	}
 
-	if view.Locked {
-		sb.WriteString("\n🔒 Esta partida está trancada e não aceita novos jogadores.")
+	if lang == groups.CommandsEN {
+		if view.Locked {
+			sb.WriteString("\n🔒 This game is locked and is not accepting new players.")
+		} else {
+			sb.WriteString(fmt.Sprintf("\nUse %s to join.", commandName(cmdJoin, lang)))
+		}
+		if len(view.Players) >= 2 {
+			sb.WriteString(fmt.Sprintf("\nUse %s to start!", commandName(cmdStart, lang)))
+		} else {
+			sb.WriteString("\n(At least 2 players are needed to start)")
+		}
 	} else {
-		sb.WriteString("\nUse /entrar para participar.")
-	}
-	if len(view.Players) >= 2 {
-		sb.WriteString("\nUse /iniciar para começar!")
-	} else {
-		sb.WriteString("\n(Mínimo de 2 jogadores para iniciar)")
+		if view.Locked {
+			sb.WriteString("\n🔒 Esta partida está trancada e não aceita novos jogadores.")
+		} else {
+			sb.WriteString(fmt.Sprintf("\nUse %s para participar.", commandName(cmdJoin, lang)))
+		}
+		if len(view.Players) >= 2 {
+			sb.WriteString(fmt.Sprintf("\nUse %s para começar!", commandName(cmdStart, lang)))
+		} else {
+			sb.WriteString("\n(Mínimo de 2 jogadores para iniciar)")
+		}
 	}
 
 	return sb.String()
@@ -339,171 +351,109 @@ func (r *Renderer) RenderTurn(view game.PublicGameView) string {
 	return fmt.Sprintf("Vez de: %s", r.PlayerLink(responsible, view))
 }
 
-// RenderActionConfirmation renders the confirmation of an accepted action to the group.
+// RenderActionConfirmation renders the only message posted for an accepted
+// action. The sticker posted by inline mode already shows the card, so the
+// confirmation carries just whose decision is next. A finished game shows the
+// final placements instead.
 func (r *Renderer) RenderActionConfirmation(actorID uno.PlayerID, action uno.Action, outcome game.Outcome) string {
-	var sb strings.Builder
-
-	actorLink := r.PlayerLink(actorID, outcome.View)
-
-	switch action.Type {
-	case uno.PlayCard:
-		if outcome.View.TopCard != nil {
-			sb.WriteString(fmt.Sprintf("%s jogou <b>%s</b>!", actorLink, CardRepr(*outcome.View.TopCard)))
-		} else {
-			sb.WriteString(fmt.Sprintf("%s jogou uma carta!", actorLink))
-		}
-	case uno.DrawCard:
-		count := 1
-		for _, ev := range outcome.Events {
-			if ev.Type == uno.CardsDrawn {
-				count = ev.Count
-				break
-			}
-		}
-		cardWord := "carta"
-		if count > 1 {
-			cardWord = "cartas"
-		}
-		sb.WriteString(fmt.Sprintf("%s comprou %d %s.", actorLink, count, cardWord))
-	case uno.PassTurn:
-		sb.WriteString(fmt.Sprintf("%s passou a vez.", actorLink))
-	case uno.ChoosePlayer:
-		sb.WriteString(fmt.Sprintf("🔄 %s selecionou %s. A troca será resolvida após escolher a cor.", actorLink, r.PlayerLink(action.TargetID, outcome.View)))
-	case uno.KeepHand:
-		sb.WriteString(fmt.Sprintf("➡️ %s decidiu manter a mão. Falta escolher a cor.", actorLink))
-	case uno.ChooseColor:
-		resolvedSwap := false
-		for _, event := range outcome.Events {
-			if event.Type != uno.HandsSwapped && event.Type != uno.HandKept {
-				continue
-			}
-			resolvedSwap = true
-			sb.WriteString(fmt.Sprintf("%s jogou 🔀 <b>Trocar cartas</b>!\n", actorLink))
-			colour := fmt.Sprintf("Cor: %s <b>%s</b>", ColorIcon(action.Color), ColorNamePT(action.Color))
-			if event.Type == uno.HandsSwapped {
-				sb.WriteString(fmt.Sprintf("🔄 %s trocou as mãos com %s. %s", actorLink, r.PlayerLink(event.TargetID, outcome.View), colour))
-			} else {
-				sb.WriteString(fmt.Sprintf("➡️ %s manteve sua mão. %s", actorLink, colour))
-			}
-			break
-		}
-		if !resolvedSwap {
-			sb.WriteString(fmt.Sprintf("%s escolheu %s <b>%s</b>!", actorLink, ColorIcon(action.Color), ColorNamePT(action.Color)))
-		}
-	case uno.CallBluff:
-		var bluffEv *uno.Event
-		for i := range outcome.Events {
-			if outcome.Events[i].Type == uno.BluffCalled {
-				bluffEv = &outcome.Events[i]
-				break
-			}
-		}
-		if bluffEv != nil {
-			targetLink := r.PlayerLink(bluffEv.TargetID, outcome.View)
-			if bluffEv.Success {
-				sb.WriteString(fmt.Sprintf("Blefe pego! %s recebeu %d cartas!", targetLink, bluffEv.Count))
-			} else {
-				sb.WriteString(fmt.Sprintf("%s não blefou! %s recebeu %d cartas!", targetLink, actorLink, bluffEv.Count))
-			}
-		}
-	}
-
-	// Check for special events
-	for _, ev := range outcome.Events {
-		switch ev.Type {
-		case uno.DirectionChanged:
-			sb.WriteString("\n🔄 O sentido foi invertido.")
-		case uno.PlayerSkipped:
-			if ev.PlayerID > 0 {
-				sb.WriteString(fmt.Sprintf("\n🚫 %s foi pulado.", r.PlayerLink(ev.PlayerID, outcome.View)))
-			}
-		case uno.PlayerWon:
-			medal := placementLabel(ev.Position)
-			sb.WriteString(fmt.Sprintf("\n%s <b>%s terminou em %dº lugar!</b>", medal, r.PlayerLink(ev.PlayerID, outcome.View), ev.Position))
-		}
-	}
-
-	sb.WriteString("\n\n")
 	if outcome.View.Closed || outcome.View.Phase == uno.Finished {
-		sb.WriteString(r.renderClosedState(outcome.View))
-	} else if turn := r.RenderTurn(outcome.View); turn != "" {
-		sb.WriteString(turn)
+		return r.renderClosedState(outcome.View)
 	}
-	return sb.String()
+	return r.RenderTurn(outcome.View)
 }
 
-// RenderHelp returns standard help text in Portuguese.
 func (r *Renderer) RenderWelcome() string {
 	return "👋 <b>Bem-vindo ao UnoBotGO!</b>\n\n" +
 		"Jogue UNO com seus amigos diretamente nos grupos do Telegram. Crie partidas, escolha o modo de jogo e use sua mão pelo menu privado.\n\n" +
-		"Use /help para conhecer todos os comandos."
+		"Use /ajuda para conhecer todos os comandos."
 }
 
-func (r *Renderer) RenderHelp(botUsername string) string {
+func (r *Renderer) RenderHelp(botUsername string, lang groups.CommandLanguage) string {
 	var sb strings.Builder
-	sb.WriteString("📖 <b>UnoBotGO — Comandos</b>\n\n")
-	sb.WriteString("<blockquote>")
-	sb.WriteString("<b>/start</b> — Mostra a apresentação do bot no privado.\n")
-	sb.WriteString("<b>/help</b> — Exibe esta ajuda. O comando /ajuda é um alias.\n")
-	sb.WriteString("<b>/novo</b> — Cria uma partida no grupo.\n")
-	sb.WriteString("<b>/entrar</b> — Entra na partida aberta ou em andamento. /join é um alias.\n")
-	sb.WriteString("<b>/trancar</b> — Impede novos jogadores de entrar.\n")
-	sb.WriteString("<b>/destrancar</b> — Permite novas entradas.\n")
-	sb.WriteString("<b>/iniciar</b> — Inicia a partida quando houver pelo menos dois jogadores.\n")
-	sb.WriteString("<b>/estado</b> — Mostra o lobby ou o estado atual da partida.\n")
-	sb.WriteString("<b>/ranking</b> — Mostra o ranking mensal do grupo (ou seus rankings mensais se usado no privado).\n")
-	sb.WriteString("<b>/stats</b> — Mostra suas estatísticas: partidas, vitórias, pontos e colocação.\n")
-	sb.WriteString("<b>/sair</b> — Sai da partida em andamento.\n")
-	sb.WriteString("<b>/pular</b> — Pula o turno do jogador atual (responsável ou admin do grupo).\n")
-	sb.WriteString("<b>/expulsar</b> — Expulsa um jogador da partida (responda à mensagem dele).\n")
-	sb.WriteString("<b>/cancelar</b> — Cancela a partida (criador, responsável ou admin). O comando /kill é um alias.\n")
-	sb.WriteString("<b>/reset</b> — Recupera o grupo e limpa sua partida e histórico.")
-	sb.WriteString("</blockquote>\n\n")
-	sb.WriteString("Em grupos, todos os comandos precisam mencionar este bot. No privado, o sufixo é opcional.\n")
-	if botUsername != "" {
-		sb.WriteString(fmt.Sprintf("Exemplo: <code>/join@%s</code>\n\n", html.EscapeString(strings.TrimPrefix(botUsername, "@"))))
-	}
-
-	sb.WriteString("<b>Como jogar suas cartas:</b>\n")
-	sb.WriteString("Quando for a sua vez, clique no botão <b>Suas cartas</b> ou digite no chat:\n")
-	if botUsername != "" {
-		sb.WriteString(fmt.Sprintf("<code>@%s</code>\n\n", html.EscapeString(strings.TrimPrefix(botUsername, "@"))))
+	sb.WriteString("📖 <b>UnoBotGO — ")
+	if lang == groups.CommandsEN {
+		sb.WriteString("Commands")
 	} else {
-		sb.WriteString("<code>@seubot</code>\n\n")
+		sb.WriteString("Comandos")
 	}
-	sb.WriteString("Sua mão privada aparecerá no menu inline. Toque em uma carta jogável (colorida) para jogá-la! ")
-	sb.WriteString("A carta 🔀 Trocar cartas permite escolher outro jogador ou manter a mão em <b>Suas cartas</b>, e depois escolher a cor. Se for a última carta, encerra sua participação sem escolhas. ")
-	sb.WriteString("A confirmação oficial e o estado atualizado serão enviados no grupo da partida.\n\n")
-	sb.WriteString("🇧🇷 Esta é uma versão brasileira desenvolvida em Go (Golang), baseada no @unopybot.")
+	sb.WriteString("</b>\n\n<blockquote>")
 
+	if lang == groups.CommandsEN {
+		sb.WriteString("<b>/start</b> — Shows the bot introduction in private.\n")
+	} else {
+		sb.WriteString("<b>/start</b> — Mostra a apresentação do bot no privado.\n")
+	}
+	orders := []commandID{cmdNew, cmdJoin, cmdClose, cmdOpen, cmdStart, cmdState, cmdRanking, cmdStats, cmdLeave, cmdSkip, cmdKick, cmdKill, cmdReset, cmdConfig, cmdHelp}
+	for _, id := range orders {
+		sb.WriteString(fmt.Sprintf("<b>%s</b> — %s\n", commandName(id, lang), commandDescriptions[lang][id]))
+	}
+	sb.WriteString("</blockquote>\n\n")
+
+	if lang == groups.CommandsEN {
+		sb.WriteString("In groups, every command must mention this bot. In private, the suffix is optional.\n")
+		if botUsername != "" {
+			sb.WriteString(fmt.Sprintf("Example: <code>/join@%s</code>\n\n", html.EscapeString(strings.TrimPrefix(botUsername, "@"))))
+		}
+		sb.WriteString("<b>How to play your cards:</b>\n")
+		sb.WriteString("On your turn, tap the <b>Suas cartas</b> button or type in the chat:\n")
+		if botUsername != "" {
+			sb.WriteString(fmt.Sprintf("<code>@%s</code>\n\n", html.EscapeString(strings.TrimPrefix(botUsername, "@"))))
+		} else {
+			sb.WriteString("<code>@yourbot</code>\n\n")
+		}
+		sb.WriteString("Your private hand appears in the inline menu. Tap a playable (colored) card to play it! ")
+		sb.WriteString("The 🔀 Swap card lets you choose another player or keep your hand, then a colour. ")
+		sb.WriteString("The official confirmation and the updated state are posted in the group.")
+	} else {
+		sb.WriteString("Em grupos, todos os comandos precisam mencionar este bot. No privado, o sufixo é opcional.\n")
+		if botUsername != "" {
+			sb.WriteString(fmt.Sprintf("Exemplo: <code>/entrar@%s</code>\n\n", html.EscapeString(strings.TrimPrefix(botUsername, "@"))))
+		}
+		sb.WriteString("<b>Como jogar suas cartas:</b>\n")
+		sb.WriteString("Quando for a sua vez, clique no botão <b>Suas cartas</b> ou digite no chat:\n")
+		if botUsername != "" {
+			sb.WriteString(fmt.Sprintf("<code>@%s</code>\n\n", html.EscapeString(strings.TrimPrefix(botUsername, "@"))))
+		} else {
+			sb.WriteString("<code>@seubot</code>\n\n")
+		}
+		sb.WriteString("Sua mão privada aparecerá no menu inline. Toque em uma carta jogável (colorida) para jogá-la! ")
+		sb.WriteString("A carta 🔀 Trocar cartas permite escolher outro jogador ou manter a mão, e depois a cor. ")
+		sb.WriteString("A confirmação oficial e o estado atualizado serão enviados no grupo.\n\n")
+		sb.WriteString("🇧🇷 Esta é uma versão brasileira desenvolvida em Go (Golang), baseada no @unopybot.")
+	}
 	return sb.String()
 }
 
 func groupRankingSummary(system groups.RankingSystem) (string, string) {
 	switch system {
 	case groups.Updated:
-		return "🏆 Atualizado", "A pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe."
+		return "🏆 Colocação", "Os pontos seguem a posição final: quanto melhor, mais pontos."
 	case groups.Legacy:
 		fallthrough
 	default:
-		return "🏆 Legado", "Todos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto."
+		return "🏆 Vitória", "Quem não ficou em último recebe +1 ponto."
 	}
 }
 
 // RenderGroupConfig formats the current group configuration for the /config command.
 func (r *Renderer) RenderGroupConfig(config groups.Config) string {
-	rankLabel := "Legado"
+	rankLabel := "Vitória"
 	if config.RankingSystem == groups.Updated {
-		rankLabel = "Atualizado"
+		rankLabel = "Colocação"
 	}
 	rankTitle, rankDesc := groupRankingSummary(config.RankingSystem)
+	langLabel := "Português"
+	if config.CommandLanguage == groups.CommandsEN {
+		langLabel = "English"
+	}
 
 	return fmt.Sprintf("⚙️ <b>Configuração do Grupo</b>\n\n"+
 		"<b>Modo de partida:</b> Caseiro\n"+
-		"<b>Sistema de ranking:</b> %s\n\n"+
+		"<b>Sistema de ranking:</b> %s\n"+
+		"<b>Idioma dos comandos:</b> %s\n\n"+
 		"<blockquote><b>%s</b>\n%s</blockquote>\n\n"+
 		"<i>Selecione abaixo para alterar.\nAs mudanças afetarão apenas as próximas partidas criadas.</i>",
-		rankLabel, rankTitle, rankDesc)
+		rankLabel, langLabel, rankTitle, rankDesc)
 }
 
 // RenderPlayerStats formats the accumulated history of one player.
@@ -537,9 +487,9 @@ func (r *Renderer) RenderPlayerStats(stats ranking.PlayerStats, scope string) st
 
 // RenderGroupWelcome formats the introductory message when the bot joins a group.
 func (r *Renderer) RenderGroupWelcome(config groups.Config) string {
-	rankLabel := "Legado"
+	rankLabel := "Vitória"
 	if config.RankingSystem == groups.Updated {
-		rankLabel = "Atualizado"
+		rankLabel = "Colocação"
 	}
 	return fmt.Sprintf("👋 <b>Olá! Obrigado por adicionar o UnoBotGO ao grupo!</b>\n\n"+
 		"O bot já está pronto para jogar. As partidas usam o modo <b>Caseiro</b> e o ranking <b>%s</b>.\n\n"+

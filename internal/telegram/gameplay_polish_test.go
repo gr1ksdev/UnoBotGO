@@ -92,7 +92,10 @@ func TestGameplayActionEffectResultAndFinish(t *testing.T) {
 	out.View.Order = []uno.PlayerID{22, 33}
 	out.View.Players[0].Active = false
 	text := plainGameplay(r.RenderActionConfirmation(11, uno.Action{Type: uno.PlayCard}, out))
-	requireGameplay(t, text, "Freddy jogou 💛 🔄 Inverter!\n🔄 O sentido foi invertido.\n🚫 Jeesttin foi pulado.\n🥇 Freddy terminou em 1º lugar!", "Vez de: Mezi")
+	requireGameplay(t, text, "Vez de: Mezi")
+	if strings.Contains(text, "jogou") || strings.Contains(text, "invertido") || strings.Contains(text, "pulado") {
+		t.Fatalf("confirmation carried the action line: %s", text)
+	}
 	if strings.Contains(text, "🏅 Classificação") || strings.Contains(text, "👥") {
 		t.Fatalf("running confirmation carried the detailed state: %s", text)
 	}
@@ -103,24 +106,22 @@ func TestGameplayActionEffectResultAndFinish(t *testing.T) {
 	if strings.Contains(text, "sentido foi invertido") {
 		t.Fatal(text)
 	}
-	requireGameplay(t, text, "\n🚫 Jeesttin foi pulado.")
+	requireGameplay(t, text, "Vez de: Mezi")
 	out.View.Closed = true
 	out.View.Phase = uno.Finished
 	out.View.CloseReason = game.Completed
 	out.View.Placements = []uno.Placement{{PlayerID: 11, Position: 1}, {PlayerID: 22, Position: 2}, {PlayerID: 33, Position: 3}, {PlayerID: 44, Position: 4}}
 	out.Events = append(out.Events, uno.Event{Type: uno.PlayerWon, PlayerID: 22, Position: 2})
 	text = plainGameplay(r.RenderActionConfirmation(22, uno.Action{Type: uno.PlayCard}, out))
-	requireGameplay(t, text, "🥈 Mezi terminou em 2º lugar!", "🏆 Partida encerrada\n\n🥇 Freddy\n🥈 Mezi\n🥉 Jeesttin\n4. Novo")
+	requireGameplay(t, text, "🏆 Partida encerrada\n\n🥇 Freddy\n🥈 Mezi\n🥉 Jeesttin\n4. Novo")
 	if strings.Count(text, "Partida encerrada") != 1 || strings.Contains(text, "chegou ao fim") || strings.Contains(text, "🎯 Vez:") || strings.Contains(text, "👥") {
 		t.Fatal(text)
 	}
+	// The final message carries placements, not per-event winner sentences.
 	for position := 1; position <= 5; position++ {
 		out.Events = []uno.Event{{Type: uno.PlayerWon, PlayerID: 22, Position: position}}
 		text = plainGameplay(r.RenderActionConfirmation(22, uno.Action{Type: uno.PlayCard}, out))
-		requireGameplay(t, text, fmt.Sprintf("Mezi terminou em %dº lugar!", position))
-		if position > 3 {
-			requireGameplay(t, text, fmt.Sprintf("%d. Mezi terminou", position))
-		}
+		requireGameplay(t, text, "🏆 Partida encerrada")
 	}
 }
 func TestGameplayChoicesMentionsEscapingAndPlacements(t *testing.T) {
@@ -147,12 +148,12 @@ func TestGameplayChoicesMentionsEscapingAndPlacements(t *testing.T) {
 	v.DrawCounter = 4
 	text := r.RenderActionConfirmation(22, uno.Action{Type: uno.ChooseColor, Color: uno.Yellow}, game.Outcome{View: v})
 	assertMentionTargets(t, text, r.userCache, 33, 999)
-	requireGameplay(t, plainGameplay(text), "Mezi escolheu 💛 Amarelo!", "Vez de: Jeesttin")
+	requireGameplay(t, plainGameplay(text), "Vez de: Jeesttin")
 	v.TopCard = &uno.Card{Color: uno.NoColor, Rank: uno.SwapHands}
 	v.DrawCounter = 0
 	text = r.RenderActionConfirmation(22, uno.Action{Type: uno.ChooseColor, Color: uno.Yellow}, game.Outcome{View: v, Events: []uno.Event{{Type: uno.HandsSwapped, PlayerID: 22, TargetID: 11}}})
 	assertMentionTargets(t, text, r.userCache, 33, 999)
-	requireGameplay(t, text, "trocou as mãos", "Cor:")
+	requireGameplay(t, plainGameplay(text), "Vez de: Jeesttin")
 	v.Placements = []uno.Placement{{PlayerID: 11, Position: 1}, {PlayerID: 22, Position: 2}}
 	v.Order = []uno.PlayerID{33}
 	v.Players[0].Active = false

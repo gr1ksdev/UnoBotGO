@@ -34,10 +34,11 @@ removidos, e a imagem Docker deixou de ter runtime Node.
 | Aplicação (`internal/game`) | IMPLEMENTED + HOMOLOGATED | autorização, views, concorrência | interno e Telegram real | isolamento por partida |
 | Adapter Telegram | IMPLEMENTED + HOMOLOGATED | handlers, comandos, callbacks | Telegram real | tokens de uso único |
 | Modo Caseiro | IMPLEMENTED **BUT NOT HOMOLOGATED** | engine, serviço, inline, renderer | **pendente** | único modo agora |
-| Ranking Legado/Updated | IMPLEMENTED + HOMOLOGATED | cálculo, elegibilidade, monthly | Telegram real | política `completed-placements-v1` |
-| `/pular` | IMPLEMENTED **NOT HOMOLOGATED** | engine, serviço, comando | pendente | novo na v3 |
-| `/expulsar` | IMPLEMENTED **NOT HOMOLOGATED** | engine, serviço, comando | pendente | novo na v3 |
+| Ranking Vitória/Colocação | IMPLEMENTED; N=1 PENDENTE DE HOMOLOGAÇÃO | cálculo, elegibilidade, monthly | Telegram real (N≥2) | política `completed-placements-v1`; N=1 agora pontua |
+| `/pular` / `/skip` | IMPLEMENTED **NOT HOMOLOGATED** | engine, serviço, comando | pendente | novo na v3 |
+| `/expulsar` / `/kick` | IMPLEMENTED **NOT HOMOLOGATED** | engine, serviço, comando | pendente | novo na v3 |
 | `/stats` | IMPLEMENTED **NOT HOMOLOGATED** | read, renderer, comando | pendente | novo na v3 |
+| Idioma de comandos por grupo | IMPLEMENTED **NOT HOMOLOGATED** | tabelas disjuntas, cache, menu por chat com `BotCommandScopeChat`, migration 0014 | pendente | padrão PT; admin troca no `/config` |
 | Webhook | IMPLEMENTED; PRODUCTION VALIDATION PENDING | HTTP, secret, retry, status, dedupe | Coolify real pendente | recomendado em produção |
 | Polling | IMPLEMENTED + HOMOLOGATED | transporte com mocks | Telegram real | `timeout=30` |
 | Docker V2 | IMPLEMENTED BUT NOT HOMOLOGATED | build no CI | operação não certificada | multi-arch sem Node |
@@ -71,6 +72,16 @@ removidos, e a imagem Docker deixou de ter runtime Node.
 O Caseiro é o único modo. O grupo não guarda mais o modo padrão e `/novo`
 ignora seus argumentos. A engine continua genérica — `ClassicRules()` e
 `BotRules()` existem para os testes e para o simulador.
+
+### Idioma dos comandos
+
+O padrão é português. Um administrador troca o grupo para inglês em
+`/config`. Não existem aliases entre idiomas: o parser aceita somente a
+grafia configurada. O menu e a sugestão do Telegram acompanham — o Grupo EN
+recebe uma lista por chat via `SetMyCommands(BotCommandScopeChat)`, que tem
+prioridade sobre a lista global; voltar para PT chama `DeleteMyCommands` no
+mesmo escopo. O idioma fica em `group_configs.command_language` (migration
+0014) e é lido em cache pelo adapter.
 
 ### Sem identificador no campo de texto
 

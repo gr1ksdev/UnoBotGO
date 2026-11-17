@@ -39,9 +39,18 @@ var ErrConflict = errors.New("ranking: GameID already contains a different resul
 var ErrNeedsProductDecision = errors.New("ranking: scoring policy requires product decision")
 
 // Score uses the specified formula, rounded to hundredths, half up.
+// A game that ends with a single eligible player (the other left) awards that
+// player the maximum: with n=1 the linear formula has no denominator, so the
+// top award is used instead of dividing by zero.
 func Score(system groups.RankingSystem, n, position int) (Units, error) {
-	if !system.Valid() || n < 2 || n > 1000000 || position < 1 || position > n {
+	if !system.Valid() || n < 1 || n > 1000000 || position < 1 || position > n {
 		return 0, ErrInvalid
+	}
+	if n == 1 {
+		if system == groups.Legacy {
+			return 100, nil
+		}
+		return 1000, nil
 	}
 	if system == groups.Legacy {
 		if position < n {
@@ -170,7 +179,7 @@ func (r Result) Validate() error {
 			positions[p.Position] = true
 		}
 		expected := Units(0)
-		if r.PolicyVersion != "" && p.Eligible() && n >= 2 {
+		if r.PolicyVersion != "" && p.Eligible() && n >= 1 {
 			var err error
 			expected, err = Score(r.RankingSystem, n, p.Position)
 			if err != nil {

@@ -167,11 +167,11 @@ func RenderUserMonthlyRankings(rankings ranking.UserMonthlyRankings) string {
 
 	first := true
 	if hasUpdated {
-		renderSection(rankings.Updated, "⚡ Atualizado", first)
+		renderSection(rankings.Updated, "⚡ Colocação", first)
 		first = false
 	}
 	if hasLegacy {
-		renderSection(rankings.Legacy, "🕹️ Legado", first)
+		renderSection(rankings.Legacy, "🕹️ Vitória", first)
 	}
 
 	return text

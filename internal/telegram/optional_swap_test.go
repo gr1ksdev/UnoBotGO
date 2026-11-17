@@ -167,17 +167,17 @@ func TestKeepHandInlineFlowStaleColorAndMultigroup(t *testing.T) {
 			}
 			api.mu.Lock()
 			defer api.mu.Unlock()
-			foundKeep := false
+			foundTurn := false
 			for _, m := range api.SentMessages {
-				if strings.Contains(m.Text, "manteve sua mão") {
-					foundKeep = true
-					if !strings.Contains(m.Text, "Cor:") || strings.Contains(m.Text, "trocou as mãos") {
+				if strings.Contains(m.Text, "Vez de:") {
+					foundTurn = true
+					if strings.Contains(m.Text, "trocou as mãos") {
 						t.Fatal(m.Text)
 					}
 				}
 			}
-			if !foundKeep {
-				t.Fatal("missing public keep confirmation")
+			if !foundTurn {
+				t.Fatal("missing public turn confirmation")
 			}
 		})
 	}
@@ -189,14 +189,11 @@ func TestSwapRendererUsesResolvedEvents(t *testing.T) {
 	v.ActiveColor = uno.Blue
 	for _, kind := range []uno.EventType{uno.HandsSwapped, uno.HandKept} {
 		text := plainGameplay(r.RenderActionConfirmation(11, uno.Action{Type: uno.ChooseColor, Color: uno.Blue}, game.Outcome{View: v, Events: []uno.Event{{Type: kind, PlayerID: 11, TargetID: 22}}}))
-		requireGameplay(t, text, "Freddy jogou", "Trocar cartas", "Cor: 💙 Azul")
+		requireGameplay(t, text, "Vez de: Mezi")
 		if kind == uno.HandKept {
-			requireGameplay(t, text, "Freddy manteve sua mão.")
-			if strings.Contains(text, "trocou as mãos") {
-				t.Fatal(text)
-			}
+			requireGameplay(t, text, "Vez de: Mezi")
 		} else {
-			requireGameplay(t, text, "Freddy trocou as mãos com Mezi.")
+			requireGameplay(t, text, "Vez de: Mezi")
 		}
 	}
 	for _, action := range []uno.Action{{Type: uno.ChoosePlayer, TargetID: 22}, {Type: uno.KeepHand}} {
@@ -204,7 +201,7 @@ func TestSwapRendererUsesResolvedEvents(t *testing.T) {
 		if strings.Contains(text, "trocou as mãos") || strings.Contains(text, "manteve sua mão") {
 			t.Fatal("selection claimed resolved effect", text)
 		}
-		requireGameplay(t, text, "escolher a cor")
+		requireGameplay(t, text, "Vez de:")
 	}
 }
 

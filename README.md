@@ -14,7 +14,7 @@ público no chat do grupo.
 - **Um único modo de jogo — Caseiro.** A carta 🔀 Trocar cartas faz parte do
   baralho (109 cartas). Não há escolha de modo.
 - **Ranking que conta colocação e pontos.** Duas políticas de pontuação
-  (`Legado` e `Atualizado`) e um ranking mensal por grupo, com desempate por
+  (`Vitória` e `Colocação`) e um ranking mensal por grupo, com desempate por
   melhor colocação, conclusão mais recente e UserID.
 - **Webhook como transporte de produção.** Long polling é o padrão local.
 - **Mensagens enxutas.** O fluxo anuncia a jogada e o próximo turno
@@ -63,25 +63,33 @@ timeout das migrations de `2m` e descarte de updates pendentes desativado.
 
 ## Comandos
 
-| Comando | Descrição |
-|---|---|
-| `/start` | Apresentação do bot (privado). |
-| `/help` (ou `/ajuda`) | Lista de comandos e instruções. |
-| `/novo` | Cria uma partida no grupo (você é o responsável). |
-| `/entrar` (ou `/join`) | Entra na partida aberta ou em andamento. |
-| `/trancar` · `/destrancar` | Controla novas entradas (responsável). |
-| `/iniciar` | Inicia a partida com pelo menos dois jogadores. |
-| `/estado` | Mostra o lobby ou o estado detalhado da partida. |
-| `/ranking` | Ranking mensal do grupo; no privado, seus rankings. |
-| `/stats` | Suas estatísticas: partidas, vitórias, pontos, colocação. |
-| `/sair` | Sai da partida em andamento. |
-| `/pular` | Pula o turno do jogador atual (responsável ou admin). |
-| `/expulsar` | Expulsa um jogador; responda à mensagem dele. |
-| `/cancelar` (ou `/kill`) | Cancela a partida (responsável, criador ou admin). |
-| `/reset` | Recupera o grupo e limpa partida e histórico (responsável ou admin). |
+O padrão é **português**. Um administrador pode trocar um grupo para inglês
+com `/config` → `🇺🇸 English`. **Não há aliases entre os idiomas**: um grupo
+em português aceita só `/novo`, `/entrar`…; um grupo em inglês aceita só
+`/new`, `/join`… O menu de comandos e a sugestão do Telegram (ao digitar `/`)
+seguem o idioma configurado naquele grupo.
+
+| Português | English | Descrição |
+|---|---|---|
+| `/start` | `/start` | Apresentação do bot (privado / deep link) |
+| `/ajuda` | `/help` | Lista de comandos e instruções |
+| `/novo` | `/new` | Cria uma partida no grupo (você é o responsável) |
+| `/entrar` | `/join` | Entra na partida aberta ou em andamento |
+| `/trancar` · `/destrancar` | `/close` · `/open` | Controla novas entradas (responsável) |
+| `/iniciar` | `/start` | Inicia a partida com pelo menos dois jogadores |
+| `/estado` | `/state` | Mostra o lobby ou o estado detalhado da partida |
+| `/ranking` | `/ranking` | Ranking mensal do grupo; no privado, seus rankings |
+| `/stats` | `/stats` | Suas estatísticas: partidas, vitórias, pontos, colocação |
+| `/sair` | `/leave` | Sai da partida em andamento |
+| `/pular` | `/skip` | Pula o turno do jogador atual (responsável ou admin) |
+| `/expulsar` | `/kick` | Expulsa um jogador; responda à mensagem dele |
+| `/cancelar` | `/kill` | Cancela a partida (responsável, criador ou admin) |
+| `/config` | `/settings` | Configura ranking e idioma dos comandos |
+| `/reset` | `/reset` | Recupera o grupo e limpa partida e histórico |
 
 Em grupos e supergrupos, todo comando precisa mencionar o bot:
-`/novo@SeuBot`. No privado, o sufixo é opcional.
+`/novo@SeuBot` (ou `/new@SeuBot` em grupo em inglês). No privado, o sufixo é
+opcional e o idioma é português.
 
 ### Como jogar as cartas
 
@@ -90,7 +98,9 @@ digite `@SeuBot`. Sua mão privada aparece com as cartas jogáveis coloridas e
 as indisponíveis em cinza. Toque numa carta colorida para jogá-la — não há
 nenhum identificador no campo de texto.
 
-A confirmação oficial e o estado da partida são enviados no grupo.
+A cada jogada, o grupo recebe **uma** mensagem: `Vez de: Fulano`. O sticker
+publicado pelo inline já mostra a carta. O aviso de UNO e a confirmação final
+com as colocações continuam. O estado detalhado fica no `/estado` (`/state`).
 
 ---
 
@@ -98,23 +108,24 @@ A confirmação oficial e o estado da partida são enviados no grupo.
 
 | Política | Fórmula | Exemplo com 3 jogadores |
 |---|---|---|
-| `Legado` | +1 ponto para todo elegível, menos o último | 1º e 2º: `+1 pt` |
-| `Atualizado` | `1000 × (N − posição) / (N − 1)`, arredondado | 1º: `+10,00`, 2º: `+5,00`, 3º: `+0,00` |
+| `Vitória` | +1 ponto para todo elegível, menos o último | 1º e 2º: `+1 pt` |
+| `Colocação` | `1000 × (N − posição) / (N − 1)`, arredondado | 1º: `+10,00`, 2º: `+5,00`, 3º: `+0,00` |
 
 A pontuação é inteira em centésimos — nunca ponto flutuante.
 
 **Elegibilidade:** só pontuam quem concluiu a partida com colocação válida.
 Quem abandona recebe zero pontos e fica fora do ranking, exibido como
-`Nome · fora do ranking`. Partidas com menos de dois elegíveis são gravadas
-para auditoria, sem alterar os acumulados.
+`Nome · fora do ranking`. Se a partida termina com um único jogador elegível
+(ex: o outro saiu), ele recebe a pontuação máxima — `+10,00` na Colocação ou
+`+1 pt` na Vitória. O resultado informa `Motivo: desistência de jogadores.`.
 
 O ranking mensal usa o calendário de `America/Sao_Paulo` e desempata por
 melhor colocação na última partida elegível do mês, depois pela conclusão mais
 recente e, por estabilidade, pelo UserID.
 
-`/config` (administradores ou quem adicionou o bot) alterna a política do
-grupo. A troca é recusada quando o grupo já tem pontuações no sistema
-anterior.
+`/config` (administradores ou quem adicionou o bot) alterna a política de
+ranking e o idioma dos comandos do grupo. A troca de sistema de ranking é
+recusada quando o grupo já tem pontuações no sistema anterior.
 
 ---
 

@@ -191,7 +191,8 @@ func TestUnscoredGamesDoNotReplaceLastEligiblePlacement(t *testing.T) {
 		t.Fatal(want)
 	}
 	for _, pending := range []bool{false, true} {
-		r := eligibleResult(t, groups.Legacy, 1, 1, "departure")
+		// No eligible players: nobody to award, so the ranking must not change.
+		r := eligibleResult(t, groups.Legacy, 0, 1, "departure")
 		if pending {
 			r = eligibleResult(t, groups.Legacy, 2, 0, "completed")
 			r.PolicyVersion = ""

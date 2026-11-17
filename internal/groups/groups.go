@@ -16,9 +16,21 @@ const (
 
 func (s RankingSystem) Valid() bool { return s == Legacy || s == Updated }
 
+// CommandLanguage selects which command set a group accepts. There are no
+// cross-language aliases: a Portuguese group only accepts Portuguese commands.
+type CommandLanguage string
+
+const (
+	CommandsPT CommandLanguage = "pt"
+	CommandsEN CommandLanguage = "en"
+)
+
+func (l CommandLanguage) Valid() bool { return l == CommandsPT || l == CommandsEN }
+
 type Config struct {
 	ChatID               int64
 	RankingSystem        RankingSystem
+	CommandLanguage      CommandLanguage
 	InstalledByUserID    *int64
 	Revision             int64
 	Title                string
@@ -26,7 +38,7 @@ type Config struct {
 }
 
 func Defaults(chatID int64) Config {
-	return Config{ChatID: chatID, RankingSystem: Updated, Revision: 1}
+	return Config{ChatID: chatID, RankingSystem: Updated, CommandLanguage: CommandsPT, Revision: 1}
 }
 
 // Snapshot is a value, frozen at creation.
@@ -40,6 +52,8 @@ func (c Config) Snapshot() Snapshot { return Snapshot{c.RankingSystem, c.Revisio
 type Repository interface {
 	GetOrCreateGroupConfig(context.Context, int64) (Config, error)
 	SetRankingSystem(context.Context, int64, RankingSystem) (Config, error)
+	SetCommandLanguage(context.Context, int64, CommandLanguage) (Config, error)
+	ReadCommandLanguage(context.Context, int64) (CommandLanguage, error)
 	SetInstalledBy(context.Context, int64, int64) (Config, error)
 	ObserveGroupTitle(context.Context, int64, string) error
 }
@@ -94,6 +108,24 @@ func (s Service) SetRankingSystem(ctx context.Context, chatID, userID int64, sys
 		return Config{}, ErrForbidden
 	}
 	return s.Repository.SetRankingSystem(ctx, chatID, system)
+}
+
+func (s Service) SetCommandLanguage(ctx context.Context, chatID, userID int64, language CommandLanguage) (Config, error) {
+	if chatID == 0 || userID <= 0 || !language.Valid() {
+		return Config{}, ErrInvalid
+	}
+	c, err := s.Repository.GetOrCreateGroupConfig(ctx, chatID)
+	if err != nil {
+		return Config{}, err
+	}
+	role, err := s.LookupMembership(ctx, chatID, userID)
+	if err != nil {
+		return Config{}, ErrForbidden
+	}
+	if !CanConfigure(c, userID, role) {
+		return Config{}, ErrForbidden
+	}
+	return s.Repository.SetCommandLanguage(ctx, chatID, language)
 }
 
 func (s Service) RecordInstallation(ctx context.Context, chatID, installerID int64) (Config, error) {

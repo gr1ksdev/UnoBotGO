@@ -54,6 +54,27 @@ func (m *mockGroupRepo) SetRankingSystem(ctx context.Context, chatID int64, syst
 	return c, nil
 }
 
+func (m *mockGroupRepo) SetCommandLanguage(_ context.Context, chatID int64, lang groups.CommandLanguage) (groups.Config, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.configs[chatID]
+	if !ok {
+		c = groups.Defaults(chatID)
+	}
+	c.CommandLanguage = lang
+	c.Revision++
+	m.configs[chatID] = c
+	return c, nil
+}
+func (m *mockGroupRepo) ReadCommandLanguage(_ context.Context, chatID int64) (groups.CommandLanguage, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if c, ok := m.configs[chatID]; ok {
+		return c.CommandLanguage, nil
+	}
+	return groups.CommandsPT, nil
+}
+
 func (m *mockGroupRepo) SetInstalledBy(ctx context.Context, chatID int64, installerID int64) (groups.Config, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -280,8 +301,8 @@ func TestConfig_AdminCanOpenAndModify(t *testing.T) {
 		t.Fatalf("unexpected message text: %s", lastMsg.Text)
 	}
 	markup, ok := lastMsg.ReplyMarkup.(*telego.InlineKeyboardMarkup)
-	if !ok || markup == nil || len(markup.InlineKeyboard) != 1 {
-		t.Fatalf("expected 1 row of config buttons, got %+v", lastMsg.ReplyMarkup)
+	if !ok || markup == nil || len(markup.InlineKeyboard) != 2 {
+		t.Fatalf("expected 2 rows of config buttons, got %+v", lastMsg.ReplyMarkup)
 	}
 
 	// Admin clicks Legacy ranking button
@@ -773,7 +794,7 @@ func TestConfig_WelcomeButtonOpensConfig(t *testing.T) {
 	if !strings.Contains(edited.Text, "Configuração do Grupo") {
 		t.Fatalf("expected config text in edited message, got: %s", edited.Text)
 	}
-	if edited.ReplyMarkup == nil || len(edited.ReplyMarkup.InlineKeyboard) != 1 {
+	if edited.ReplyMarkup == nil || len(edited.ReplyMarkup.InlineKeyboard) != 2 {
 		t.Fatalf("expected 3 rows of config buttons, got %+v", edited.ReplyMarkup)
 	}
 }
@@ -967,13 +988,13 @@ func TestConfig_DynamicCallbackUpdates(t *testing.T) {
 	if !strings.Contains(initialMsg.Text, "<b>Modo de partida:</b> Caseiro") {
 		t.Fatalf("expected Caseiro mode header in: %s", initialMsg.Text)
 	}
-	if !strings.Contains(initialMsg.Text, "<b>Sistema de ranking:</b> Legado") {
+	if !strings.Contains(initialMsg.Text, "<b>Sistema de ranking:</b> Vitória") {
 		t.Fatalf("expected Legacy ranking header in: %s", initialMsg.Text)
 	}
-	if !strings.Contains(initialMsg.Text, "<blockquote><b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.</blockquote>") {
+	if !strings.Contains(initialMsg.Text, "<blockquote><b>🏆 Vitória</b>\nQuem não ficou em último recebe +1 ponto.</blockquote>") {
 		t.Fatalf("expected Legacy summary in: %s", initialMsg.Text)
 	}
-	if strings.Contains(initialMsg.Text, "🏆 Atualizado") {
+	if strings.Contains(initialMsg.Text, "🏆 Colocação") {
 		t.Fatalf("unexpected Updated in initial message: %s", initialMsg.Text)
 	}
 	if strings.Count(initialMsg.Text, "<blockquote>") != 1 {
@@ -1004,14 +1025,14 @@ func TestConfig_DynamicCallbackUpdates(t *testing.T) {
 		t.Fatalf("expected ParseMode HTML, got %s", editedAfterRank.ParseMode)
 	}
 
-	if !strings.Contains(editedAfterRank.Text, "<b>Sistema de ranking:</b> Atualizado") {
+	if !strings.Contains(editedAfterRank.Text, "<b>Sistema de ranking:</b> Colocação") {
 		t.Fatalf("expected Updated rank header in: %s", editedAfterRank.Text)
 	}
-	if !strings.Contains(editedAfterRank.Text, "<blockquote><b>🏆 Atualizado</b>\nA pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe.</blockquote>") {
+	if !strings.Contains(editedAfterRank.Text, "<blockquote><b>🏆 Colocação</b>\nOs pontos seguem a posição final: quanto melhor, mais pontos.</blockquote>") {
 		t.Fatalf("expected Updated summary in: %s", editedAfterRank.Text)
 	}
 	// Old Legacy summary must disappear
-	if strings.Contains(editedAfterRank.Text, "🏆 Legado") {
+	if strings.Contains(editedAfterRank.Text, "🏆 Vitória") {
 		t.Fatalf("old Legacy summary did not disappear after rank change: %s", editedAfterRank.Text)
 	}
 	// House mode is fixed
@@ -1023,7 +1044,7 @@ func TestConfig_DynamicCallbackUpdates(t *testing.T) {
 	}
 
 	// Buttons preserved
-	if editedAfterRank.ReplyMarkup == nil || len(editedAfterRank.ReplyMarkup.InlineKeyboard) != 1 {
+	if editedAfterRank.ReplyMarkup == nil || len(editedAfterRank.ReplyMarkup.InlineKeyboard) != 2 {
 		t.Fatalf("expected 1 row of buttons, got %+v", editedAfterRank.ReplyMarkup)
 	}
 }

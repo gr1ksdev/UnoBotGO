@@ -483,7 +483,7 @@ func TestTimeoutAdvancesOnceAndMentionsResultingPlayer(t *testing.T) {
 		t.Fatalf("duplicate timeout notification: %+v", api.SentMessages)
 	}
 	msg := api.SentMessages[0]
-	if !strings.Contains(msg.Text, "O tempo acabou") || msg.ReplyMarkup == nil {
+	if !strings.Contains(msg.Text, "Vez de:") || msg.ReplyMarkup == nil {
 		t.Fatalf("timeout notification: %+v", msg)
 	}
 	assertMentionTargets(t, msg.Text, b.renderer.userCache, after.CurrentTurn, 999)

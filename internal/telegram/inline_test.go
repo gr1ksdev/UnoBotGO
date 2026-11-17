@@ -150,8 +150,8 @@ func TestInlineHandler_PlayTurn_DrawAndPlayCard(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	lastMsg := mockAPI.LastSentMessage()
-	if !strings.Contains(lastMsg, "comprou") {
-		t.Fatalf("expected draw confirmation message sent to group, got: %s", lastMsg)
+	if !strings.Contains(lastMsg, "Vez de:") {
+		t.Fatalf("expected turn confirmation message sent to group, got: %s", lastMsg)
 	}
 
 	// Verify sticker message was not cluttered with button edits

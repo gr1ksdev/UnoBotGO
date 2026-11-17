@@ -88,6 +88,45 @@ func (s *Store) SetRankingSystem(ctx context.Context, chatID int64, system group
 	return c, nil
 }
 
+func (s *Store) SetCommandLanguage(ctx context.Context, chatID int64, language groups.CommandLanguage) (groups.Config, error) {
+	if chatID == 0 || !language.Valid() {
+		return groups.Config{}, groups.ErrInvalid
+	}
+	c, err := scanGroup(s.pool.QueryRow(ctx, `UPDATE group_configs SET
+  command_language=$2,
+  config_revision=config_revision+1,
+  updated_at=now()
+  WHERE chat_id=$1 RETURNING `+groupColumns, chatID, string(language)))
+	if err == nil {
+		c.CommandLanguage = language
+		return c, nil
+	}
+	// The row may not exist yet.
+	c, err = scanGroup(s.pool.QueryRow(ctx, `INSERT INTO group_configs(chat_id, command_language) VALUES($1,$2)
+  ON CONFLICT(chat_id) DO UPDATE SET command_language=EXCLUDED.command_language,
+  config_revision=group_configs.config_revision+1,
+  updated_at=now() RETURNING `+groupColumns, chatID, string(language)))
+	if err != nil {
+		return groups.Config{}, operationError(ctx, "set command language")
+	}
+	c.CommandLanguage = language
+	return c, nil
+}
+
+// ReadCommandLanguage is isolated from groupColumns so callers can still
+// read configurations written before migration 0014.
+func (s *Store) ReadCommandLanguage(ctx context.Context, chatID int64) (groups.CommandLanguage, error) {
+	var raw string
+	if err := s.pool.QueryRow(ctx, `SELECT command_language FROM group_configs WHERE chat_id=$1`, chatID).Scan(&raw); err != nil {
+		return groups.CommandsPT, operationError(ctx, "read command language")
+	}
+	lang := groups.CommandLanguage(raw)
+	if !lang.Valid() {
+		return groups.CommandsPT, nil
+	}
+	return lang, nil
+}
+
 func (s *Store) SetInstalledBy(ctx context.Context, chatID int64, installerID int64) (groups.Config, error) {
 	if chatID == 0 || installerID <= 0 {
 		return groups.Config{}, groups.ErrInvalid

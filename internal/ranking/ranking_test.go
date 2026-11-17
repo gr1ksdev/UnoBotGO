@@ -43,8 +43,18 @@ func TestScores(t *testing.T) {
 	if u, _ := Score(groups.Updated, 17, 16); u != 63 {
 		t.Fatal("half-up rounding", u)
 	}
-	if _, err := Score(groups.Updated, 1, 1); err == nil {
-		t.Fatal("undefined N=1 accepted")
+	// A sole remaining player receives the top award.
+	if u, err := Score(groups.Updated, 1, 1); err != nil || u != 1000 {
+		t.Fatal("N=1 updated award", u, err)
+	}
+	if u, err := Score(groups.Legacy, 1, 1); err != nil || u != 100 {
+		t.Fatal("N=1 legacy award", u, err)
+	}
+	if _, err := Score(groups.Updated, 1, 2); err == nil {
+		t.Fatal("N=1 accepted an out-of-range position")
+	}
+	if _, err := Score(groups.Updated, 0, 1); err == nil {
+		t.Fatal("N=0 accepted")
 	}
 	if got := FormatPoints(857); got != "8,6" {
 		t.Fatal(got)

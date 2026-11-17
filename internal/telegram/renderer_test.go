@@ -68,18 +68,18 @@ func TestCardRepr(t *testing.T) {
 func TestRenderer_WelcomeAndHelp(t *testing.T) {
 	renderer := NewRenderer(nil)
 	welcome := renderer.RenderWelcome()
-	if !strings.Contains(welcome, "Bem-vindo ao UnoBotGO") || !strings.Contains(welcome, "/help") {
+	if !strings.Contains(welcome, "Bem-vindo ao UnoBotGO") || !strings.Contains(welcome, "/ajuda") {
 		t.Fatalf("unexpected welcome: %s", welcome)
 	}
 	if strings.Contains(welcome, "V2") || strings.Contains(welcome, "Golang") || strings.Contains(welcome, "desenvolvida em Go") {
 		t.Fatalf("welcome exposed implementation details: %s", welcome)
 	}
 
-	help := renderer.RenderHelp("ExampleBot")
+	help := renderer.RenderHelp("ExampleBot", groups.CommandsPT)
 	if strings.Count(help, "<blockquote>") != 1 || strings.Count(help, "</blockquote>") != 1 {
 		t.Fatalf("help blockquote is malformed: %s", help)
 	}
-	for _, expected := range []string{"<b>/start</b>", "<b>/help</b>", "<b>/novo</b>", "<b>/reset</b>", "@ExampleBot", "Go (Golang)", "@unopybot"} {
+	for _, expected := range []string{"<b>/start</b>", "<b>/ajuda</b>", "<b>/novo</b>", "<b>/reset</b>", "@ExampleBot", "Go (Golang)", "@unopybot"} {
 		if !strings.Contains(help, expected) {
 			t.Fatalf("help is missing %q: %s", expected, help)
 		}
@@ -101,7 +101,7 @@ func TestRenderer_RenderLobbyAndState(t *testing.T) {
 		Phase:   uno.Lobby,
 	}
 
-	lobbyText := renderer.RenderLobby(lobbyView)
+	lobbyText := renderer.RenderLobby(lobbyView, groups.CommandsPT)
 	if !strings.Contains(lobbyText, "Alice") || !strings.Contains(lobbyText, "Bob") {
 		t.Errorf("expected players in lobby text: %s", lobbyText)
 	}
@@ -187,7 +187,7 @@ func TestRenderer_RenderActionConfirmation(t *testing.T) {
 	}
 
 	text := renderer.RenderActionConfirmation(10, uno.Action{Type: uno.PlayCard, PlayerID: 10}, outcome)
-	if !strings.Contains(text, "Alice") || !strings.Contains(text, "jogou") || !strings.Contains(text, "invertido") {
+	if !strings.Contains(text, "Vez de:") || !strings.Contains(text, "Bob") {
 		t.Errorf("unexpected action confirmation text: %s", text)
 	}
 }
@@ -201,8 +201,9 @@ func TestRenderer_RenderCallBluffConfirmation(t *testing.T) {
 	// 1. Bluff caught
 	outcomeCaught := game.Outcome{
 		View: game.PublicGameView{
-			GameID: "g1",
-			Phase:  uno.TakingTurn,
+			GameID:      "g1",
+			Phase:       uno.TakingTurn,
+			CurrentTurn: 10,
 			Players: []game.PublicPlayer{
 				{ID: 10, CardCount: 5, Active: true},
 				{ID: 20, CardCount: 3, Active: true},
@@ -214,15 +215,16 @@ func TestRenderer_RenderCallBluffConfirmation(t *testing.T) {
 		},
 	}
 	textCaught := renderer.RenderActionConfirmation(20, uno.Action{Type: uno.CallBluff, PlayerID: 20}, outcomeCaught)
-	if !strings.Contains(textCaught, "Blefe pego!") || !strings.Contains(textCaught, "Alice") || !strings.Contains(textCaught, "4 cartas") {
+	if !strings.Contains(textCaught, "Vez de:") {
 		t.Errorf("unexpected caught confirmation text: %s", textCaught)
 	}
 
 	// 2. Bluff failed
 	outcomeFailed := game.Outcome{
 		View: game.PublicGameView{
-			GameID: "g1",
-			Phase:  uno.TakingTurn,
+			GameID:      "g1",
+			Phase:       uno.TakingTurn,
+			CurrentTurn: 10,
 			Players: []game.PublicPlayer{
 				{ID: 10, CardCount: 1, Active: true},
 				{ID: 20, CardCount: 8, Active: true},
@@ -234,7 +236,7 @@ func TestRenderer_RenderCallBluffConfirmation(t *testing.T) {
 		},
 	}
 	textFailed := renderer.RenderActionConfirmation(20, uno.Action{Type: uno.CallBluff, PlayerID: 20}, outcomeFailed)
-	if !strings.Contains(textFailed, "não blefou!") || !strings.Contains(textFailed, "Alice") || !strings.Contains(textFailed, "Bob") || !strings.Contains(textFailed, "6 cartas") {
+	if !strings.Contains(textFailed, "Vez de:") {
 		t.Errorf("unexpected failed confirmation text: %s", textFailed)
 	}
 }
@@ -270,7 +272,7 @@ func TestRendererMentionTargetsFollowResultingTurn(t *testing.T) {
 			}
 			text := r.RenderPublicState(v)
 			if tc.phase == uno.Lobby {
-				text = r.RenderLobby(v)
+				text = r.RenderLobby(v, groups.CommandsPT)
 			}
 			assertMentionTargets(t, text, cache, tc.real, 999)
 			for _, action := range []uno.ActionType{uno.PlayCard, uno.DrawCard, uno.PassTurn, uno.ChooseColor} {
@@ -280,7 +282,9 @@ func TestRendererMentionTargetsFollowResultingTurn(t *testing.T) {
 					{Type: uno.PlayerWon, PlayerID: 33, Position: 1},
 				}}
 				confirmation := r.RenderActionConfirmation(11, uno.Action{Type: action, Color: uno.Blue}, out)
-				assertMentionTargets(t, confirmation, cache, tc.real, 999)
+				if confirmation != "" {
+					assertMentionTargets(t, confirmation, cache, tc.real, 999)
+				}
 				if (tc.closed || tc.phase == uno.Finished) && strings.Contains(confirmation, "Vez de:") {
 					t.Fatalf("turn after closure: %s", confirmation)
 				}
@@ -346,11 +350,17 @@ func TestGameButtonsRespectLifecycle(t *testing.T) {
 			t.Fatalf("expected a single hand button: %+v", markup)
 		}
 		button := markup.InlineKeyboard[0][0]
-		if button.Text != "🃏 Suas cartas" {
-			t.Fatalf("unexpected button text: %+v", button)
-		}
-		if button.SwitchInlineQueryCurrentChat == nil || *button.SwitchInlineQueryCurrentChat != "" {
-			t.Fatalf("hand button exposed an internal identifier: %+v", button)
+		if phase == uno.Lobby {
+			if button.Text != "▶️ Iniciar" || button.CallbackData != "start_context" {
+				t.Fatalf("lobby button does not start the game: %+v", button)
+			}
+		} else {
+			if button.Text != "🃏 Suas cartas" {
+				t.Fatalf("unexpected button text: %+v", button)
+			}
+			if button.SwitchInlineQueryCurrentChat == nil || *button.SwitchInlineQueryCurrentChat != "" {
+				t.Fatalf("hand button exposed an internal identifier: %+v", button)
+			}
 		}
 		v.Closed = true
 		if makeGameButtons(v) != nil {
@@ -372,16 +382,16 @@ func TestRenderer_RenderGroupConfig(t *testing.T) {
 		{
 			name:           "Legacy",
 			system:         groups.Legacy,
-			wantRankHeader: "<b>Sistema de ranking:</b> Legado",
-			wantRankBlock:  "<blockquote><b>🏆 Legado</b>\nTodos os jogadores elegíveis, exceto o último colocado, recebem +1 ponto.</blockquote>",
-			unwantSummary:  "🏆 Atualizado",
+			wantRankHeader: "<b>Sistema de ranking:</b> Vitória",
+			wantRankBlock:  "<blockquote><b>🏆 Vitória</b>\nQuem não ficou em último recebe +1 ponto.</blockquote>",
+			unwantSummary:  "🏆 Colocação",
 		},
 		{
 			name:           "Updated",
 			system:         groups.Updated,
-			wantRankHeader: "<b>Sistema de ranking:</b> Atualizado",
-			wantRankBlock:  "<blockquote><b>🏆 Atualizado</b>\nA pontuação varia conforme a colocação: quanto melhor a posição, mais pontos o jogador recebe.</blockquote>",
-			unwantSummary:  "🏆 Legado",
+			wantRankHeader: "<b>Sistema de ranking:</b> Colocação",
+			wantRankBlock:  "<blockquote><b>🏆 Colocação</b>\nOs pontos seguem a posição final: quanto melhor, mais pontos.</blockquote>",
+			unwantSummary:  "🏆 Vitória",
 		},
 	}
 

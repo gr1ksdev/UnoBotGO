@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/malbs/UnoGoBot/internal/game"
+	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/uno"
 	"github.com/mymmrac/telego"
 )
@@ -52,7 +53,7 @@ func TestRoomLockCommands(t *testing.T) {
 	send(99, "/novo", "Partida de UNO")
 	send(4, "/entrar", "1/10")
 	for _, text := range []string{"/trancar", "Impede novos jogadores de entrar", "/destrancar", "Permite novas entradas"} {
-		if !strings.Contains(r.RenderHelp("unobot"), text) {
+		if !strings.Contains(r.RenderHelp("unobot", groups.CommandsPT), text) {
 			t.Fatal("help missing", text)
 		}
 	}

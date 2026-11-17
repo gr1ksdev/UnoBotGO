@@ -60,7 +60,7 @@ Migrations embutidas versionadas em `internal/storage/postgres/migrations`:
 | `0002_results.up.sql` | `completed_games`: GameID PK, snapshots/auditoria/hash/policy/status; `completed_game_players`: UserID/nomes/colocação/status/score/counters; `player_group_stats`: uma linha por chat/user, unidades acumuladas, partidas e vitórias |
 | `0003_known_users.up.sql` | `known_group_users`: identidade chat/user, nomes mutáveis, username nullable, last_seen monotônico |
 | `0004_imports.up.sql` | `ranking_imports`: fonte/hash único por chat e auditoria; `ranking_import_entries`: IDs próprios, linhas, nomes e status, sem chave pelo nome |
-| `0005_insufficient_eligible_players.up.sql` | `completed_games`: adiciona o status `insufficient_eligible_players` para partidas concluídas onde N < 2 elegíveis |
+| `0005_insufficient_eligible_players.up.sql` | `completed_games`: adiciona o status `insufficient_eligible_players` para partidas concluídas onde N = 0 elegíveis |
 | `0006_monthly_ranking.up.sql` | `player_group_monthly_stats`: ranking mensal e backfill do ledger de partidas |
 | `0007_group_title.up.sql` | Título do grupo e índice de consulta mensal por usuário |
 
@@ -74,9 +74,9 @@ transação integralmente. Não há reset ou conversão silenciosa.
 ## Ranking e elegibilidade definitiva
 
 100 unidades inteiras = 1 ponto. Legacy concede 100 unidades para posições antes
-do último e 0 ao último. Updated calcula `1000*(N-position)/(N-1)`, arredondado a
+do último e 0 ao último. Colocação calcula `1000*(N-position)/(N-1)`, arredondado a
 unidades inteiras pelo método half-up. Exibição preparada com vírgula e duas casas
-decimais para Updated e inteiro para Legacy, com pluralização `1 pt`/`0 pts`/`2 pts`.
+decimais para Colocação e inteiro para Vitória, com pluralização `1 pt`/`0 pts`/`2 pts`.
 O formatter compartilhado `ranking.FormatScore` usa somente inteiros armazenados.
 
 A política de elegibilidade definitiva foi aprovada e integrada (`completed-placements-v1`):
@@ -87,9 +87,12 @@ A política de elegibilidade definitiva foi aprovada e integrada (`completed-pla
   e exibido no resultado como `Nome · fora do ranking`, sem medalha ou score competitivo.
 - Late join e saída com reentrada válida: se o jogador concluiu normalmente a partida,
   participa de `N` e pontua pela sua colocação final sem penalidade.
-- Partidas com `N < 2` elegíveis (ex: encerramento por departure com 1 jogador restante)
-  são persistidas para auditoria com status `insufficient_eligible_players`, com scores
-  zerados e sem alteração de `player_group_stats`. Partidas canceladas não são persistidas.
+- Partidas com `N = 1` elegível (ex: encerramento por departure com 1 jogador restante)
+  concedem a esse jogador a pontuação máxima da política: 1000 unidades na Colocação
+  (`+10,00`) e 100 no Vitória (`+1 pt`). O status é `scored` e a mensagem final informa
+  o motivo da desistência. Partidas com `N = 0` elegíveis são gravadas com status
+  `insufficient_eligible_players`, scores zerados e sem alteração de
+  `player_group_stats`. Partidas canceladas não são persistidas.
 - A finalização síncrona aguarda o COMMIT do PostgreSQL e, quando confirmado com concessão
   de pontos (`commit.Scored == true`), envia o resultado com pontos daquela partida e,
   em outra mensagem, consulta e apresenta o ranking histórico atualizado. O resultado
@@ -117,7 +120,7 @@ e participação elegível (posição válida e status/went_out coerentes com `r
 Ordena por `finished_at DESC, game_id DESC` para selecionar a última partida daquele jogador
 *dentro daquele mês*; GameID apenas estabiliza a seleção se duas partidas tiverem o mesmo timestamp.
 `last_placement` vem de `position`; `last_completed_game_at` vem de `finished_at`.
-Abandono, N<2 e resultados sem política pontuada não substituem essa referência, e partidas
+Abandono, N=0 e resultados sem política pontuada não substituem essa referência, e partidas
 de meses anteriores não influenciam o critério de desempate do mês vigente.
 
 O JOIN do histórico do mês selecionado com `player_group_monthly_stats` ocorre antes do LIMIT.
@@ -147,7 +150,7 @@ mínimas dessa mensagem. Não há callbacks de paginação.
 Falha de consulta pós-commit não desfaz pontos: uma resposta curta orienta usar
 `/ranking` novamente. Falha no envio Telegram continua sem outbox/reenvio automático;
 não se repete a gravação. Persistência, consulta e envio têm prazos limitados.
-Sem concessão (N<2), mantém-se apenas o encerramento sem anúncio de ganhos.
+Sem concessão (N=0), mantém-se apenas o encerramento sem anúncio de ganhos.
 
 Continuam NEEDS PRODUCT DECISION:
 
@@ -167,7 +170,7 @@ membro. Falha na consulta de associação recusa ação (fail closed).
 
 A UX Telegram de configuração de grupos foi integrada com sucesso:
 - Comando `/config` disponível em grupos para administradores e instalador ativo.
-- Interface em botões inline para alternar Modo (`Clássico` / `Caseiro`) e Ranking (`Legado` / `Atualizado`).
+- Interface em botões inline para alternar Modo (`Clássico` / `Caseiro`) e Ranking (`Vitória` / `Colocação`).
 - Tentativa de alternância de ranking em grupos com histórico incompatível recusa a operação com alerta amigável ao usuário via `ErrNeedsProductDecision`, preservando a configuração anterior.
 - Monitoramento de `my_chat_member` captura transições reais de instalação/reentrada (`left`/`kicked` -> `member`/`administrator`), grava `installed_by_user_id` e envia mensagem curta de boas-vindas com botão `[ ⚙️ Configurar ]`. Updates irrelevantes (promoções/demissões) são ignorados.
 
@@ -230,7 +233,7 @@ git diff --check
 
 PostgreSQL 17 em container efêmero local, sem volume de produção; cada teste usa
 schema próprio e remove somente esse schema. Integração cobre migrations/reapply/
-concorrência/checksum/rollback, defaults/config, acúmulo Legacy/Updated,
+concorrência/checksum/rollback, defaults/config, acúmulo Vitória/Colocação,
 GameID/retry concorrente/hash divergente, rollback após game/player/stats parciais,
 sistemas incompatíveis, pending sem score, usuários e import idempotente.
 Unit tests cobrem autorização, snapshot/overrides, fórmula N2/N3/N8/N20 e half-up,
@@ -248,7 +251,7 @@ Os seguintes fluxos e cenários foram homologados manualmente no Telegram real:
 - **N=2**: Conclusão da partida com persistência e concessão correta de pontos aos concluintes.
 - **N=3**: Conclusão da partida com persistência e anúncio de pontuação pós-commit.
 
-### 2. Sistema de Ranking Updated
+### 2. Sistema de Ranking Colocação
 - **N=2**:
   - 1º lugar = `+10,00`
   - 2º lugar = `+0,00`
@@ -269,6 +272,6 @@ Os seguintes fluxos e cenários foram homologados manualmente no Telegram real:
 ### 5. Configuração do Grupo (`/config`)
 - Comando `/config` operacional em grupos exibindo interface interativa com botões inline;
 - Seleção de modo de jogo padrão (`Clássico` / `Caseiro`) funcionando com persistência;
-- Seleção de sistema de ranking (`Legado` / `Atualizado`) funcionando com persistência;
+- Seleção de sistema de ranking (`Vitória` / `Colocação`) funcionando com persistência;
 - Defaults `Classic` + `Updated` operacionais sem necessidade de qualquer configuração prévia;
 - Tentativa de alternar o sistema de ranking em grupo com histórico de pontuações já acumulado no sistema anterior foi devidamente recusada com alerta pop-up (`ErrNeedsProductDecision`) e preservação da configuração original.

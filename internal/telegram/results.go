@@ -101,7 +101,11 @@ func renderPoints(result ranking.Result) string {
 		return 0
 	})
 	var text strings.Builder
-	text.WriteString("🏁 Partida encerrada\n\n")
+	text.WriteString("🏁 Partida encerrada\n")
+	if r.FinishReason == "departure" {
+		text.WriteString("Motivo: desistência de jogadores.\n")
+	}
+	text.WriteByte('\n')
 	for i, p := range r.Players {
 		if i > 0 {
 			text.WriteByte('\n')

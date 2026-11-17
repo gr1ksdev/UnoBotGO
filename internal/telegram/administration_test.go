@@ -9,6 +9,7 @@ import (
 	"github.com/malbs/UnoGoBot/internal/game"
 	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/ranking"
+	"github.com/malbs/UnoGoBot/internal/uno"
 	"github.com/mymmrac/telego"
 )
 
@@ -54,7 +55,7 @@ func TestPularAdvancesTheTurnForTheOwner(t *testing.T) {
 		t.Fatalf("turn not advanced: %+v", after)
 	}
 	last := api.SentMessages[len(api.SentMessages)-1]
-	if !strings.Contains(last.Text, "foi pulado") {
+	if !strings.Contains(last.Text, "Vez de:") {
 		t.Fatalf("unexpected reply: %s", last.Text)
 	}
 }
@@ -150,5 +151,57 @@ func TestStatsCommandReportsThePlayerHistory(t *testing.T) {
 		if !strings.Contains(last.Text, want) {
 			t.Fatalf("missing %q in %s", want, last.Text)
 		}
+	}
+}
+
+func TestLobbyButtonStartsTheGame(t *testing.T) {
+	api := newMockBotAPI()
+	svc, _ := game.NewService()
+	b := New(api, svc, nil, nil, time.Minute, nil)
+	defer b.dispatcher.Stop(time.Second)
+	b.cmdHandler.botUsername = "unobot"
+	h := b.cmdHandler
+	chat := telego.Chat{ID: -77, Type: "supergroup", Title: "Lobby Button"}
+
+	h.HandleMessage(t.Context(), &telego.Message{Chat: chat, From: &telego.User{ID: 1, FirstName: "Owner"}, Text: "/novo@unobot"})
+	h.HandleMessage(t.Context(), &telego.Message{Chat: chat, From: &telego.User{ID: 1, FirstName: "Owner"}, Text: "/entrar@unobot"})
+	h.HandleMessage(t.Context(), &telego.Message{Chat: chat, From: &telego.User{ID: 2, FirstName: "Other"}, Text: "/entrar@unobot"})
+
+	summary, err := svc.FindChatGame(t.Context(), -77)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lobby := api.SentMessages[len(api.SentMessages)-1]
+	if strings.Contains(lobby.Text, "Regras:") {
+		t.Fatalf("rules line still present in lobby: %s", lobby.Text)
+	}
+	markup, ok := lobby.ReplyMarkup.(*telego.InlineKeyboardMarkup)
+	if !ok || len(markup.InlineKeyboard) != 1 || len(markup.InlineKeyboard[0]) != 1 {
+		t.Fatalf("missing lobby button: %+v", lobby.ReplyMarkup)
+	}
+	button := markup.InlineKeyboard[0][0]
+	if button.Text != "▶️ Iniciar" || button.CallbackData != "start_"+string(summary.GameID) {
+		t.Fatalf("wrong lobby button: %+v", button)
+	}
+
+	b.cbHandler.HandleCallback(t.Context(), &telego.CallbackQuery{
+		ID:      "start",
+		From:    telego.User{ID: 1, FirstName: "Owner"},
+		Message: &telego.Message{MessageID: 42, Chat: chat},
+		Data:    button.CallbackData,
+	})
+
+	started, err := svc.PublicView(t.Context(), summary.GameID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started.Phase == uno.Lobby {
+		t.Fatal("lobby button did not start the game")
+	}
+	if len(api.EditedMessages) == 0 || strings.Contains(api.EditedMessages[0].Text, "▶️ Iniciar") != false {
+		t.Fatalf("lobby message was not replaced: %+v", api.EditedMessages)
+	}
+	if len(api.AnsweredCallbacks) == 0 || !strings.Contains(api.AnsweredCallbacks[0].Text, "iniciada") {
+		t.Fatalf("callback not answered: %+v", api.AnsweredCallbacks)
 	}
 }

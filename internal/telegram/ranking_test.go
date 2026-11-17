@@ -281,7 +281,7 @@ func TestRenderUserMonthlyRankings_UpdatedOnly(t *testing.T) {
 
 	got := RenderUserMonthlyRankings(rankings)
 	want := "🏆 Seus rankings · Setembro\n\n" +
-		"⚡ Atualizado\n" +
+		"⚡ Colocação\n" +
 		"• UNO da Galera · 30,00 pts\n" +
 		"• Amigos do UNO · 18,57 pts\n" +
 		"• Grupo Zero · 0,00 pts\n\n" +
@@ -309,7 +309,7 @@ func TestRenderUserMonthlyRankings_LegacyOnly(t *testing.T) {
 
 	got := RenderUserMonthlyRankings(rankings)
 	want := "🏆 Seus rankings · Setembro\n\n" +
-		"🕹️ Legado\n" +
+		"🕹️ Vitória\n" +
 		"• Jogatina BR · 5 pts\n" +
 		"• Amigos 2 · 1 pt\n" +
 		"• Zerados · 0 pts\n\n" +
@@ -344,11 +344,11 @@ func TestRenderUserMonthlyRankings_BothSeparated(t *testing.T) {
 
 	got := RenderUserMonthlyRankings(rankings)
 	want := "🏆 Seus rankings · Setembro\n\n" +
-		"⚡ Atualizado\n" +
+		"⚡ Colocação\n" +
 		"• UNO da Galera · 30,00 pts\n" +
 		"• Amigos do UNO · 18,57 pts\n\n" +
 		"Total · 48,57 pts\n\n" +
-		"🕹️ Legado\n" +
+		"🕹️ Vitória\n" +
 		"• Jogatina BR · 5 pts\n" +
 		"• Amigos 2 · 3 pts\n\n" +
 		"Total · 8 pts"

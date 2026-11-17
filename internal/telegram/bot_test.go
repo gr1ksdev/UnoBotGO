@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/malbs/UnoGoBot/internal/game"
+	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/mymmrac/telego"
 )
 
@@ -57,30 +58,21 @@ func TestBot_RunAndShutdown(t *testing.T) {
 	// Wait for startup and commands registration
 	time.Sleep(50 * time.Millisecond)
 
-	cmds := mockAPI.GetRegisteredCommands()
-	if len(cmds) != 15 {
-		t.Errorf("expected 15 registered commands, got %d", len(cmds))
-	}
-	foundReset := false
-	foundConfig := false
-	for _, command := range cmds {
-		foundReset = foundReset || command.Command == "reset"
-		foundConfig = foundConfig || command.Command == "config"
-	}
-	if !foundReset {
-		t.Error("reset command was not registered")
-	}
-	if !foundConfig {
-		t.Error("config command was not registered")
-	}
 	registrations := mockAPI.GetCommandRegistrations()
 	if len(registrations) != 3 {
 		t.Fatalf("expected default, private and group command registrations, got %d", len(registrations))
 	}
 	wantByScope := map[string][]string{
-		telego.ScopeTypeDefault:         {"help"},
+		telego.ScopeTypeDefault:         {"start"},
 		telego.ScopeTypeAllPrivateChats: {"start", "help", "ranking", "stats"},
-		telego.ScopeTypeAllGroupChats:   {"novo", "entrar", "trancar", "destrancar", "iniciar", "estado", "ranking", "stats", "sair", "pular", "expulsar", "cancelar", "reset", "config", "help"},
+		telego.ScopeTypeAllGroupChats:   groupCommandNames(groups.CommandsPT),
+	}
+
+	// The global group list uses the Portuguese spelling; the per-chat override
+	// is installed only when an administrator switches the group to English.
+	cmds := mockAPI.GetRegisteredCommands()
+	if len(cmds) != len(wantByScope[telego.ScopeTypeAllGroupChats]) {
+		t.Errorf("expected %d registered commands, got %d", len(wantByScope[telego.ScopeTypeAllGroupChats]), len(cmds))
 	}
 
 	for _, registration := range registrations {

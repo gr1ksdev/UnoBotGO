@@ -23,6 +23,8 @@ type CallbackHandler struct {
 	logger        *slog.Logger
 	groupsService *groups.Service
 	knownUsers    groups.UserRepository
+	languages     *languageCache
+	applyMenu     func(context.Context, game.ChatID, groups.CommandLanguage) error
 }
 
 func (h *CallbackHandler) SetGroupsService(s *groups.Service) {
@@ -70,6 +72,8 @@ func (h *CallbackHandler) HandleCallback(ctx context.Context, cq *telego.Callbac
 	}
 
 	switch {
+	case strings.HasPrefix(data, "start_"):
+		h.handleStartCallback(ctx, cq, strings.TrimPrefix(data, "start_"))
 	case strings.HasPrefix(data, "cfg_"):
 		h.handleConfigCallback(ctx, cq, data)
 	case strings.HasPrefix(data, "view_"):
@@ -85,6 +89,61 @@ func (h *CallbackHandler) HandleCallback(ctx context.Context, cq *telego.Callbac
 	}
 }
 
+// handleStartCallback starts a game from the lobby button. Callbacks already
+// run inside the chat queue, so the mutation is serialized with every other
+// action in that chat.
+func (h *CallbackHandler) handleStartCallback(ctx context.Context, cq *telego.CallbackQuery, gameID string) {
+	answer := func(text string, alert bool) {
+		_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: cq.ID,
+			Text:            text,
+			ShowAlert:       alert,
+		})
+	}
+	if cq.Message == nil || cq.From.ID <= 0 {
+		answer("⚠️ Requisição inválida.", true)
+		return
+	}
+	chatID := game.ChatID(cq.Message.GetChat().ID)
+	view, err := h.service.PublicView(ctx, uno.GameID(gameID))
+	if err != nil || view.ChatID != chatID {
+		answer("⚠️ Partida não encontrada.", true)
+		return
+	}
+	if view.Phase != uno.Lobby {
+		answer("⚠️ A partida já foi iniciada!", true)
+		return
+	}
+	if len(view.Players) < 2 {
+		answer("⚠️ São necessários pelo menos 2 jogadores inscritos para iniciar.", true)
+		return
+	}
+
+	outcome, err := startGame(ctx, h.service, h.bot, uno.PlayerID(cq.From.ID), chatID, view.GameID, view.Revision)
+	if err != nil {
+		switch {
+		case errors.Is(err, uno.ErrStaleRevision):
+			answer("⚠️ A partida mudou. Abra o estado novamente.", true)
+		default:
+			answer("⚠️ Não foi possível iniciar a partida.", true)
+		}
+		return
+	}
+
+	// Replace the lobby message so its button cannot be pressed twice.
+	text := h.renderer.RenderPublicState(outcome.View)
+	if cq.Message != nil {
+		_, _ = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
+			ChatID:      telego.ChatID{ID: int64(chatID)},
+			MessageID:   cq.Message.GetMessageID(),
+			Text:        text,
+			ParseMode:   telego.ModeHTML,
+			ReplyMarkup: makeGameButtons(outcome.View),
+		})
+	}
+	answer("✅ Partida iniciada!", false)
+}
+
 // handleRefreshState re-renders a game message on demand.
 func (h *CallbackHandler) handleRefreshState(ctx context.Context, cq *telego.CallbackQuery, gameID uno.GameID) {
 	view, err := h.service.PublicView(ctx, gameID)
@@ -98,7 +157,7 @@ func (h *CallbackHandler) handleRefreshState(ctx context.Context, cq *telego.Cal
 
 	var text string
 	if view.Phase == uno.Lobby {
-		text = h.renderer.RenderLobby(view)
+		text = h.renderer.RenderLobby(view, h.commandLanguage(ctx, game.ChatID(cq.Message.GetChat().ID)))
 	} else {
 		text = h.renderer.RenderPublicState(view)
 	}
@@ -158,7 +217,7 @@ func (h *CallbackHandler) handleConfigCallback(ctx context.Context, cq *telego.C
 			return
 		}
 		chatIDStr = parts[2]
-	case "rank":
+	case "rank", "lang":
 		if len(parts) != 4 {
 			_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 				CallbackQueryID: cq.ID,
@@ -245,10 +304,10 @@ func (h *CallbackHandler) handleConfigCallback(ctx context.Context, cq *telego.C
 		switch actionArg {
 		case "legacy":
 			targetRank = groups.Legacy
-			rankName = "Legado"
+			rankName = "Vitória"
 		case "updated":
 			targetRank = groups.Updated
-			rankName = "Atualizado"
+			rankName = "Colocação"
 		default:
 			_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
 				CallbackQueryID: cq.ID,
@@ -298,5 +357,58 @@ func (h *CallbackHandler) handleConfigCallback(ctx context.Context, cq *telego.C
 			Text:            fmt.Sprintf("Sistema de ranking alterado para %s.", rankName),
 		})
 
+	case "lang":
+		var target groups.CommandLanguage
+		var label string
+		switch actionArg {
+		case "pt":
+			target, label = groups.CommandsPT, "Português"
+		case "en":
+			target, label = groups.CommandsEN, "English"
+		default:
+			_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+				CallbackQueryID: cq.ID,
+				Text:            "⚠️ Idioma inválido.",
+				ShowAlert:       true,
+			})
+			return
+		}
+
+		cfg, err := svc.SetCommandLanguage(ctx, targetChatID, actorID, target)
+		if errors.Is(err, groups.ErrForbidden) {
+			_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+				CallbackQueryID: cq.ID,
+				Text:            "⚠️ Somente administradores ou quem adicionou o bot pode alterar esta configuração.",
+				ShowAlert:       true,
+			})
+			return
+		}
+		if err != nil {
+			_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+				CallbackQueryID: cq.ID,
+				Text:            "❌ Não foi possível alterar o idioma.",
+				ShowAlert:       true,
+			})
+			return
+		}
+
+		if h.applyMenu != nil {
+			_ = h.applyMenu(ctx, game.ChatID(targetChatID), target)
+		}
+		h.languages.set(game.ChatID(targetChatID), target)
+
+		text := h.renderer.RenderGroupConfig(cfg)
+		buttons := makeGroupConfigButtons(cfg)
+		_, _ = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
+			ChatID:      telego.ChatID{ID: targetChatID},
+			MessageID:   messageID,
+			Text:        text,
+			ParseMode:   telego.ModeHTML,
+			ReplyMarkup: buttons,
+		})
+		_ = h.bot.AnswerCallbackQuery(ctx, &telego.AnswerCallbackQueryParams{
+			CallbackQueryID: cq.ID,
+			Text:            fmt.Sprintf("Idioma dos comandos alterado para %s.", label),
+		})
 	}
 }

@@ -25,7 +25,7 @@ Carlos · fora do ranking
 Os números são ilustrativos. A primeira mensagem usa os pontos calculados pelo
 sistema/snapshot da partida; a segunda lê os totais de `player_group_stats`,
 incluindo participantes históricos ausentes, como Ana. Legacy apresenta inteiros
-(`+1 pt`, `+0 pts`), sem casas artificiais; Updated usa centésimos com vírgula.
+(`+1 pt`, `+0 pts`), sem casas artificiais; Colocação usa centésimos com vírgula.
 Posições históricas são únicas e sequenciais. Scores iguais são desempatados pela
 melhor colocação na última partida elegível de cada jogador, depois pela conclusão
 mais recente e pelo UserID crescente. Não é necessário terem jogado juntos.
@@ -45,7 +45,7 @@ informa indisponibilidade, sem fingir ranking vazio nem refazer pontuação.
 Homologar manualmente antes de publicar:
 
 1. Consultar `/ranking` em grupo vazio, em privado e como membro sem admin.
-2. Concluir duas partidas Updated e conferir resultado separado dos totais acumulados.
+2. Concluir duas partidas Colocação e conferir resultado separado dos totais acumulados.
 3. Conferir histórico de quem não participou da segunda partida e isolamento de outro grupo.
 4. Repetir em grupo Legacy; conferir inteiros, pluralização e posições únicas nos empates, pela última colocação elegível e data de conclusão.
 5. Conferir abandono definitivo como “fora do ranking” e reentrada elegível normal.
@@ -463,6 +463,6 @@ Mantenha uma única instância e nenhum processo local/remoto usando o mesmo tok
 
 ## Endereçamento de comandos em grupos
 
-Comandos em grupos e supergrupos exigem `@username` do bot, com comparação sem distinção de maiúsculas/minúsculas. `/join@SeuBot` é alias de `/entrar@SeuBot`, com as mesmas restrições de entrada. `/reset` também exige destinatário antes de entrar na recovery lane. Comandos sem sufixo ou dirigidos a outro bot são ignorados; callbacks e consultas inline mantêm seu fluxo. No privado, comandos sem sufixo continuam aceitos.
+Comandos em grupos e supergrupos exigem `@username` do bot, com comparação sem distinção de maiúsculas/minúsculas. O idioma é configurado por grupo em `/config`: grupos em português aceitam `/entrar@SeuBot`, grupos em inglês aceitam `/join@SeuBot` — não há aliases cruzados. `/reset` também exige destinatário antes de entrar na recovery lane. Comandos sem sufixo ou dirigidos a outro bot são ignorados; callbacks e consultas inline mantêm seu fluxo. No privado, comandos sem sufixo continuam aceitos.
 
-Novas configurações de grupo usam Clássico e ranking Atualizado. A migration 0008 altera somente o DEFAULT SQL, sem converter grupos existentes nem alterar pontos.
+Novas configurações de grupo passaram a usar ranking Colocação (valor interno `updated`). A migration 0008 alterou somente o DEFAULT SQL, sem converter grupos existentes nem alterar pontos.

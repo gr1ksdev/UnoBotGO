@@ -175,8 +175,21 @@ func TestDepartureUsesExistingPlacementsForRanking(t *testing.T) {
 					t.Fatal("departure placements excluded")
 				}
 			} else {
-				if r.EligibleCount() != 1 || r.ScoringStatus() != ranking.StatusInsufficientPlayers {
-					t.Fatal("N1 awarded")
+				// The sole remaining player receives the top award.
+				if r.EligibleCount() != 1 || r.ScoringStatus() != ranking.StatusScored {
+					t.Fatal("N1 not awarded")
+				}
+				for _, p := range r.Players {
+					if !p.Eligible() {
+						continue
+					}
+					want := ranking.Units(1000)
+					if r.RankingSystem == groups.Legacy {
+						want = 100
+					}
+					if p.Score != want {
+						t.Fatalf("sole remaining player got %d, want %d", p.Score, want)
+					}
 				}
 			}
 		})

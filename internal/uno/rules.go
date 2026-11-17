@@ -40,11 +40,12 @@ func BotRules() Rules {
 	}
 }
 
-// CaseiroRules preserves the homologated bot lifecycle while enabling the
-// V1 responses for accumulated penalties and the house-only hand swap card.
+// CaseiroRules keeps the bot lifecycle and the house-only hand swap card, and
+// allows accumulated penalties to be answered across ranks: +4 on +4, +4 on
+// +2 and +2 of the active colour on +4. A wild still cannot answer a wild
+// outside a pending penalty.
 func CaseiroRules() Rules {
 	r := BotRules()
-	r.StackWildDrawFour = false
 	r.StackWildDrawFourOnTwo = true
 	r.StackDrawTwoOnWildFour = true
 	r.AllowSwapHands = true

@@ -29,8 +29,13 @@ func TestSwapChoiceMenuFiltersTargetsAndProtectsTokens(t *testing.T) {
 	if len(results) != 4 {
 		t.Fatalf("expected two targets, keep hand and private hand summary: %d", len(results))
 	}
+	// "Manter minha mão" is deliberately the first decision.
+	keep := results[0].(*telego.InlineQueryResultArticle)
+	if keep.Title != "➡️ Manter minha mão" {
+		t.Fatalf("keep hand is not first: %+v", keep)
+	}
 	for i, target := range []uno.PlayerID{2, 3} {
-		article, ok := results[i].(*telego.InlineQueryResultArticle)
+		article, ok := results[i+1].(*telego.InlineQueryResultArticle)
 		if !ok {
 			t.Fatalf("unexpected result %T", results[i])
 		}
@@ -58,7 +63,7 @@ func TestSwapChoiceMenuFiltersTargetsAndProtectsTokens(t *testing.T) {
 		t.Fatal(waiting)
 	}
 	confirmation := renderer.RenderActionConfirmation(1, uno.Action{Type: uno.ChoosePlayer, TargetID: 2}, game.Outcome{View: view.Public})
-	if !strings.Contains(confirmation, "selecionou") || !strings.Contains(confirmation, "Bob &lt;&amp;&gt;") {
+	if !strings.Contains(confirmation, "Vez de:") {
 		t.Fatal(confirmation)
 	}
 	if !strings.Contains(renderer.PlayerLink(1, view.Public), "id=1") || !strings.Contains(renderer.PlayerLink(2, view.Public), "id=999") {
@@ -165,7 +170,16 @@ func TestSwapInlineFlowExchangesHandsAndRejectsOldSelection(t *testing.T) {
 	if next != "" || len(results) != 3 {
 		t.Fatal("expected opponent, keep and summary")
 	}
-	choice := results[0].(*telego.InlineQueryResultArticle)
+	var choice *telego.InlineQueryResultArticle
+	for _, result := range results {
+		if article, ok := result.(*telego.InlineQueryResultArticle); ok && strings.HasPrefix(article.Title, "🔄 Trocar com") {
+			choice = article
+			break
+		}
+	}
+	if choice == nil {
+		t.Fatal("missing swap target decision")
+	}
 	oldResults, _ := b.inlineHandler.buildPlayerHandResults(t.Context(), actor, view.GameID, "")
 	oldChoice := oldResults[0].(*telego.InlineQueryResultArticle)
 	b.inlineHandler.HandleChosenInlineResult(t.Context(), &telego.ChosenInlineResult{ResultID: choice.ID, From: telego.User{ID: int64(other)}})

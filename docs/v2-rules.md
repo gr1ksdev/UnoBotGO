@@ -7,22 +7,26 @@ O Caseiro é o único modo do produto. O grupo não guarda mais um modo padrão 
 `BotRules()` para os testes e o simulador; apenas a superfície de produto
 colapsa.
 
-`CaseiroRules()` continua sendo `BotRules()` com quatro ajustes:
+`CaseiroRules()` continua sendo `BotRules()` com três ajustes:
 
-- `StackWildDrawFour = false` — `+4` não responde a outro `+4`;
 - `StackWildDrawFourOnTwo = true` — `+4` responde a `+2` pendente;
 - `StackDrawTwoOnWildFour = true` — `+2` da cor escolhida responde a `+4`;
 - `AllowSwapHands = true` — baralho com 109 cartas.
+
+O empilhamento de `+4` sobre `+4` pendente vem do `BotRules()` e vale
+**independentemente da cor escolhida** antes: dois `+4` acumulam 8 cartas, e o
+`+4` empilhado continua contestável por blefe. Fora de uma penalidade pendente,
+`NoWildOnWild` continua impedindo coringa sobre coringa.
 
 ## Atualização — apresentação e empilhamento Caseiro (2026-09-25)
 
 - O estado público do Telegram indica a direção somente pelas setas entre os
   jogadores. A linha textual `Direção: ...` foi removida por ser redundante.
-- No modo Caseiro, um `+4` não pode responder a outro `+4`. A carta aparece como
-  indisponível enquanto essa penalidade estiver pendente.
+- No modo Caseiro, um `+4` **pode** responder a outro `+4` pendente, qualquer
+  que seja a cor escolhida. A carta só aparece como indisponível se o jogador
+  estiver resolvendo uma escolha de cor.
 - As respostas cruzadas do Caseiro permanecem: `+2 → +4` acumula seis cartas e
   um `+2` da cor escolhida pode responder a um `+4`.
-- O modo Clássico preserva sua configuração vigente de `+4 → +4`.
 
 ## Atualização — Trocar cartas no Caseiro (2026-09-28)
 

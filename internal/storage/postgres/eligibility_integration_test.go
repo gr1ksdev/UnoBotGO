@@ -49,7 +49,7 @@ func TestEligibilityTransaction(t *testing.T) {
 			{"one_abandoned", 7, 1, "completed", []int64{1000, 833, 667, 500, 333, 167, 0}},
 			{"two_abandoned", 6, 2, "completed", []int64{1000, 800, 600, 400, 200, 0}},
 			{"departure", 2, 1, "departure", []int64{1000, 0}},
-			{"single_survivor", 1, 1, "departure", []int64{0}},
+			{"single_survivor", 1, 1, "departure", []int64{1000}},
 			{"no_eligible_players", 0, 2, "departure", nil},
 		} {
 			t.Run(string(system)+"/"+tt.name, func(t *testing.T) {
@@ -73,7 +73,7 @@ func TestEligibilityTransaction(t *testing.T) {
 					}
 				}
 				commit, err := s.RecordCompletedGame(ctx, r)
-				if err != nil || !commit.AlreadyPersisted || commit.Scored != (tt.n >= 2) {
+				if err != nil || !commit.AlreadyPersisted || commit.Scored != (tt.n >= 1) {
 					t.Fatalf("retry %+v %v", commit, err)
 				}
 				var status string
@@ -83,7 +83,7 @@ func TestEligibilityTransaction(t *testing.T) {
 				if err = s.pool.QueryRow(ctx, `SELECT scoring_status,participant_count,policy_version,scored_at FROM completed_games WHERE game_id=$1`, r.GameID).Scan(&status, &count, &policy, &scoredAt); err != nil {
 					t.Fatal(err)
 				}
-				if status != r.ScoringStatus() || count != tt.n+tt.abandoned || policy == nil || *policy != ranking.PlacementPolicyV1 || (scoredAt != nil) != (tt.n >= 2) {
+				if status != r.ScoringStatus() || count != tt.n+tt.abandoned || policy == nil || *policy != ranking.PlacementPolicyV1 || (scoredAt != nil) != (tt.n >= 1) {
 					t.Fatal("audit header inconsistent", status, count, policy, scoredAt)
 				}
 				for _, p := range r.Players {
@@ -97,7 +97,7 @@ func TestEligibilityTransaction(t *testing.T) {
 						want = tt.expected[p.Position-1]
 						if system == groups.Legacy {
 							want = 0
-							if tt.n >= 2 && p.Position < tt.n {
+							if tt.n == 1 || p.Position < tt.n {
 								want = 100
 							}
 						}
@@ -107,7 +107,7 @@ func TestEligibilityTransaction(t *testing.T) {
 					}
 					var scoreTotal, played, wins int64
 					err = s.pool.QueryRow(ctx, `SELECT score_units,completed_games,wins FROM player_group_stats WHERE chat_id=42 AND user_id=$1`, p.UserID).Scan(&scoreTotal, &played, &wins)
-					if !p.Eligible() || tt.n < 2 {
+					if !p.Eligible() || tt.n < 1 {
 						if !errors.Is(err, pgx.ErrNoRows) {
 							t.Fatal("expected no stats for ineligible/no-award result", p, err)
 						}

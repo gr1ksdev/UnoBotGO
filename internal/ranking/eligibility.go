@@ -2,7 +2,8 @@ package ranking
 
 const (
 	// PlacementPolicyV1 counts all and only valid final placements. Late join and
-	// previous leaves/reentries do not affect eligibility. N<2 grants no awards.
+	// previous leaves/reentries do not affect eligibility. A sole remaining
+	// player still receives the top award; N=0 has nobody to award.
 	PlacementPolicyV1         = "completed-placements-v1"
 	StatusNeedsDecision       = "needs_product_decision"
 	StatusScored              = "scored"
@@ -26,13 +27,14 @@ func (r Result) EligibleCount() int {
 	return n
 }
 
-// ScoringStatus is used only after Validate. A selected policy with N<2 records
-// an explicit no-award result; it must not update any accumulated statistics.
+// ScoringStatus is used only after Validate. A selected policy with no eligible
+// players records an explicit no-award result; it must not update any accumulated
+// statistics.
 func (r Result) ScoringStatus() string {
 	if r.PolicyVersion == "" {
 		return StatusNeedsDecision
 	}
-	if r.EligibleCount() < 2 {
+	if r.EligibleCount() < 1 {
 		return StatusInsufficientPlayers
 	}
 	return StatusScored
@@ -55,7 +57,7 @@ func Prepare(result Result) (Result, error) {
 	}
 	r.PolicyVersion = PlacementPolicyV1
 	n := r.EligibleCount()
-	if n >= 2 {
+	if n >= 1 {
 		for i := range r.Players {
 			p := &r.Players[i]
 			if !p.Eligible() {

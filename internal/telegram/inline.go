@@ -526,6 +526,18 @@ func colorSortRank(c uno.Color, r uno.Rank) int {
 func (h *InlineHandler) playerChoiceResults(actorID uno.PlayerID, view game.PlayerGameView) []telego.InlineQueryResult {
 	var results []telego.InlineQueryResult
 	if view.Public.PlayerChooserID == actorID {
+		// Keeping the hand comes first: it is the safe default and should not
+		// be buried after a long list of possible swap targets.
+		token, err := h.tokens.CreateActionToken(actorID, view.Public.GameID, view.Public.ChatID, uno.Action{
+			Type: uno.KeepHand, PlayerID: actorID, Revision: view.Public.Revision,
+		}, h.tokenTTL)
+		if err == nil {
+			results = append(results, &telego.InlineQueryResultArticle{
+				Type: "article", ID: token, Title: "➡️ Manter minha mão",
+				Description:         "Não troca cartas; continue escolhendo a cor",
+				InputMessageContent: &telego.InputTextMessageContent{MessageText: "Mantendo minha mão; vou escolher a cor."},
+			})
+		}
 		for _, player := range view.Public.Players {
 			if !player.Active || player.ID == actorID {
 				continue
@@ -541,16 +553,6 @@ func (h *InlineHandler) playerChoiceResults(actorID uno.PlayerID, view game.Play
 				Type: "article", ID: token, Title: "🔄 Trocar com " + name,
 				Description:         fmt.Sprintf("%d carta(s)", player.CardCount),
 				InputMessageContent: &telego.InputTextMessageContent{MessageText: "Escolhendo " + name + " para trocar cartas."},
-			})
-		}
-		token, err := h.tokens.CreateActionToken(actorID, view.Public.GameID, view.Public.ChatID, uno.Action{
-			Type: uno.KeepHand, PlayerID: actorID, Revision: view.Public.Revision,
-		}, h.tokenTTL)
-		if err == nil {
-			results = append(results, &telego.InlineQueryResultArticle{
-				Type: "article", ID: token, Title: "➡️ Manter minha mão",
-				Description:         "Não troca cartas; continue escolhendo a cor",
-				InputMessageContent: &telego.InputTextMessageContent{MessageText: "Mantendo minha mão; vou escolher a cor."},
 			})
 		}
 	} else {

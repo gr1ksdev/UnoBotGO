@@ -130,13 +130,13 @@ func TestDepartureAndInsufficientEligiblePlayers(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if n < 2 {
+				if n == 0 {
 					if got.ScoringStatus() != StatusInsufficientPlayers {
 						t.Fatal("insufficient result not explicit")
 					}
 					for _, p := range got.Players {
 						if p.Score != 0 {
-							t.Fatal("awarded with N<2")
+							t.Fatal("awarded with no eligible players")
 						}
 					}
 				} else if got.ScoringStatus() != StatusScored {

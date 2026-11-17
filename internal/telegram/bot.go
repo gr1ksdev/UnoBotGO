@@ -51,6 +51,7 @@ type Bot struct {
 	cbHandler        *CallbackHandler
 	inlineHandler    *InlineHandler
 	current          *currentGameTracker
+	languages        *languageCache
 	logger           *slog.Logger
 	usernamePublic   atomic.Value
 	username         string
@@ -65,6 +66,7 @@ type Bot struct {
 func (b *Bot) SetGroupConfigs(repository groups.Repository) {
 	b.groupConfigs = repository
 	b.cmdHandler.groupConfigs = repository
+	b.languages.repo = repository
 	b.updateGroupsService()
 }
 
@@ -117,14 +119,17 @@ func New(api BotAPI, service *game.Service, tokens *TokenStore, renderer *Render
 	if renderer == nil {
 		renderer = NewRenderer(nil)
 	}
-	b := &Bot{api: api, service: service, tokens: tokens, renderer: renderer, logger: logger, transport: TransportConfig{Mode: TransportPolling, ListenAddr: defaultWebhookListenAddr}, dedupe: newUpdateDeduper(time.Now), retrySleep: waitContext, current: newCurrentGameTracker()}
+	b := &Bot{api: api, service: service, tokens: tokens, renderer: renderer, logger: logger, transport: TransportConfig{Mode: TransportPolling, ListenAddr: defaultWebhookListenAddr}, dedupe: newUpdateDeduper(time.Now), retrySleep: waitContext, current: newCurrentGameTracker(), languages: newLanguageCache()}
 	b.inlineHandler = NewInlineHandler(api, service, renderer, tokens, tokenTTL, nil, logger)
 	b.inlineHandler.current = b.current
 	b.dispatcher = NewDispatcher(logger, func(ctx context.Context, q *telego.InlineQuery) { b.inlineHandler.HandleInlineQuery(ctx, q) })
 	b.inlineHandler.dispatcher = b.dispatcher
 	b.cmdHandler = NewCommandHandler(api, service, renderer, tokens, "", logger)
 	b.cmdHandler.current = b.current
+	b.cmdHandler.languages = b.languages
 	b.cbHandler = NewCallbackHandler(api, service, renderer, tokens, logger)
+	b.cbHandler.languages = b.languages
+	b.cbHandler.applyMenu = b.applyCommandMenu
 	return b
 }
 
@@ -156,39 +161,20 @@ func (b *Bot) Run(ctx context.Context) error {
 	return b.runPolling(ctx, cfg)
 }
 func (b *Bot) registerCommands(ctx context.Context) error {
+	// The global group list is Portuguese. Groups configured for English get a
+	// higher-priority per-chat override installed when the admin changes it.
 	registrations := []telego.SetMyCommandsParams{
 		{
-			Commands: []telego.BotCommand{{Command: "help", Description: "Ver comandos e instruções"}},
+			Commands: []telego.BotCommand{{Command: "start", Description: "Conhecer o UnoBotGO"}},
 			Scope:    &telego.BotCommandScopeDefault{Type: telego.ScopeTypeDefault},
 		},
 		{
-			Commands: []telego.BotCommand{
-				{Command: "start", Description: "Conhecer o UnoBotGO"},
-				{Command: "help", Description: "Ver comandos e instruções"},
-				{Command: "ranking", Description: "Ver seus rankings mensais"},
-				{Command: "stats", Description: "Ver suas estatísticas"},
-			},
-			Scope: &telego.BotCommandScopeAllPrivateChats{Type: telego.ScopeTypeAllPrivateChats},
+			Commands: privateCommandList(groups.CommandsPT),
+			Scope:    &telego.BotCommandScopeAllPrivateChats{Type: telego.ScopeTypeAllPrivateChats},
 		},
 		{
-			Commands: []telego.BotCommand{
-				{Command: "novo", Description: "Criar uma nova partida de UNO"},
-				{Command: "entrar", Description: "Entrar na partida de UNO"},
-				{Command: "trancar", Description: "Impede novos jogadores de entrar"},
-				{Command: "destrancar", Description: "Permite novas entradas"},
-				{Command: "iniciar", Description: "Iniciar a partida"},
-				{Command: "estado", Description: "Ver o estado atual da partida"},
-				{Command: "ranking", Description: "Ver o ranking acumulado do grupo"},
-				{Command: "stats", Description: "Ver suas estatísticas no grupo"},
-				{Command: "sair", Description: "Sair da partida em andamento"},
-				{Command: "pular", Description: "Pular o turno do jogador atual"},
-				{Command: "expulsar", Description: "Expulsar um jogador da partida"},
-				{Command: "cancelar", Description: "Cancelar a partida"},
-				{Command: "reset", Description: "Recuperar e limpar o grupo"},
-				{Command: "config", Description: "Configurar o ranking do grupo"},
-				{Command: "help", Description: "Ver comandos e instruções"},
-			},
-			Scope: &telego.BotCommandScopeAllGroupChats{Type: telego.ScopeTypeAllGroupChats},
+			Commands: commandList(groups.CommandsPT),
+			Scope:    &telego.BotCommandScopeAllGroupChats{Type: telego.ScopeTypeAllGroupChats},
 		},
 	}
 	for i := range registrations {
@@ -464,8 +450,7 @@ func (b *Bot) enqueueAutoSkip(candidate game.ExpiredTurn) bool {
 			notify()
 			return
 		}
-		text := "⏱️ O tempo acabou; o turno foi pulado.\n\n" + b.renderer.RenderPublicState(outcome.View)
-		b.cmdHandler.reply(ctx, int64(candidate.ChatID), text, makeGameButtons(outcome.View))
+		b.cmdHandler.reply(ctx, int64(candidate.ChatID), b.renderer.RenderTurn(outcome.View), makeGameButtons(outcome.View))
 	})
 }
 func (b *Bot) submitUpdate(ctx context.Context, update telego.Update) bool {

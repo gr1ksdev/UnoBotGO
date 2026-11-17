@@ -34,6 +34,7 @@ type mockBotAPI struct {
 	AnsweredCallbacks    []telego.AnswerCallbackQueryParams
 	RegisteredCommands   []telego.BotCommand
 	CommandRegistrations []telego.SetMyCommandsParams
+	DeletedCommandScopes []telego.BotCommandScope
 	SentMessageSignal    chan struct{}
 
 	UpdatesChan chan telego.Update
@@ -112,6 +113,13 @@ func (m *mockBotAPI) SetMyCommands(ctx context.Context, params *telego.SetMyComm
 		m.RegisteredCommands = params.Commands
 		m.CommandRegistrations = append(m.CommandRegistrations, *params)
 	}
+	return m.CommandsErr
+}
+
+func (m *mockBotAPI) DeleteMyCommands(ctx context.Context, params *telego.DeleteMyCommandsParams) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.DeletedCommandScopes = append(m.DeletedCommandScopes, params.Scope)
 	return m.CommandsErr
 }
 

@@ -248,7 +248,7 @@ func TestCommandHandler_FiltersAndAliases(t *testing.T) {
 	cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: -1002, Type: "supergroup"},
 		From: &telego.User{ID: 1, FirstName: "User"},
-		Text: "/kill@unobot",
+		Text: "/cancelar@unobot",
 	})
 	if !strings.Contains(mockAPI.LastSentMessage(), "Partida cancelada") {
 		t.Fatalf("expected /kill to act as cancel alias, got: %s", mockAPI.LastSentMessage())
@@ -286,7 +286,7 @@ func TestCommandHandler_PrivateStartAndHelp(t *testing.T) {
 		t.Fatalf("expected one welcome message, got %d", len(mockAPI.SentMessages))
 	}
 	welcome := mockAPI.SentMessages[0]
-	if !strings.Contains(welcome.Text, "Bem-vindo ao UnoBotGO") || !strings.Contains(welcome.Text, "/help") {
+	if !strings.Contains(welcome.Text, "Bem-vindo ao UnoBotGO") || !strings.Contains(welcome.Text, "/ajuda") {
 		t.Fatalf("unexpected welcome text: %s", welcome.Text)
 	}
 	for _, forbidden := range []string{"V2", "Golang", "desenvolvida em Go"} {
@@ -303,7 +303,7 @@ func TestCommandHandler_PrivateStartAndHelp(t *testing.T) {
 		t.Fatalf("unexpected add-to-group button: %#v", button)
 	}
 
-	handler.HandleMessage(t.Context(), &telego.Message{Chat: private, From: user, Text: "/help"})
+	handler.HandleMessage(t.Context(), &telego.Message{Chat: private, From: user, Text: "/ajuda"})
 	if len(mockAPI.SentMessages) != 2 {
 		t.Fatalf("expected help response, got %d messages", len(mockAPI.SentMessages))
 	}
@@ -847,7 +847,7 @@ func TestCancelGameByAdminAndCreator(t *testing.T) {
 	cmdHandler.HandleMessage(ctx, &telego.Message{
 		Chat: telego.Chat{ID: chatID2, Type: "supergroup", Title: "UNO Creator Test"},
 		From: &telego.User{ID: 10, FirstName: "CreatorAlice"},
-		Text: "/kill@unobot",
+		Text: "/cancelar@unobot",
 	})
 	lastMsg = mockAPI.LastSentMessage()
 	if !strings.Contains(lastMsg, "Partida cancelada pelo responsável") {

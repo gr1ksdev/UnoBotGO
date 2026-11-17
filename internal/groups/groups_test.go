@@ -17,6 +17,14 @@ func (r *memoryRepo) SetRankingSystem(_ context.Context, _ int64, s RankingSyste
 	r.c.RankingSystem = s
 	return r.c, nil
 }
+func (r *memoryRepo) SetCommandLanguage(_ context.Context, _ int64, lang CommandLanguage) (Config, error) {
+	r.writes++
+	r.c.CommandLanguage = lang
+	return r.c, nil
+}
+func (r *memoryRepo) ReadCommandLanguage(context.Context, int64) (CommandLanguage, error) {
+	return r.c.CommandLanguage, nil
+}
 func (r *memoryRepo) SetInstalledBy(_ context.Context, _ int64, installerID int64) (Config, error) {
 	r.writes++
 	r.c.InstalledByUserID = &installerID
@@ -76,9 +84,40 @@ func TestRecordInstallation(t *testing.T) {
 	}
 }
 
-func TestNewGroupsDefaultToUpdated(t *testing.T) {
+func TestNewGroupsDefaultToUpdatedAndPortuguese(t *testing.T) {
 	c := Defaults(123)
-	if c.RankingSystem != Updated || c.Revision != 1 {
+	if c.RankingSystem != Updated || c.Revision != 1 || c.CommandLanguage != CommandsPT {
 		t.Fatalf("incorrect new group defaults: %+v", c)
+	}
+}
+
+func TestSetCommandLanguageAuthorization(t *testing.T) {
+	installer := int64(7)
+	for _, tt := range []struct {
+		name  string
+		id    int64
+		role  Membership
+		allow bool
+	}{
+		{"admin", 8, Membership{Admin: true, Member: true}, true},
+		{"installer member", 7, Membership{Member: true}, true},
+		{"installer left", 7, Membership{}, false},
+		{"ordinary member", 8, Membership{Member: true}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &memoryRepo{c: Defaults(42)}
+			r.c.InstalledByUserID = &installer
+			s := Service{Repository: r, LookupMembership: func(context.Context, int64, int64) (Membership, error) { return tt.role, nil }}
+			_, err := s.SetCommandLanguage(t.Context(), 42, tt.id, CommandsEN)
+			if (err == nil) != tt.allow {
+				t.Fatalf("allow %t got %v", tt.allow, err)
+			}
+			if tt.allow && r.c.CommandLanguage != CommandsEN {
+				t.Fatal("language not persisted")
+			}
+		})
+	}
+	if _, err := (Service{Repository: &memoryRepo{}}).SetCommandLanguage(t.Context(), 42, 1, "xx"); !errors.Is(err, ErrInvalid) {
+		t.Fatal("invalid language accepted")
 	}
 }
