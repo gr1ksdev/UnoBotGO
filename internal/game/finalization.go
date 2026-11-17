@@ -8,26 +8,6 @@ import (
 	"time"
 )
 
-// Subscribe coalesces invalidations. Every subscriber recovers an authoritative
-// projection, so missed/coalesced events cannot lose state or reveal hidden hands.
-func (s *Service) Subscribe() (<-chan struct{}, func()) {
-	ch := make(chan struct{}, 1)
-	s.manager.indexMu.Lock()
-	s.manager.subscribers[ch] = struct{}{}
-	s.manager.indexMu.Unlock()
-	return ch, func() { s.manager.indexMu.Lock(); delete(s.manager.subscribers, ch); s.manager.indexMu.Unlock() }
-}
-func (s *Service) Signal() {
-	s.manager.indexMu.RLock()
-	defer s.manager.indexMu.RUnlock()
-	for ch := range s.manager.subscribers {
-		select {
-		case ch <- struct{}{}:
-		default:
-		}
-	}
-}
-
 type Finalizer struct {
 	Service    *Service
 	Repository ranking.Repository
@@ -58,7 +38,6 @@ func (f *Finalizer) Commit(ctx context.Context, input ranking.Result) (ranking.C
 		return commit, err
 	}
 	f.Service.AcknowledgeResult(uno.GameID(result.GameID))
-	f.Service.Signal()
 	if commit.Scored && !commit.AlreadyPersisted && f.Notify != nil {
 		f.Notify(ctx, result)
 	}

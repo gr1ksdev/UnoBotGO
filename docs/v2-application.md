@@ -61,10 +61,9 @@ notificação: esse padrão permitiria anunciar um turno antigo após a vitória
 Candidatos duplicados, antigos, cancelados, de jogos removidos ou de um jogo
 anterior no mesmo chat não alteram o estado. Saturação da fila não aplica a ação.
 
-`AutoSkipExpired(ctx, timeout)` permanece como wrapper síncrono das duas operações
-para consumidores sem fila. O bot usa as operações separadas. Leituras de runtime,
-`final` e prazo usam exclusivamente o mutex da partida; `indexMu` só protege os
-índices e a cópia de referências.
+O wrapper síncrono `AutoSkipExpired` foi removido na v3: não há mais
+consumidores sem fila. Leituras de runtime, `final` e prazo usam exclusivamente
+o mutex da partida; `indexMu` só protege os índices e a cópia de referências.
 
 Regras de cartas preservadas: o Clássico do Telegram usa `BotRules` (placements e
 stacking de +2), enquanto `ClassicRules` da engine usa primeiro vencedor. Wild/+4

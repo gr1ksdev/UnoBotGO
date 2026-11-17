@@ -2,7 +2,6 @@ package game
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"time"
 
@@ -89,17 +88,6 @@ func (s *Service) Create(ctx context.Context, actor Actor, req CreateRequest) (O
 }
 
 func (s *Service) Apply(ctx context.Context, actor Actor, id uno.GameID, action uno.Action) (Outcome, error) {
-	return s.apply(ctx, actor, id, action, "")
-}
-
-// ApplyWeb is the authenticated adapter entry. Receipts are checked under the game lock.
-func (s *Service) ApplyWeb(ctx context.Context, actor Actor, id uno.GameID, action uno.Action, requestID string) (Outcome, error) {
-	if len(requestID) < 8 || len(requestID) > 128 {
-		return Outcome{}, ErrInvalidArgument
-	}
-	return s.apply(ctx, actor, id, action, requestID)
-}
-func (s *Service) apply(ctx context.Context, actor Actor, id uno.GameID, action uno.Action, requestID string) (Outcome, error) {
 	if err := checkContext(ctx); err != nil {
 		return Outcome{}, err
 	}
@@ -114,19 +102,6 @@ func (s *Service) apply(ctx context.Context, actor Actor, id uno.GameID, action 
 		return Outcome{}, err
 	}
 	defer entry.mu.Unlock()
-	requested := action
-	if requestID != "" {
-		key := receiptKey{actor.PlayerID, requestID}
-		if receipt, ok := entry.receipts[key]; ok {
-			if receipt.action != action {
-				return Outcome{}, ErrInvalidArgument
-			}
-			return Outcome{View: receipt.view.clone()}, nil
-		}
-		if len(entry.receipts) >= 8192 {
-			return Outcome{}, ErrInvalidArgument
-		}
-	}
 	if entry.final != nil {
 		return Outcome{}, ErrGameClosed
 	}
@@ -163,23 +138,11 @@ func (s *Service) apply(ctx context.Context, actor Actor, id uno.GameID, action 
 	if err := ctx.Err(); err != nil {
 		return Outcome{}, err
 	}
-	var result uno.Result
-	if requestID != "" {
-		result, err = entry.engine.ApplyWeb(action)
-	} else {
-		result, err = entry.engine.Apply(action)
-	}
+	result, err := entry.engine.Apply(action)
 	if err != nil {
 		return Outcome{}, err
 	}
-	outcome := s.manager.publish(entry, before, entry.engine.Snapshot(), result)
-	if requestID != "" {
-		if entry.receipts == nil {
-			entry.receipts = make(map[receiptKey]actionReceipt)
-		}
-		entry.receipts[receiptKey{actor.PlayerID, requestID}] = actionReceipt{requested, outcome.View.clone()}
-	}
-	return outcome, nil
+	return s.manager.publish(entry, before, entry.engine.Snapshot(), result), nil
 }
 
 // Pure application checks, executed while the entry is locked. No role lookup I/O.
@@ -194,10 +157,6 @@ func authorize(entry *managedGame, actor Actor, kind uno.ActionType) error {
 		}
 	case uno.CancelGame:
 		if actor.ChatID == 0 || (!actor.ChatAdmin && actor.PlayerID != entry.ownerID && actor.PlayerID != entry.creatorID) {
-			return ErrForbidden
-		}
-	case uno.SetRules:
-		if actor.ChatID == 0 || actor.PlayerID != entry.ownerID {
 			return ErrForbidden
 		}
 	case uno.PlayCard, uno.DrawCard, uno.PassTurn, uno.ChooseColor, uno.ChoosePlayer, uno.KeepHand, uno.CallBluff:
@@ -227,14 +186,7 @@ func (s *Service) PublicView(ctx context.Context, id uno.GameID) (PublicGameView
 	}
 	defer entry.mu.Unlock()
 	if entry.final != nil {
-		v := entry.final.clone()
-		if v.Rematch != nil {
-			s.manager.indexMu.RLock()
-			_, pending := s.manager.pendingResults[id]
-			s.manager.indexMu.RUnlock()
-			v.Rematch.Ready = !pending
-		}
-		return v, nil
+		return entry.final.clone(), nil
 	}
 	return publicView(entry, entry.engine.Snapshot()), nil
 }
@@ -309,46 +261,6 @@ func (s *Service) AutoSkipTurn(ctx context.Context, candidate ExpiredTurn, timeo
 		return Outcome{}, false
 	}
 	return s.manager.skipTurn(ctx, candidate, timeout, time.Now())
-}
-
-// AutoSkipExpired is the synchronous scheduler API. Adapters with chat queues
-// use ExpiredTurns and AutoSkipTurn to serialize mutation AND notification.
-func (s *Service) AutoSkipExpired(ctx context.Context, timeout time.Duration) []Outcome {
-	var outcomes []Outcome
-	for _, candidate := range s.ExpiredTurns(ctx, timeout) {
-		if outcome, applied := s.AutoSkipTurn(ctx, candidate, timeout); applied {
-			outcomes = append(outcomes, outcome)
-		}
-	}
-	return outcomes
-}
-
-// SetRules updates the game rules during the lobby phase.
-func (s *Service) SetRules(ctx context.Context, actor Actor, id uno.GameID, rules uno.Rules) (Outcome, error) {
-	if err := checkContext(ctx); err != nil {
-		return Outcome{}, err
-	}
-	if actor.PlayerID <= 0 || id == "" {
-		return Outcome{}, ErrInvalidArgument
-	}
-	view, err := s.PublicView(ctx, id)
-	if err != nil {
-		return Outcome{}, err
-	}
-	action := uno.Action{
-		Type:     uno.SetRules,
-		PlayerID: actor.PlayerID,
-		Revision: view.Revision,
-		Rules:    rules,
-	}
-	outcome, err := s.Apply(ctx, actor, id, action)
-	if errors.Is(err, uno.ErrStaleRevision) {
-		if freshView, freshErr := s.PublicView(ctx, id); freshErr == nil {
-			action.Revision = freshView.Revision
-			outcome, err = s.Apply(ctx, actor, id, action)
-		}
-	}
-	return outcome, err
 }
 
 // ResetChat is an administrative recovery operation. It removes all active and

@@ -104,10 +104,10 @@ func TestAutomaticPendingRetry(t *testing.T) {
 	}
 }
 
-func TestWebAppNormalTwoPlayerFinishAndFinalActionRetry(t *testing.T) {
+func TestNormalTwoPlayerFinishAndFinalResult(t *testing.T) {
 	s, v := rankingGame(t, 2)
 	joinView, _ := s.PublicView(t.Context(), v.GameID)
-	if _, err := s.ApplyWeb(t.Context(), Actor{PlayerID: 1, ChatID: 42}, v.GameID, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: joinView.Revision}, "web-start-action"); err != nil {
+	if _, err := s.Apply(t.Context(), Actor{PlayerID: 1, ChatID: 42}, v.GameID, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: joinView.Revision}); err != nil {
 		t.Fatal(err)
 	}
 	for turn := 0; turn < 100; turn++ {
@@ -121,8 +121,7 @@ func TestWebAppNormalTwoPlayerFinishAndFinalActionRetry(t *testing.T) {
 			t.Fatal(err)
 		}
 		action := uno.Action{Type: uno.PlayCard, PlayerID: actor.PlayerID, Revision: view.Revision, CardID: hand.Hand[0].Card.ID}
-		request := string(action.CardID) + "-web-action"
-		out, err := s.ApplyWeb(t.Context(), actor, v.GameID, action, request)
+		out, err := s.Apply(t.Context(), actor, v.GameID, action)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -139,12 +138,8 @@ func TestWebAppNormalTwoPlayerFinishAndFinalActionRetry(t *testing.T) {
 		for _, player := range prepared.Players {
 			expected, err := ranking.Score(prepared.RankingSystem, 2, player.Position)
 			if err != nil || player.Score != expected {
-				t.Fatal("WebApp policy differs from Inline", prepared)
+				t.Fatal("score policy differs from Inline", prepared)
 			}
-		}
-		retry, err := s.ApplyWeb(t.Context(), actor, v.GameID, action, request)
-		if err != nil || !retry.View.Closed || retry.Completed != nil || len(s.PendingResults()) != 1 {
-			t.Fatal("final action retry duplicated result", err, retry)
 		}
 		return
 	}

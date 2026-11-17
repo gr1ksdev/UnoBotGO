@@ -70,17 +70,10 @@ func (g *Game) Snapshot() State { return g.state.clone() }
 // Apply commits exactly one revision after a successful, fully validated action.
 // Rejected actions return a zero Result and leave the entire state untouched.
 func (g *Game) Apply(a Action) (Result, error) {
-	return g.apply(a, false)
+	return g.apply(a)
 }
 
-// ApplyWeb applies an authenticated Mini App action. A manual draw that leaves
-// the player with no engine-legal card also advances the turn in this same
-// revision. Telegram actions continue to use Apply and retain their controls.
-func (g *Game) ApplyWeb(a Action) (Result, error) {
-	return g.apply(a, true)
-}
-
-func (g *Game) apply(a Action, autoPassAfterDraw bool) (Result, error) {
+func (g *Game) apply(a Action) (Result, error) {
 	if g.state.Phase == Finished {
 		return Result{}, ErrGameFinished
 	}
@@ -118,7 +111,7 @@ func (g *Game) apply(a Action, autoPassAfterDraw bool) (Result, error) {
 	case SetRules:
 		err = g.setRules(&s, a, &events)
 	default:
-		err = g.takeAction(&s, a, &events, autoPassAfterDraw)
+		err = g.takeAction(&s, a, &events)
 	}
 	if err != nil {
 		return Result{}, err
@@ -335,7 +328,7 @@ func (g *Game) start(s *State, dealer PlayerID, events *[]Event) error {
 	return nil
 }
 
-func (g *Game) takeAction(s *State, a Action, events *[]Event, autoPassAfterDraw bool) error {
+func (g *Game) takeAction(s *State, a Action, events *[]Event) error {
 	if s.Phase == Lobby {
 		return ErrGameNotStarted
 	}
@@ -418,9 +411,6 @@ func (g *Game) takeAction(s *State, a Action, events *[]Event, autoPassAfterDraw
 			p.Hand = append(p.Hand, cards...)
 			s.DrawCounter = 0
 			*events = append(*events, Event{Type: CardsDrawn, PlayerID: p.ID, Count: count})
-			if autoPassAfterDraw {
-				*events = append(*events, Event{Type: PlayerSkipped, PlayerID: p.ID})
-			}
 			changeTurn(s, s.next(p.ID, 1), events)
 			return nil
 		}
@@ -432,11 +422,6 @@ func (g *Game) takeAction(s *State, a Action, events *[]Event, autoPassAfterDraw
 		p.Hand = append(p.Hand, cards...)
 		s.DrawnCardID = cards[0]
 		*events = append(*events, Event{Type: CardsDrawn, PlayerID: p.ID, Count: 1})
-		if autoPassAfterDraw {
-			*events = append(*events, Event{Type: PlayerSkipped, PlayerID: p.ID})
-			changeTurn(s, s.next(p.ID, 1), events)
-			return nil
-		}
 		if !s.Rules.FreePlayAfterDraw && playable(s, p.ID, cards[0]) != nil {
 			changeTurn(s, s.next(p.ID, 1), events)
 			return nil

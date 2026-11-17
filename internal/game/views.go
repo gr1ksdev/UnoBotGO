@@ -34,16 +34,7 @@ type ConfirmedEvent struct {
 	Event    uno.Event
 }
 
-type RematchView struct {
-	Revision   uint64
-	Required   []uno.PlayerID
-	Accepted   []uno.PlayerID
-	NextGameID uno.GameID
-	Ready      bool
-}
-
 type PublicGameView struct {
-	Rematch         *RematchView
 	Events          []ConfirmedEvent
 	TurnStarted     time.Time
 	GroupConfig     groups.Snapshot
@@ -96,12 +87,6 @@ type GameSummary struct {
 }
 
 func (v PublicGameView) clone() PublicGameView {
-	if v.Rematch != nil {
-		r := *v.Rematch
-		r.Required = slices.Clone(r.Required)
-		r.Accepted = slices.Clone(r.Accepted)
-		v.Rematch = &r
-	}
 	v.Events = slices.Clone(v.Events)
 	v.Players = slices.Clone(v.Players)
 	v.Order = slices.Clone(v.Order)

@@ -18,7 +18,6 @@ import (
 // for entry.mu. No engine operation, ID generation, factory or I/O under indexMu.
 type manager struct {
 	indexMu        sync.RWMutex
-	subscribers    map[chan struct{}]struct{}
 	pendingResults map[uno.GameID]ranking.Result
 	byID           map[uno.GameID]indexRecord
 	byChat         map[ChatID]uno.GameID
@@ -34,37 +33,26 @@ type indexRecord struct {
 	summary GameSummary // accessed only under indexMu
 }
 
-type receiptKey struct {
-	player  uno.PlayerID
-	request string
-}
-type actionReceipt struct {
-	action uno.Action
-	view   PublicGameView
-}
 type managedGame struct {
-	rematchVotes    map[uno.PlayerID]bool
-	rematchReceipts map[receiptKey]bool
-	events          []ConfirmedEvent
-	receipts        map[receiptKey]actionReceipt
-	mu              sync.Mutex
-	startedAt       time.Time
-	participants    map[uno.PlayerID]participantHistory
-	engine          *uno.Game // unique runtime owner; nil once closed
-	chatID          ChatID
-	chatName        string
-	creatorID       uno.PlayerID
-	ownerID         uno.PlayerID
-	groupConfig     groups.Snapshot
-	locked          bool // session admission policy, guarded by mu
-	turnStarted     time.Time
-	final           *PublicGameView // public projection only, accessed under mu
-	reset           bool
+	events       []ConfirmedEvent
+	mu           sync.Mutex
+	startedAt    time.Time
+	participants map[uno.PlayerID]participantHistory
+	engine       *uno.Game // unique runtime owner; nil once closed
+	chatID       ChatID
+	chatName     string
+	creatorID    uno.PlayerID
+	ownerID      uno.PlayerID
+	groupConfig  groups.Snapshot
+	locked       bool // session admission policy, guarded by mu
+	turnStarted  time.Time
+	final        *PublicGameView // public projection only, accessed under mu
+	reset        bool
 }
 
 func newManager(limit int) *manager {
 	return &manager{
-		subscribers: make(map[chan struct{}]struct{}), pendingResults: make(map[uno.GameID]ranking.Result), byID: make(map[uno.GameID]indexRecord), byChat: make(map[ChatID]uno.GameID),
+		pendingResults: make(map[uno.GameID]ranking.Result), byID: make(map[uno.GameID]indexRecord), byChat: make(map[ChatID]uno.GameID),
 		byPlayer: make(map[uno.PlayerID]map[uno.GameID]struct{}), historyLimit: limit,
 		newID:   randomID,
 		newGame: func(id uno.GameID, rules uno.Rules) (*uno.Game, error) { return uno.NewGame(id, rules) },
@@ -208,13 +196,6 @@ func (m *manager) create(ctx context.Context, actor Actor, req CreateRequest) (O
 		m.indexMu.Unlock()
 		oldEntry.mu.Unlock()
 
-		for ch := range m.subscribers {
-			select {
-			case ch <- struct{}{}:
-			default:
-			}
-		}
-
 		return Outcome{View: view, ReplacedGameID: activeID}, nil
 	}
 }
@@ -260,12 +241,6 @@ func (m *manager) publish(entry *managedGame, before, after uno.State, result un
 	view := publicView(entry, after)
 	completed := finalResult(entry, after)
 	if view.Closed {
-		if view.CloseReason != Cancelled && len(view.Players) >= 2 {
-			view.Rematch = &RematchView{}
-			for _, p := range view.Players {
-				view.Rematch.Required = append(view.Rematch.Required, p.ID)
-			}
-		}
 		final := view.clone()
 		entry.final = &final
 		entry.engine = nil // discard hands and full runtime on closure
@@ -304,12 +279,6 @@ func (m *manager) publish(entry *managedGame, before, after uno.State, result un
 		if len(m.history) > m.historyLimit {
 			delete(m.byID, m.history[0])
 			m.history = slices.Delete(m.history, 0, 1)
-		}
-	}
-	for ch := range m.subscribers {
-		select {
-		case ch <- struct{}{}:
-		default:
 		}
 	}
 	return Outcome{View: view, Events: slices.Clone(result.Events), Completed: completed}

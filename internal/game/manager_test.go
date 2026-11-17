@@ -11,7 +11,7 @@ import (
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
 
-func TestAutoSkipExpiredTurn(t *testing.T) {
+func TestExpiredTurnAdvance(t *testing.T) {
 	s := testService(t)
 	v := create(t, s, 77, 99, uno.BotRules())
 	join(t, s, v, 1)
@@ -22,9 +22,13 @@ func TestAutoSkipExpiredTurn(t *testing.T) {
 	current := e.engine.Snapshot().CurrentPlayerID
 	e.turnStarted = time.Now().Add(-time.Minute)
 	e.mu.Unlock()
-	outs := s.AutoSkipExpired(t.Context(), time.Second)
-	if len(outs) != 1 || outs[0].View.CurrentTurn == current {
-		t.Fatalf("expected expired turn to advance: %+v", outs)
+	candidates := s.ExpiredTurns(t.Context(), time.Second)
+	if len(candidates) != 1 || candidates[0].PlayerID != current {
+		t.Fatalf("expected one expired candidate: %+v", candidates)
+	}
+	out, applied := s.AutoSkipTurn(t.Context(), candidates[0], time.Second)
+	if !applied || out.View.CurrentTurn == current {
+		t.Fatalf("expected expired turn to advance: %+v", out)
 	}
 }
 
@@ -241,7 +245,7 @@ func TestTerminalGameHasNoTimeout(t *testing.T) {
 					t.Fatal("last remaining placement")
 				}
 				assertIndexes(t, s)
-				if len(s.ExpiredTurns(t.Context(), time.Nanosecond)) != 0 || len(s.AutoSkipExpired(t.Context(), time.Nanosecond)) != 0 {
+				if len(s.ExpiredTurns(t.Context(), time.Nanosecond)) != 0 {
 					t.Fatal("finished game scheduled")
 				}
 				if _, applied := s.AutoSkipTurn(t.Context(), candidate, time.Nanosecond); applied {
