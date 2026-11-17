@@ -14,25 +14,26 @@ import (
 )
 
 var (
-	ErrMissingDatabaseURL   = errors.New("config: DATABASE_URL is required")
-	ErrMissingToken         = errors.New("config: TOKEN environment variable is required")
-	ErrInvalidToken         = errors.New("config: invalid Telegram bot token format")
-	ErrInvalidTurnTimeout   = errors.New("config: TURN_TIMEOUT must be a positive duration")
-	ErrInvalidTelegramMode  = errors.New("config: TELEGRAM_MODE must be polling or webhook")
-	ErrMissingWebhookURL    = errors.New("config: WEBHOOK_URL is required in webhook mode")
-	ErrInvalidWebhookURL    = errors.New("config: WEBHOOK_URL must be an HTTPS URL with a host and a dedicated path, e.g. /telegram")
-	ErrInvalidMiniAppSecret = errors.New("config: MINIAPP_SECRET must be base64 encoding of exactly 32 random bytes")
-	tokenRegex              = regexp.MustCompile(`^[0-9]{3,}:[a-zA-Z0-9_-]{10,}$`)
+	ErrMissingDatabaseURL  = errors.New("config: DATABASE_URL is required")
+	ErrMissingToken        = errors.New("config: TOKEN environment variable is required")
+	ErrInvalidToken        = errors.New("config: invalid Telegram bot token format")
+	ErrInvalidTurnTimeout  = errors.New("config: TURN_TIMEOUT must be a positive duration")
+	ErrInvalidTelegramMode = errors.New("config: TELEGRAM_MODE must be polling or webhook")
+	ErrMissingWebhookURL   = errors.New("config: WEBHOOK_URL is required in webhook mode")
+	ErrInvalidWebhookURL   = errors.New("config: WEBHOOK_URL must be an HTTPS URL with a host and a dedicated path, e.g. /telegram")
+	ErrInvalidSecretKey    = errors.New("config: SECRET_KEY must be base64 encoding of exactly 32 random bytes")
+	ErrMissingSecretKey    = errors.New("config: SECRET_KEY is required in webhook mode")
+	tokenRegex             = regexp.MustCompile(`^[0-9]{3,}:[a-zA-Z0-9_-]{10,}$`)
 )
 
 type Config struct {
-	Token         string
-	TelegramMode  string
-	DatabaseURL   string
-	TurnTimeout   time.Duration
-	WebAddr       string
-	MiniAppSecret []byte
-	WebhookURL    string // Required only when TelegramMode is webhook.
+	Token        string
+	TelegramMode string
+	DatabaseURL  string
+	TurnTimeout  time.Duration
+	WebAddr      string
+	SecretKey    []byte // Required only when TelegramMode is webhook.
+	WebhookURL   string // Required only when TelegramMode is webhook.
 }
 
 // Load reads .env without overriding existing environment variables.
@@ -69,14 +70,18 @@ func LoadFromLookup(lookup func(string) (string, bool)) (*Config, error) {
 	if v := value("WEB_ADDR"); v != "" {
 		cfg.WebAddr = v
 	}
-	// Preserve the existing Base64 format; do not accept larger keys or alternate encodings.
-	raw, _ := lookup("MINIAPP_SECRET")
-	key, err := base64.StdEncoding.DecodeString(raw)
-	if err != nil || len(key) != 32 {
-		return nil, ErrInvalidMiniAppSecret
-	}
-	cfg.MiniAppSecret = key
 	if cfg.TelegramMode == "webhook" {
+		// Preserve the existing Base64 format; do not accept larger keys or
+		// alternate encodings. The key is only needed by the webhook.
+		raw, _ := lookup("SECRET_KEY")
+		if strings.TrimSpace(raw) == "" {
+			return nil, ErrMissingSecretKey
+		}
+		key, err := base64.StdEncoding.DecodeString(raw)
+		if err != nil || len(key) != 32 {
+			return nil, ErrInvalidSecretKey
+		}
+		cfg.SecretKey = key
 		cfg.WebhookURL = value("WEBHOOK_URL")
 		if cfg.WebhookURL == "" {
 			return nil, ErrMissingWebhookURL
@@ -86,7 +91,7 @@ func LoadFromLookup(lookup func(string) (string, bool)) (*Config, error) {
 			return nil, ErrInvalidWebhookURL
 		}
 		path := u.Path
-		if path == "" || path == "/" || strings.HasPrefix(path, "/api") || strings.HasPrefix(path, "/assets") || path == "/healthz" || path == "/readyz" {
+		if path == "" || path == "/" || path == "/healthz" || path == "/readyz" {
 			return nil, ErrInvalidWebhookURL
 		}
 	}

@@ -46,7 +46,7 @@ func TestDerivedWebhookSecret(t *testing.T) {
 func TestDeriveWebhookSecretRejectsWrongKeySize(t *testing.T) {
 	for _, size := range []int{0, 31, 33, 64} {
 		got, err := DeriveWebhookSecret(make([]byte, size))
-		if got != "" || !errors.Is(err, ErrInvalidMiniAppSecret) {
+		if got != "" || !errors.Is(err, ErrInvalidSecretKey) {
 			t.Fatal("invalid master key accepted", size)
 		}
 	}

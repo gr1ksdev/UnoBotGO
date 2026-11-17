@@ -47,7 +47,7 @@ func Initialize(ctx context.Context, m Migrator, start func(context.Context) err
 func Run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 	webhookSecret := ""
 	if cfg.TelegramMode == "webhook" {
-		secret, err := config.DeriveWebhookSecret(cfg.MiniAppSecret)
+		secret, err := config.DeriveWebhookSecret(cfg.SecretKey)
 		if err != nil {
 			return err
 		}

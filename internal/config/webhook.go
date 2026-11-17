@@ -7,15 +7,15 @@ import (
 )
 
 // This versioned protocol context separates the webhook authenticator from
-// AES-GCM references, cursor signing and every other use of MINIAPP_SECRET.
+// any future use of SECRET_KEY.
 const webhookSecretContext = "unobotgo/v2/telegram-webhook-secret/v1"
 
 // DeriveWebhookSecret returns a 43-character [A-Za-z0-9_-] authenticator,
 // compatible with Telegram secret_token. The master key is never sent to Telegram.
-// Rotating MINIAPP_SECRET rotates this value; startup setWebhook installs it.
+// Rotating SECRET_KEY rotates this value; startup setWebhook installs it.
 func DeriveWebhookSecret(master []byte) (string, error) {
 	if len(master) != 32 {
-		return "", ErrInvalidMiniAppSecret
+		return "", ErrInvalidSecretKey
 	}
 	mac := hmac.New(sha256.New, master)
 	_, _ = mac.Write([]byte(webhookSecretContext))

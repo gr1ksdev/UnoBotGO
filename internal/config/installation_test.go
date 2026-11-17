@@ -15,7 +15,7 @@ import (
 )
 
 func installationEnv() map[string]string {
-	return map[string]string{"TOKEN": "123456789:abcdefghij", "DATABASE_URL": "postgres://localhost/unobot_test", "MINIAPP_SECRET": base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32))}
+	return map[string]string{"TOKEN": "123456789:abcdefghij", "DATABASE_URL": "postgres://localhost/unobot_test"}
 }
 func loadInstallationEnv(env map[string]string) (*Config, error) {
 	return LoadFromLookup(func(k string) (string, bool) { v, ok := env[k]; return v, ok })
@@ -48,7 +48,7 @@ func TestMandatoryConfig(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		want error
-	}{{"TOKEN", ErrMissingToken}, {"DATABASE_URL", ErrMissingDatabaseURL}, {"MINIAPP_SECRET", ErrInvalidMiniAppSecret}} {
+	}{{"TOKEN", ErrMissingToken}, {"DATABASE_URL", ErrMissingDatabaseURL}} {
 		t.Run(tc.name, func(t *testing.T) {
 			env := installationEnv()
 			delete(env, tc.name)
@@ -65,23 +65,38 @@ func TestMandatoryConfig(t *testing.T) {
 		t.Fatal("invalid token validation leaked data")
 	}
 }
-func TestMiniAppSecret(t *testing.T) {
-	for _, size := range []int{0, 1, 31, 32, 33, 64} {
+func TestSecretKey(t *testing.T) {
+	base := func() map[string]string {
 		env := installationEnv()
-		env["MINIAPP_SECRET"] = base64.StdEncoding.EncodeToString(make([]byte, size))
+		env["TELEGRAM_MODE"] = "webhook"
+		env["WEBHOOK_URL"] = "https://bot.example/telegram"
+		return env
+	}
+	if cfg, err := loadInstallationEnv(installationEnv()); err != nil || len(cfg.SecretKey) != 0 {
+		t.Fatal("polling must not require the secret", err)
+	}
+	for _, size := range []int{0, 1, 31, 32, 33, 64} {
+		env := base()
+		env["SECRET_KEY"] = base64.StdEncoding.EncodeToString(make([]byte, size))
 		cfg, err := loadInstallationEnv(env)
 		if size == 32 {
-			if err != nil || len(cfg.MiniAppSecret) != 32 {
+			if err != nil || len(cfg.SecretKey) != 32 {
 				t.Fatalf("32 bytes rejected: %v", err)
 			}
-		} else if !errors.Is(err, ErrInvalidMiniAppSecret) {
-			t.Fatalf("size %d accepted", size)
+		} else {
+			want := ErrInvalidSecretKey
+			if size == 0 {
+				want = ErrMissingSecretKey
+			}
+			if !errors.Is(err, want) {
+				t.Fatalf("size %d accepted: %v", size, err)
+			}
 		}
 	}
-	env := installationEnv()
-	env["MINIAPP_SECRET"] = "not-base64!"
+	env := base()
+	env["SECRET_KEY"] = "not-base64!"
 	_, err := loadInstallationEnv(env)
-	if !errors.Is(err, ErrInvalidMiniAppSecret) || strings.Contains(err.Error(), env["MINIAPP_SECRET"]) {
+	if !errors.Is(err, ErrInvalidSecretKey) || strings.Contains(err.Error(), env["SECRET_KEY"]) {
 		t.Fatal("invalid secret validation")
 	}
 }
@@ -89,6 +104,7 @@ func TestTelegramMode(t *testing.T) {
 	for _, mode := range []string{"polling", "webhook", " WEBHOOK ", "invalid"} {
 		env := installationEnv()
 		env["TELEGRAM_MODE"] = mode
+		env["SECRET_KEY"] = base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32))
 		env["WEBHOOK_URL"] = "https://bot.example/telegram"
 		cfg, err := loadInstallationEnv(env)
 		if mode == "invalid" {
@@ -113,10 +129,11 @@ func TestTurnTimeout(t *testing.T) {
 func TestWebhookURL(t *testing.T) {
 	env := installationEnv()
 	env["TELEGRAM_MODE"] = "webhook"
+	env["SECRET_KEY"] = base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32))
 	if _, err := loadInstallationEnv(env); !errors.Is(err, ErrMissingWebhookURL) {
 		t.Fatal(err)
 	}
-	for _, value := range []string{"http://bot.example/telegram", "https://bot.example", "https://bot.example/", "https://bot.example/api/hooks", "https://bot.example/assets/hook", "https://bot.example/healthz", "https://bot.example/readyz", "https://user:password@bot.example/telegram", "https://bot.example/telegram?secret=secret", "https://bot.example/telegram#hook"} {
+	for _, value := range []string{"http://bot.example/telegram", "https://bot.example", "https://bot.example/", "https://bot.example/healthz", "https://bot.example/readyz", "https://user:password@bot.example/telegram", "https://bot.example/telegram?secret=secret", "https://bot.example/telegram#hook"} {
 		env["WEBHOOK_URL"] = value
 		_, err := loadInstallationEnv(env)
 		if !errors.Is(err, ErrInvalidWebhookURL) || strings.Contains(err.Error(), value) {
@@ -136,7 +153,7 @@ func TestWebhookURL(t *testing.T) {
 }
 func TestOnlyInstallationSettingsAreRead(t *testing.T) {
 	env := installationEnv()
-	allowed := map[string]bool{"TOKEN": true, "DATABASE_URL": true, "MINIAPP_SECRET": true, "TURN_TIMEOUT": true, "TELEGRAM_MODE": true, "WEB_ADDR": true, "WEBHOOK_URL": true}
+	allowed := map[string]bool{"TOKEN": true, "DATABASE_URL": true, "SECRET_KEY": true, "TURN_TIMEOUT": true, "TELEGRAM_MODE": true, "WEB_ADDR": true, "WEBHOOK_URL": true}
 	cfg, err := LoadFromLookup(func(k string) (string, bool) {
 		if !allowed[k] {
 			t.Fatalf("unexpected configuration lookup: %s", k)
@@ -149,7 +166,11 @@ func TestOnlyInstallationSettingsAreRead(t *testing.T) {
 	}
 }
 func TestWebhookSecretDerivation(t *testing.T) {
-	cfg, err := loadInstallationEnv(installationEnv())
+	env := installationEnv()
+	env["TELEGRAM_MODE"] = "webhook"
+	env["WEBHOOK_URL"] = "https://bot.example/telegram"
+	env["SECRET_KEY"] = base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32))
+	cfg, err := loadInstallationEnv(env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,22 +185,22 @@ func TestWebhookSecretDerivation(t *testing.T) {
 	if err != nil || len(decoded) != sha256.Size {
 		t.Fatal("invalid derived bytes")
 	}
-	if bytes.Equal(decoded, cfg.MiniAppSecret) {
+	if bytes.Equal(decoded, cfg.SecretKey) {
 		t.Fatal("master key exposed")
 	}
-	mac := hmac.New(sha256.New, cfg.MiniAppSecret)
+	mac := hmac.New(sha256.New, cfg.SecretKey)
 	mac.Write([]byte("unobotgo/v2/telegram-webhook-secret/v1"))
 	if !bytes.Equal(decoded, mac.Sum(nil)) {
 		t.Fatal("protocol context changed")
 	}
 	for _, other := range []string{"unobotgo/reference/v1", "unobotgo/key/v1", "unobotgo/telegram/webhook-secret/v2"} {
-		mac := hmac.New(sha256.New, cfg.MiniAppSecret)
+		mac := hmac.New(sha256.New, cfg.SecretKey)
 		mac.Write([]byte(other))
 		if bytes.Equal(decoded, mac.Sum(nil)) {
 			t.Fatal("missing domain separation")
 		}
 	}
-	cfg.MiniAppSecret[0] ^= 1
+	cfg.SecretKey[0] ^= 1
 	if cfg.WebhookSecret() == secret {
 		t.Fatal("key rotation did not rotate token")
 	}

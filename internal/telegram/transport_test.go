@@ -96,7 +96,7 @@ func TestWebhookStartupAlwaysSetsWebhook(t *testing.T) {
 
 func TestSharedWebhookUsesDerivedSecret(t *testing.T) {
 	for _, keyByte := range []byte{1, 2} {
-		cfg := &config.Config{MiniAppSecret: bytes.Repeat([]byte{keyByte}, 32)}
+		cfg := &config.Config{SecretKey: bytes.Repeat([]byte{keyByte}, 32)}
 		secret := cfg.WebhookSecret()
 		api := newMockBotAPI()
 		svc, _ := game.NewService()
@@ -110,7 +110,7 @@ func TestSharedWebhookUsesDerivedSecret(t *testing.T) {
 		if len(api.SetWebhookCalls) != 1 || api.SetWebhookCalls[0].SecretToken != secret || api.SetWebhookCalls[0].DropPendingUpdates {
 			t.Fatal("registration lost secret or pending updates")
 		}
-		for _, token := range []string{secret, "", "wrong", base64.RawURLEncoding.EncodeToString(cfg.MiniAppSecret)} {
+		for _, token := range []string{secret, "", "wrong", base64.RawURLEncoding.EncodeToString(cfg.SecretKey)} {
 			request := httptest.NewRequest("POST", "/telegram", strings.NewReader(`{"update_id":123}`))
 			request.Header.Set(telego.WebhookSecretTokenHeader, token)
 			request.Header.Set("Content-Type", "application/json")
