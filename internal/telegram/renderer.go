@@ -353,13 +353,37 @@ func (r *Renderer) RenderTurn(view game.PublicGameView) string {
 
 // RenderActionConfirmation renders the only message posted for an accepted
 // action. The sticker posted by inline mode already shows the card, so the
-// confirmation carries just whose decision is next. A finished game shows the
-// final placements instead.
+// confirmation carries just whose decision is next. A bluff challenge has no
+// sticker of its own, so its result is announced here instead. A finished game
+// shows the final placements.
 func (r *Renderer) RenderActionConfirmation(actorID uno.PlayerID, action uno.Action, outcome game.Outcome) string {
-	if outcome.View.Closed || outcome.View.Phase == uno.Finished {
-		return r.renderClosedState(outcome.View)
+	var prefix string
+	if action.Type == uno.CallBluff {
+		for _, ev := range outcome.Events {
+			if ev.Type != uno.BluffCalled {
+				continue
+			}
+			target := r.PlayerLink(ev.TargetID, outcome.View)
+			if ev.Success {
+				prefix = fmt.Sprintf("Blefe pego! %s recebeu %d cartas!", target, ev.Count)
+			} else {
+				prefix = fmt.Sprintf("%s não blefou! %s recebeu %d cartas!", target, r.PlayerLink(actorID, outcome.View), ev.Count)
+			}
+			break
+		}
 	}
-	return r.RenderTurn(outcome.View)
+	if outcome.View.Closed || outcome.View.Phase == uno.Finished {
+		final := r.renderClosedState(outcome.View)
+		if prefix == "" {
+			return final
+		}
+		return prefix + "\n\n" + final
+	}
+	turn := r.RenderTurn(outcome.View)
+	if prefix == "" {
+		return turn
+	}
+	return prefix + "\n\n" + turn
 }
 
 func (r *Renderer) RenderWelcome() string {

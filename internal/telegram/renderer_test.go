@@ -215,7 +215,8 @@ func TestRenderer_RenderCallBluffConfirmation(t *testing.T) {
 		},
 	}
 	textCaught := renderer.RenderActionConfirmation(20, uno.Action{Type: uno.CallBluff, PlayerID: 20}, outcomeCaught)
-	if !strings.Contains(textCaught, "Vez de:") {
+	if !strings.Contains(textCaught, "Blefe pego!") || !strings.Contains(textCaught, "Alice") ||
+		!strings.Contains(textCaught, "4 cartas") || !strings.Contains(textCaught, "Vez de:") {
 		t.Errorf("unexpected caught confirmation text: %s", textCaught)
 	}
 
@@ -236,7 +237,9 @@ func TestRenderer_RenderCallBluffConfirmation(t *testing.T) {
 		},
 	}
 	textFailed := renderer.RenderActionConfirmation(20, uno.Action{Type: uno.CallBluff, PlayerID: 20}, outcomeFailed)
-	if !strings.Contains(textFailed, "Vez de:") {
+	if !strings.Contains(textFailed, "não blefou!") || !strings.Contains(textFailed, "Alice") ||
+		!strings.Contains(textFailed, "Bob") || !strings.Contains(textFailed, "6 cartas") ||
+		!strings.Contains(textFailed, "Vez de:") {
 		t.Errorf("unexpected failed confirmation text: %s", textFailed)
 	}
 }

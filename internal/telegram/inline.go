@@ -150,6 +150,30 @@ func (h *InlineHandler) buildPlayerHandResults(
 	}
 	if view.Public.Phase == uno.ChoosingColor {
 		if view.Public.ColorChooserID == actorID {
+			// The hand comes first: with a pending swap it is the hand the
+			// chooser is about to receive, and the colour should be picked
+			// from it. Cards stay in the private inline description only.
+			if len(sortedHand) > 0 {
+				var descs []string
+				for _, cv := range sortedHand {
+					descs = append(descs, CardRepr(cv.Card))
+				}
+				title := "Cartas (toque para estado do jogo):"
+				if view.Public.SwapPending {
+					title = "🃏 Sua nova mão — escolha a cor:"
+				}
+				results = append(results, &telego.InlineQueryResultArticle{
+					Type:        "article",
+					ID:          fmt.Sprintf("hand_%s_%d", gameID, view.Public.Revision),
+					Title:       title,
+					Description: strings.Join(descs, ", "),
+					InputMessageContent: &telego.InputTextMessageContent{
+						MessageText: h.renderer.RenderPublicState(view.Public),
+						ParseMode:   "HTML",
+					},
+				})
+			}
+
 			// 4 color articles
 			colors := []struct {
 				color uno.Color
@@ -175,24 +199,6 @@ func (h *InlineHandler) buildPlayerHandResults(
 					Description: c.name,
 					InputMessageContent: &telego.InputTextMessageContent{
 						MessageText: c.name,
-					},
-				})
-			}
-
-			// 5th article: hand summary
-			if len(sortedHand) > 0 {
-				var descs []string
-				for _, cv := range sortedHand {
-					descs = append(descs, CardRepr(cv.Card))
-				}
-				results = append(results, &telego.InlineQueryResultArticle{
-					Type:        "article",
-					ID:          fmt.Sprintf("hand_%s_%d", gameID, view.Public.Revision),
-					Title:       "Cartas (toque para estado do jogo):",
-					Description: strings.Join(descs, ", "),
-					InputMessageContent: &telego.InputTextMessageContent{
-						MessageText: h.renderer.RenderPublicState(view.Public),
-						ParseMode:   "HTML",
 					},
 				})
 			}

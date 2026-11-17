@@ -53,6 +53,7 @@ type PublicGameView struct {
 	TopCard         *uno.Card
 	PlayerChooserID uno.PlayerID
 	ColorChooserID  uno.PlayerID
+	SwapPending     bool
 	DrawCounter     int
 	Players         []PublicPlayer
 	Order           []uno.PlayerID
@@ -131,6 +132,7 @@ func publicView(entry *managedGame, state uno.State) PublicGameView {
 	}
 	if state.Pending != nil {
 		v.ColorChooserID = state.Pending.Actor
+		v.SwapPending = state.Pending.SwapHands && state.Pending.SwapTarget != 0
 	}
 	if state.PendingBluff != nil && state.DrawFourChallengeable && state.CurrentPlayerID == state.PendingBluff.Target && state.DrawCounter > 0 {
 		v.CanCallBluff = true
@@ -150,13 +152,23 @@ func playerView(entry *managedGame, state uno.State, id uno.PlayerID) (PlayerGam
 	if player == nil || player.Status != uno.Playing {
 		return PlayerGameView{}, ErrNotParticipant
 	}
-	v := PlayerGameView{Public: publicView(entry, state), PlayerID: id, Hand: make([]CardView, 0, len(player.Hand))}
+	// With a swap target selected and the colour still pending, show the
+	// chooser the hand they are about to receive. The engine keeps the atomic
+	// transfer in ChooseColor; this is a read-only preview of the target's hand.
+	handOwner := player
+	if state.Phase == uno.ChoosingColor && state.Pending != nil && state.Pending.SwapHands &&
+		state.Pending.SwapTarget != 0 && state.Pending.Actor == id {
+		if target := state.Player(state.Pending.SwapTarget); target != nil {
+			handOwner = target
+		}
+	}
+	v := PlayerGameView{Public: publicView(entry, state), PlayerID: id, Hand: make([]CardView, 0, len(handOwner.Hand))}
 	catalog := make(map[uno.CardID]uno.Card, len(state.Cards))
 	for _, c := range state.Cards {
 		catalog[c.ID] = c
 	}
-	for _, id := range player.Hand {
-		v.Hand = append(v.Hand, CardView{Card: catalog[id], Playable: entry.engine.CanPlay(player.ID, id) == nil})
+	for _, cardID := range handOwner.Hand {
+		v.Hand = append(v.Hand, CardView{Card: catalog[cardID], Playable: entry.engine.CanPlay(handOwner.ID, cardID) == nil})
 	}
 	if state.CurrentPlayerID == id {
 		v.DrawnCardID = state.DrawnCardID

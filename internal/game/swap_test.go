@@ -47,8 +47,29 @@ func TestServiceSwapHandsAuthorizationViewsAndTimeout(t *testing.T) {
 		t.Fatal("timeout skipped choice")
 	}
 	chosen := act(t, s, v.GameID, Actor{PlayerID: 1}, uno.Action{Type: uno.ChoosePlayer, TargetID: 2})
-	if chosen.View.Phase != uno.ChoosingColor || chosen.View.CurrentTurn != 1 {
+	if chosen.View.Phase != uno.ChoosingColor || chosen.View.CurrentTurn != 1 || !chosen.View.SwapPending {
 		t.Fatal(chosen.View)
+	}
+	ids := func(hand []CardView) []uno.CardID {
+		var result []uno.CardID
+		for _, c := range hand {
+			result = append(result, c.Card.ID)
+		}
+		return result
+	}
+	preview, err := s.PlayerView(t.Context(), Actor{PlayerID: 1}, v.GameID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetStillOwn, err := s.PlayerView(t.Context(), Actor{PlayerID: 2}, v.GameID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ids(preview.Hand), ids(before2.Hand)) || slices.Equal(ids(preview.Hand), ids(before1.Hand[1:])) {
+		t.Fatal("chooser did not preview the incoming hand")
+	}
+	if !slices.Equal(ids(targetStillOwn.Hand), ids(before2.Hand)) {
+		t.Fatal("target's own view changed before the swap resolved")
 	}
 	entry.turnStarted = time.Now().Add(-time.Hour)
 	if candidates := s.ExpiredTurns(t.Context(), time.Second); len(candidates) != 0 {
@@ -65,13 +86,6 @@ func TestServiceSwapHandsAuthorizationViewsAndTimeout(t *testing.T) {
 	after2, err := s.PlayerView(t.Context(), Actor{PlayerID: 2}, v.GameID)
 	if err != nil {
 		t.Fatal(err)
-	}
-	ids := func(hand []CardView) []uno.CardID {
-		var result []uno.CardID
-		for _, c := range hand {
-			result = append(result, c.Card.ID)
-		}
-		return result
 	}
 	if !slices.Equal(ids(after1.Hand), ids(before2.Hand)) || !slices.Equal(ids(after2.Hand), ids(before1.Hand[1:])) {
 		t.Fatal("private views did not reflect exchange")

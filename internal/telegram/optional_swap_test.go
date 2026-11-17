@@ -256,6 +256,23 @@ func TestSwapInlineTargetDepartureInvalidatesColor(t *testing.T) {
 	}
 	choose(choiceArticle(t, results, "➡️ Manter minha mão").ID)
 	results, _ = b.inlineHandler.buildPlayerHandResults(t.Context(), actor, v.GameID, "")
+	keptView, _ := svc.PlayerView(t.Context(), game.Actor{PlayerID: actor}, v.GameID)
+	foundHand := false
+	for _, result := range results {
+		a, ok := result.(*telego.InlineQueryResultArticle)
+		if !ok || a.Title != "Cartas (toque para estado do jogo):" {
+			continue
+		}
+		foundHand = true
+		for _, cv := range keptView.Hand {
+			if !strings.Contains(a.Description, CardRepr(cv.Card)) {
+				t.Fatalf("kept hand not shown: %q", a.Description)
+			}
+		}
+	}
+	if !foundHand {
+		t.Fatal("missing hand article after keeping the hand")
+	}
 	choose(colorArticle(t, results, uno.Green).ID)
 	final, _ := svc.PublicView(t.Context(), v.GameID)
 	if final.Phase != uno.TakingTurn || final.CurrentTurn != 33 || final.ActiveColor != uno.Green {

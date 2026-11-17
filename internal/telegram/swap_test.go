@@ -191,6 +191,18 @@ func TestSwapInlineFlowExchangesHandsAndRejectsOldSelection(t *testing.T) {
 	b.inlineHandler.HandleChosenInlineResult(t.Context(), &telego.ChosenInlineResult{ResultID: choice.ID, From: telego.User{ID: int64(actor)}})
 	flushChat(t, b, view.ChatID)
 	colorResults, _ := b.inlineHandler.buildPlayerHandResults(t.Context(), actor, view.GameID, "")
+	if len(colorResults) != 5 {
+		t.Fatalf("expected hand preview and four colours, got %d results", len(colorResults))
+	}
+	preview, ok := colorResults[0].(*telego.InlineQueryResultArticle)
+	if !ok || preview.Title != "🃏 Sua nova mão — escolha a cor:" {
+		t.Fatalf("missing new-hand preview: %+v", colorResults[0])
+	}
+	for _, cv := range before.Hand {
+		if !strings.Contains(preview.Description, CardRepr(cv.Card)) {
+			t.Fatalf("preview missing incoming card %s: %q", CardRepr(cv.Card), preview.Description)
+		}
+	}
 	var colorToken string
 	for _, result := range colorResults {
 		article, ok := result.(*telego.InlineQueryResultArticle)

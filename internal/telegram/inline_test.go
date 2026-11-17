@@ -373,13 +373,13 @@ func TestInlineHandler_ChoosingColorCleanV1Layout(t *testing.T) {
 		if !ok {
 			t.Fatalf("result %d is not article: %T", i, r)
 		}
-		if i < 4 {
-			if art.Title != "Escolha sua cor" {
-				t.Errorf("expected title 'Escolha sua cor', got %q", art.Title)
+		if i == 0 {
+			if art.Title != "Cartas (toque para estado do jogo):" {
+				t.Errorf("expected hand summary first, got %q", art.Title)
 			}
 		} else {
-			if art.Title != "Cartas (toque para estado do jogo):" {
-				t.Errorf("expected hand summary title, got %q", art.Title)
+			if art.Title != "Escolha sua cor" {
+				t.Errorf("expected title 'Escolha sua cor', got %q", art.Title)
 			}
 		}
 	}
