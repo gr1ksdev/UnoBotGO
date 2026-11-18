@@ -268,6 +268,12 @@ func (h *CommandHandler) HandleMessage(ctx context.Context, msg *telego.Message)
 		return
 	}
 
+	// Debug commands are intentionally outside the language table: /dar is
+	// always /dar, and the stub is a no-op in production builds.
+	if h.handleDebugCommand(ctx, msg, cmdName, fields) {
+		return
+	}
+
 	lang := h.commandLanguage(ctx, chatID)
 	id, ok := resolveCommand(cmdName, lang)
 	if !ok {
@@ -516,10 +522,10 @@ func (h *CommandHandler) handleEntrar(ctx context.Context, actorID uno.PlayerID,
 	if outcome.View.Phase == uno.Lobby {
 		h.reply(ctx, int64(chatID), h.renderer.RenderLobby(outcome.View, h.commandLanguage(ctx, chatID)), h.gameMarkup(outcome.View))
 	} else {
-		msg := fmt.Sprintf("✅ %s entrou na partida em andamento!\n\n%s",
-			h.renderer.PlayerLink(actorID, outcome.View),
-			h.renderer.RenderPublicState(outcome.View),
-		)
+		msg := fmt.Sprintf("✅ %s entrou na partida em andamento!", h.renderer.PlayerLink(actorID, outcome.View))
+		if turn := h.renderer.RenderTurn(outcome.View); turn != "" {
+			msg += "\n\n" + turn
+		}
 		h.reply(ctx, int64(chatID), msg, h.gameMarkup(outcome.View))
 	}
 }
@@ -548,6 +554,24 @@ func startGame(ctx context.Context, svc *game.Service, bot BotAPI, actorID uno.P
 		}
 	}
 	return outcome, nil
+}
+
+// sendStartFlow posts the normal game-start message: a short announcement and
+// whose turn it is. The top-card sticker is sent separately by startGame.
+func sendStartFlow(ctx context.Context, bot BotAPI, renderer *Renderer, chatID game.ChatID, view game.PublicGameView) {
+	text := "🚀 <b>Partida iniciada!</b>"
+	if turn := renderer.RenderTurn(view); turn != "" {
+		text += "\n\n" + turn
+	}
+	params := &telego.SendMessageParams{
+		ChatID:    telego.ChatID{ID: int64(chatID)},
+		Text:      text,
+		ParseMode: "HTML",
+	}
+	if markup := makeGameButtons(view); markup != nil {
+		params.ReplyMarkup = markup
+	}
+	_, _ = bot.SendMessage(ctx, params)
 }
 
 func (h *CommandHandler) handleIniciar(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID) {
@@ -579,8 +603,7 @@ func (h *CommandHandler) handleIniciar(ctx context.Context, actorID uno.PlayerID
 		return
 	}
 
-	msg := "🚀 <b>Partida iniciada!</b>\n\n" + h.renderer.RenderPublicState(outcome.View)
-	h.reply(ctx, int64(chatID), msg, h.gameMarkup(outcome.View))
+	sendStartFlow(ctx, h.bot, h.renderer, chatID, outcome.View)
 }
 
 func (h *CommandHandler) handleCancelar(ctx context.Context, actorID uno.PlayerID, chatID game.ChatID) {
@@ -682,10 +705,10 @@ func (h *CommandHandler) handleSair(ctx context.Context, actorID uno.PlayerID, c
 		)
 		h.reply(ctx, int64(chatID), msg, nil)
 	} else {
-		msg := fmt.Sprintf("👋 %s saiu da partida.\n\n%s",
-			h.renderer.PlayerLink(actorID, outcome.View),
-			h.renderer.RenderPublicState(outcome.View),
-		)
+		msg := fmt.Sprintf("👋 %s saiu da partida.", h.renderer.PlayerLink(actorID, outcome.View))
+		if turn := h.renderer.RenderTurn(outcome.View); turn != "" {
+			msg += "\n\n" + turn
+		}
 		h.reply(ctx, int64(chatID), msg, h.gameMarkup(outcome.View))
 	}
 }

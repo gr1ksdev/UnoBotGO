@@ -539,6 +539,7 @@ func (g *Game) play(s *State, id CardID, events *[]Event) error {
 	card, _ := s.card(id)
 	top, _ := s.card(s.DiscardPile[len(s.DiscardPile)-1])
 	stackedOnDrawTwo := s.DrawCounter > 0 && top.Rank == DrawTwo && s.Rules.StackWildDrawFourOnTwo
+	stackedOnDrawFour := s.DrawCounter > 0 && top.Rank == WildDrawFour && s.Rules.StackWildDrawFour
 	p := s.player(actor)
 	i := slices.Index(p.Hand, id)
 	p.Hand = slices.Delete(p.Hand, i, i+1)
@@ -564,13 +565,25 @@ func (g *Game) play(s *State, id CardID, events *[]Event) error {
 		if card.Rank == WildDrawFour {
 			count = 4
 			if stackedOnDrawTwo {
+				// Answering a +2 is never a bluff in the house rules.
 				challengeable = false
 				bluffing = false
 			} else {
 				challengeable = true
 				for _, hid := range p.Hand {
 					c, ok := s.card(hid)
-					if ok && c.Color == s.ActiveColor {
+					if !ok {
+						continue
+					}
+					if stackedOnDrawFour {
+						// Under a pending +4 the only coloured answer is a +2
+						// of the active colour. Having a plain card of that
+						// colour is not evidence: it could not have been played.
+						if c.Rank == DrawTwo && c.Color == s.ActiveColor {
+							bluffing = true
+							break
+						}
+					} else if c.Color == s.ActiveColor {
 						bluffing = true
 						break
 					}

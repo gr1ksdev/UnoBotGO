@@ -299,13 +299,26 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 			sb.WriteString(fmt.Sprintf("Vez de: %s\n", r.PlayerLink(view.CurrentTurn, view)))
 		}
 	}
+	if order := r.renderOrder(view, view.CurrentTurn); order != "" {
+		sb.WriteString(order)
+	}
+	return strings.TrimSpace(sb.String())
+}
+
+// renderOrder walks the active seats from startAt in the current direction and
+// includes each player's public card count. Counts are public information; the
+// cards themselves remain private to the inline hand menu.
+func (r *Renderer) renderOrder(view game.PublicGameView, startAt uno.PlayerID) string {
+	if len(view.Order) == 0 {
+		return ""
+	}
 	parts := make([]string, 0, len(view.Order))
 	start, direction := 0, 1
 	if view.Direction < 0 {
 		direction = -1
 	}
 	for i, id := range view.Order {
-		if id == view.CurrentTurn {
+		if id == startAt {
 			start = i
 			break
 		}
@@ -316,7 +329,7 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 			if player.ID != pid || !player.Active {
 				continue
 			}
-			text := r.PlayerLink(pid, view)
+			text := fmt.Sprintf("%s (%d)", r.PlayerLink(pid, view), player.CardCount)
 			if player.CardCount == 1 {
 				text += " ⚠️ <b>UNO!</b>"
 			}
@@ -324,10 +337,10 @@ func (r *Renderer) RenderPublicState(view game.PublicGameView) string {
 			break
 		}
 	}
-	if len(parts) > 0 {
-		sb.WriteString("👥 " + strings.Join(parts, " → "))
+	if len(parts) == 0 {
+		return ""
 	}
-	return strings.TrimSpace(sb.String())
+	return "👥 " + strings.Join(parts, " → ")
 }
 
 // RenderTurn names the player whose decision is pending. A closed game has no

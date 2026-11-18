@@ -130,17 +130,18 @@ func (h *CallbackHandler) handleStartCallback(ctx context.Context, cq *telego.Ca
 		return
 	}
 
-	// Replace the lobby message so its button cannot be pressed twice.
-	text := h.renderer.RenderPublicState(outcome.View)
+	// The lobby message becomes a short receipt with no button at all.
 	if cq.Message != nil {
 		_, _ = h.bot.EditMessageText(ctx, &telego.EditMessageTextParams{
 			ChatID:      telego.ChatID{ID: int64(chatID)},
 			MessageID:   cq.Message.GetMessageID(),
-			Text:        text,
+			Text:        "🚀 <b>Partida iniciada!</b>",
 			ParseMode:   telego.ModeHTML,
-			ReplyMarkup: makeGameButtons(outcome.View),
+			ReplyMarkup: &telego.InlineKeyboardMarkup{InlineKeyboard: [][]telego.InlineKeyboardButton{}},
 		})
 	}
+	// The actual game flow goes in a new message, exactly like /iniciar.
+	sendStartFlow(ctx, h.bot, h.renderer, chatID, outcome.View)
 	answer("✅ Partida iniciada!", false)
 }
 

@@ -44,7 +44,7 @@ func TestGameplayCardColorAndPenalty(t *testing.T) {
 					v.DrawCounter = 6
 				}
 				text := plainGameplay(r.RenderPublicState(v))
-				requireGameplay(t, text, "🃏 Topo:", "Vez de: Mezi", "👥 Mezi → Jeesttin → Freddy")
+				requireGameplay(t, text, "🃏 Topo:", "Vez de: Mezi", "👥 Mezi (3) → Jeesttin (3) → Freddy (3)")
 				if strings.Contains(text, "🎨 Cor:") != colorless {
 					t.Fatalf("wrong color visibility: %s", text)
 				}
@@ -64,9 +64,9 @@ func TestGameplayOrderFollowsDirectionAndLateJoin(t *testing.T) {
 	for _, dir := range []int{1, -1} {
 		r, v := polishFixture()
 		v.Direction = dir
-		want := "👥 Mezi → Jeesttin → Freddy"
+		want := "👥 Mezi (3) → Jeesttin (3) → Freddy (3)"
 		if dir < 0 {
-			want = "👥 Mezi → Freddy → Jeesttin"
+			want = "👥 Mezi (3) → Freddy (3) → Jeesttin (3)"
 		}
 		requireGameplay(t, plainGameplay(r.RenderPublicState(v)), want)
 		// Physical insertion before current clockwise; after current counter-clockwise.
@@ -76,7 +76,7 @@ func TestGameplayOrderFollowsDirectionAndLateJoin(t *testing.T) {
 			v.Order = []uno.PlayerID{11, 22, 44, 33}
 		}
 		v.Players = append(v.Players, game.PublicPlayer{ID: 44, Active: true, CardCount: 7})
-		requireGameplay(t, plainGameplay(r.RenderPublicState(v)), want+" → Novo")
+		requireGameplay(t, plainGameplay(r.RenderPublicState(v)), want+" → Novo (7)")
 		v.Players[0].Active = false
 		text := plainGameplay(r.RenderPublicState(v))
 		if strings.Contains(text, "Freddy") {
@@ -93,10 +93,13 @@ func TestGameplayActionEffectResultAndFinish(t *testing.T) {
 	out.View.Players[0].Active = false
 	text := plainGameplay(r.RenderActionConfirmation(11, uno.Action{Type: uno.PlayCard}, out))
 	requireGameplay(t, text, "Vez de: Mezi")
+	if strings.Contains(text, "👥") {
+		t.Fatalf("turn message must not carry the order line: %s", text)
+	}
 	if strings.Contains(text, "jogou") || strings.Contains(text, "invertido") || strings.Contains(text, "pulado") {
 		t.Fatalf("confirmation carried the action line: %s", text)
 	}
-	if strings.Contains(text, "🏅 Classificação") || strings.Contains(text, "👥") {
+	if strings.Contains(text, "🏅 Classificação") || strings.Contains(text, "🃏 Topo:") {
 		t.Fatalf("running confirmation carried the detailed state: %s", text)
 	}
 	// Without a DirectionChanged event a Skip must not invent a reversal.
@@ -159,7 +162,7 @@ func TestGameplayChoicesMentionsEscapingAndPlacements(t *testing.T) {
 	v.Players[0].Active = false
 	v.Players[1].Active = false
 	text = plainGameplay(r.RenderPublicState(v))
-	requireGameplay(t, text, "🏅 Classificação\n🥇 Freddy &lt;&amp;&gt;\n🥈 Mezi", "👥 Jeesttin")
+	requireGameplay(t, text, "🏅 Classificação\n🥇 Freddy &lt;&amp;&gt;\n🥈 Mezi", "👥 Jeesttin (3)")
 	if strings.Contains(text, " | ") {
 		t.Fatal(text)
 	}

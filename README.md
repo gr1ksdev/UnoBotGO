@@ -189,6 +189,31 @@ go run ./cmd/simulator --players 4 --mode caseiro --seed 20260924
 Ele grava um relatório Markdown em `.reports/simulations/` com colocações,
 estatísticas e a linha do tempo completa.
 
+### Comando de depuração `/dar`
+
+Para testes locais é possível entregar cartas sem ficar comprando. O comando
+**só existe em builds com a tag `debugcards`** e exige administrador do grupo:
+
+```bash
+go run -tags debugcards ./cmd/bot
+```
+
+No grupo:
+
+```
+/dar +4                       # coringa +4 para você
+/dar coringa                  # coringa sem cor
+/dar troca                    # carta 🔀 Trocar cartas
+/dar vermelho 7               # carta numerada
+/dar azul +2                  # +2, pular, inverter...
+/dar verde 3                  # respondendo a uma mensagem: entrega ao autor
+```
+
+Sem responder a uma mensagem, a carta vai para quem digitou. O comando não
+aparece no menu do Telegram nem na ajuda, e o binário normal não o contém.
+A carta é removida do monte (ou do descarte abaixo do topo) — nunca é criada —,
+o inventário é preservado e cada entrega avança uma revisão.
+
 ---
 
 ## Arquitetura

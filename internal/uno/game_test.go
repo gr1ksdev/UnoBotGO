@@ -1253,3 +1253,80 @@ func TestPlayerFinishedCannotReenterEver(t *testing.T) {
 		seen[pl.PlayerID] = true
 	}
 }
+
+func TestCaseiroStackedWildDrawFourBluffNeedsMatchingDrawTwo(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		secondHand   []Card
+		wantBluffing bool
+		wantLoser    PlayerID
+		wantPenalty  int
+	}{
+		{
+			name:         "holder_of_matching_draw_two_is_caught",
+			secondHand:   []Card{card(NoColor, WildDrawFour), card(Red, DrawTwo), card(Green, One)},
+			wantBluffing: true,
+			wantLoser:    2,
+			wantPenalty:  8,
+		},
+		{
+			name:         "plain_card_of_active_color_is_not_evidence",
+			secondHand:   []Card{card(NoColor, WildDrawFour), card(Red, Nine), card(Green, One)},
+			wantBluffing: false,
+			wantLoser:    3,
+			wantPenalty:  10,
+		},
+		{
+			name:         "no_card_of_active_color_is_safe",
+			secondHand:   []Card{card(NoColor, WildDrawFour), card(Blue, Nine), card(Green, One)},
+			wantBluffing: false,
+			wantLoser:    3,
+			wantPenalty:  10,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := scenario(t, CaseiroRules(), [][]Card{
+				{card(NoColor, WildDrawFour), card(Blue, Five)},
+				tc.secondHand,
+				{card(Yellow, One), card(Green, Nine)},
+			}, card(Red, Three), nil)
+
+			// A plays +4 and chooses red.
+			apply(t, g, Action{Type: PlayCard, PlayerID: 1, CardID: g.Snapshot().Players[0].Hand[0]})
+			apply(t, g, Action{Type: ChooseColor, PlayerID: 1, Color: Red})
+
+			// B stacks +4 and chooses blue.
+			s := g.Snapshot()
+			apply(t, g, Action{Type: PlayCard, PlayerID: 2, CardID: s.Players[1].Hand[0]})
+			apply(t, g, Action{Type: ChooseColor, PlayerID: 2, Color: Blue})
+
+			s = g.Snapshot()
+			if !s.DrawFourChallengeable || s.PendingBluff == nil {
+				t.Fatalf("stacked +4 must stay challengeable: %+v", s)
+			}
+			if s.PendingBluff.Bluffing != tc.wantBluffing {
+				t.Fatalf("bluffing=%v, want %v", s.PendingBluff.Bluffing, tc.wantBluffing)
+			}
+			if s.DrawCounter != 8 {
+				t.Fatalf("stacked counter = %d, want 8", s.DrawCounter)
+			}
+
+			// C contests; the evidence must not be leaked in events.
+			beforeLoser := len(s.Players[tc.wantLoser-1].Hand)
+			res := apply(t, g, Action{Type: CallBluff, PlayerID: 3})
+			after := g.Snapshot()
+			if len(after.Players[tc.wantLoser-1].Hand) != beforeLoser+tc.wantPenalty {
+				t.Fatalf("loser %d hand %d -> %d, want +%d", tc.wantLoser, beforeLoser,
+					len(after.Players[tc.wantLoser-1].Hand), tc.wantPenalty)
+			}
+			if after.DrawCounter != 0 || after.PendingBluff != nil {
+				t.Fatalf("challenge did not clear the penalty: %+v", after)
+			}
+			for _, ev := range res.Events {
+				if ev.Type == BluffCalled && ev.Count != tc.wantPenalty {
+					t.Fatalf("BluffCalled count=%d, want %d", ev.Count, tc.wantPenalty)
+				}
+			}
+		})
+	}
+}

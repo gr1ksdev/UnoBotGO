@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"html"
 	"log/slog"
 	"slices"
 	"strings"
@@ -340,7 +339,11 @@ func (h *InlineHandler) buildPlayerHandResults(
 					ID:            fmt.Sprintf("grey_%s_%d", cv.Card.ID, i),
 					StickerFileID: greyStickerID,
 					InputMessageContent: &telego.InputTextMessageContent{
-						MessageText: "Esta carta não pode ser jogada agora. Abra suas cartas novamente quando for a sua vez.",
+						// A grey card is still a tap that posts a message to the
+						// group. Publish the same authoritative state as /estado,
+						// never an error lecture about the card.
+						MessageText: h.renderer.RenderPublicState(view.Public),
+						ParseMode:   "HTML",
 					},
 				})
 			}
@@ -460,30 +463,39 @@ func (h *InlineHandler) HandleChosenInlineResult(ctx context.Context, chosen *te
 // Failed actions use current public context, never the old token's turn.
 func (h *InlineHandler) replyActionError(ctx context.Context, actorID uno.PlayerID, tokenStr string, token ActionToken, actionErr error) {
 	status := "rejected"
-	message := "Jogada não aceita: " + html.EscapeString(actionErr.Error()) + "."
 	if errors.Is(actionErr, uno.ErrStaleRevision) {
 		status = "stale"
-		message = "Seleção antiga: a partida mudou."
 	}
 	h.tokens.SetActionResult(tokenStr, status)
+
 	view, viewErr := h.service.PublicView(ctx, token.GameID)
+	var text string
 	var markup *telego.InlineKeyboardMarkup
 	switch {
 	case viewErr != nil:
-		view = game.PublicGameView{}
-		message = "Esta partida não está disponível."
+		text = "⚠️ Esta partida não está disponível."
 	case view.Closed || view.Phase == uno.Finished:
-		message = "Esta partida já foi encerrada."
+		text = "⚠️ Esta partida já foi encerrada."
 	default:
+		// Always the full authoritative state, exactly like /estado: top card,
+		// the pending decision and the order with each player's card count.
+		state := h.renderer.RenderPublicState(view)
+		if status == "stale" {
+			// Only the hint why the old menu must be reopened; no card identity
+			// and no invented state.
+			text = "⚠️ Seleção antiga — abra Suas cartas novamente.\n\n" + state
+		} else {
+			text = state
+		}
 		// A player who left or already placed cannot reopen a private hand.
 		if _, err := h.service.PlayerView(ctx, game.Actor{PlayerID: actorID, ChatID: token.ChatID}, token.GameID); err == nil {
-			message += " Abra Suas cartas novamente."
 			markup = makeGameButtons(view)
 		}
 	}
+
 	params := &telego.SendMessageParams{
 		ChatID:    telego.ChatID{ID: int64(token.ChatID)},
-		Text:      fmt.Sprintf("⚠️ %s: %s", h.renderer.PlayerLink(actorID, view), message),
+		Text:      text,
 		ParseMode: "HTML",
 	}
 	if markup != nil {

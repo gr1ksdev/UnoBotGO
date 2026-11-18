@@ -199,6 +199,9 @@ func TestInlineHandler_StaleRevisionRejection(t *testing.T) {
 	if !strings.Contains(lastMsg, "Seleção antiga") {
 		t.Fatalf("expected stale notice sent to group, got: %s", lastMsg)
 	}
+	if !strings.Contains(lastMsg, "Vez de:") || !strings.Contains(lastMsg, "👥") {
+		t.Fatalf("stale notice must carry the authoritative state, got: %s", lastMsg)
+	}
 
 	// Verify sticker message was not cluttered with button edits
 	if len(mockAPI.EditedMarkups) != 0 {
@@ -866,5 +869,103 @@ func TestInlineHandler_ChosenResultReleasedWhenQueueSaturated(t *testing.T) {
 	_, status := tokens.ConsumeAction(tok, actorID)
 	if status != ConsumeOK {
 		t.Fatalf("expected token to be released and consumeable, got status %v", status)
+	}
+}
+
+func TestRejectedPlayPostsOnlyTheGameState(t *testing.T) {
+	ctx := context.Background()
+	api := newMockBotAPI()
+	svc, _ := game.NewService()
+	renderer := NewRenderer(NewUserCache(100))
+	renderer.userCache.Put(1, "Alice", "")
+	renderer.userCache.Put(2, "Bob", "")
+	tokens := NewTokenStore(100, 100, time.Now, nil)
+	dispatcher := NewDispatcher(nil, nil)
+	defer dispatcher.Stop(2 * time.Second)
+	inlineHandler := NewInlineHandler(api, svc, renderer, tokens, time.Minute, dispatcher, nil)
+
+	out, _ := svc.Create(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, game.CreateRequest{ChatName: "Group UNO", Rules: uno.CaseiroRules()})
+	gameID := out.View.GameID
+	svc.Apply(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 1, Revision: 0})
+	svc.Apply(ctx, game.Actor{PlayerID: 2, ChatID: -1001}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 2, Revision: 1})
+	started, _ := svc.Apply(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, gameID, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: 2})
+
+	// Give the non-current player a token for a play they cannot make.
+	other := uno.PlayerID(1)
+	if started.View.CurrentTurn == 1 {
+		other = 2
+	}
+	token, err := tokens.CreateActionToken(other, gameID, -1001, uno.Action{
+		Type: uno.PlayCard, PlayerID: other, CardID: "c001", Revision: started.View.Revision,
+	}, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inlineHandler.HandleChosenInlineResult(ctx, &telego.ChosenInlineResult{
+		ResultID: token,
+		From:     telego.User{ID: int64(other), FirstName: "Other"},
+	})
+	time.Sleep(100 * time.Millisecond)
+
+	msg := api.LastSentMessage()
+	t.Logf("rejection message:\n%s", msg)
+	if strings.Contains(msg, "não aceita") || strings.Contains(msg, "não é a vez") {
+		t.Fatalf("rejection still exposes an error lecture: %s", msg)
+	}
+	// It must be the same projection as /estado, not just the turn line.
+	for _, want := range []string{"🃏 Topo:", "\n\nVez de:", "\n👥 ", "(7) →"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("rejection missing %q: %s", want, msg)
+		}
+	}
+}
+
+func TestGreyStickerPostsTheGameState(t *testing.T) {
+	ctx := context.Background()
+	api := newMockBotAPI()
+	svc, _ := game.NewService()
+	renderer := NewRenderer(NewUserCache(100))
+	renderer.userCache.Put(1, "Alice", "")
+	renderer.userCache.Put(2, "Bob", "")
+	tokens := NewTokenStore(100, 100, time.Now, nil)
+	dispatcher := NewDispatcher(nil, nil)
+	defer dispatcher.Stop(2 * time.Second)
+	h := NewInlineHandler(api, svc, renderer, tokens, time.Minute, dispatcher, nil)
+
+	out, _ := svc.Create(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, game.CreateRequest{ChatName: "Group UNO", Rules: uno.CaseiroRules()})
+	gameID := out.View.GameID
+	svc.Apply(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 1, Revision: 0})
+	svc.Apply(ctx, game.Actor{PlayerID: 2, ChatID: -1001}, gameID, uno.Action{Type: uno.JoinGame, PlayerID: 2, Revision: 1})
+	svc.Apply(ctx, game.Actor{PlayerID: 1, ChatID: -1001}, gameID, uno.Action{Type: uno.StartGame, PlayerID: 1, Revision: 2})
+
+	// A player who is not in turn still gets grey cards in their hand menu.
+	other := uno.PlayerID(1)
+	view, _ := svc.PublicView(ctx, gameID)
+	if view.CurrentTurn == 1 {
+		other = 2
+	}
+	results, _ := h.buildPlayerHandResults(ctx, other, gameID, "")
+	var grey *telego.InlineQueryResultCachedSticker
+	for _, result := range results {
+		if s, ok := result.(*telego.InlineQueryResultCachedSticker); ok && strings.HasPrefix(s.ID, "grey_") {
+			grey = s
+			break
+		}
+	}
+	if grey == nil {
+		t.Fatal("no grey sticker for the idle player")
+	}
+	if grey.InputMessageContent == nil {
+		t.Fatal("grey sticker has no message content")
+	}
+	text := grey.InputMessageContent.(*telego.InputTextMessageContent).MessageText
+	t.Logf("grey sticker message:\n%s", text)
+	if strings.Contains(text, "não pode ser jogada") || strings.Contains(text, "Abra suas cartas") {
+		t.Fatalf("grey sticker still posts an error lecture: %s", text)
+	}
+	for _, want := range []string{"🃏 Topo:", "\n\nVez de:", "\n👥 ", "(7) →"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("grey sticker missing %q: %s", want, text)
+		}
 	}
 }

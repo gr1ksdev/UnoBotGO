@@ -198,10 +198,41 @@ func TestLobbyButtonStartsTheGame(t *testing.T) {
 	if started.Phase == uno.Lobby {
 		t.Fatal("lobby button did not start the game")
 	}
-	if len(api.EditedMessages) == 0 || strings.Contains(api.EditedMessages[0].Text, "▶️ Iniciar") != false {
-		t.Fatalf("lobby message was not replaced: %+v", api.EditedMessages)
+	if len(api.EditedMessages) != 1 {
+		t.Fatalf("expected one edited lobby message: %+v", api.EditedMessages)
+	}
+	edit := api.EditedMessages[0]
+	plainEdit := plainGameplay(edit.Text)
+	if plainEdit != "🚀 Partida iniciada!" {
+		t.Fatalf("lobby receipt must be only the announcement: %q", plainEdit)
+	}
+	if edit.ReplyMarkup == nil || len(edit.ReplyMarkup.InlineKeyboard) != 0 {
+		t.Fatalf("lobby button was not removed: %+v", edit.ReplyMarkup)
+	}
+
+	// A new message carries the normal game flow, without the detailed state.
+	if len(api.SentMessages) < 2 {
+		t.Fatalf("expected a new start message: %+v", api.SentMessages)
+	}
+	flow := plainGameplay(api.LastSentMessage())
+	if !strings.Contains(flow, "🚀 Partida iniciada!") || !strings.Contains(flow, "Vez de:") {
+		t.Fatalf("start flow missing announcement or turn: %q", flow)
+	}
+	if strings.Contains(flow, "🃏 Topo:") || strings.Contains(flow, "👥") {
+		t.Fatalf("start flow leaked the detailed state: %q", flow)
 	}
 	if len(api.AnsweredCallbacks) == 0 || !strings.Contains(api.AnsweredCallbacks[0].Text, "iniciada") {
 		t.Fatalf("callback not answered: %+v", api.AnsweredCallbacks)
+	}
+}
+
+func TestTextStartDoesNotRepeatTheDetailedState(t *testing.T) {
+	_, _, _, api := administrationFixture(t)
+	last := plainGameplay(api.LastSentMessage())
+	if !strings.Contains(last, "🚀 Partida iniciada!") || !strings.Contains(last, "Vez de:") {
+		t.Fatalf("start message missing announcement or turn: %q", last)
+	}
+	if strings.Contains(last, "🃏 Topo:") || strings.Contains(last, "👥") {
+		t.Fatalf("start message leaked the detailed state: %q", last)
 	}
 }
