@@ -67,7 +67,10 @@ func Run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 	}
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
-	svc, err := game.NewService(game.WithHistoryLimit(config.HistoryLimit))
+	svc, err := game.NewService(
+		game.WithHistoryLimit(config.HistoryLimit),
+		game.WithTurnPolicy(game.TurnPolicy{Initial: cfg.TurnTimeout, Min: cfg.MinTurnTime, Penalty: cfg.SkipTimePenalty}),
+	)
 	if err != nil {
 		return err
 	}
@@ -86,6 +89,7 @@ func Run(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 	bot.SetFinalizer(finalizer)
 	bot.SetRankingService(&ranking.Service{Repository: store})
 	bot.SetTurnTimeout(cfg.TurnTimeout)
+	bot.SetTurnMin(cfg.MinTurnTime)
 	bot.SetTransport(telegram.TransportConfig{
 		Mode:          telegram.TransportMode(cfg.TelegramMode),
 		WebhookURL:    cfg.WebhookURL,

@@ -153,7 +153,7 @@ func TestWebhookURL(t *testing.T) {
 }
 func TestOnlyInstallationSettingsAreRead(t *testing.T) {
 	env := installationEnv()
-	allowed := map[string]bool{"TOKEN": true, "DATABASE_URL": true, "SECRET_KEY": true, "TURN_TIMEOUT": true, "TELEGRAM_MODE": true, "WEB_ADDR": true, "WEBHOOK_URL": true}
+	allowed := map[string]bool{"TOKEN": true, "DATABASE_URL": true, "SECRET_KEY": true, "TURN_TIMEOUT": true, "SKIP_TIME_PENALTY": true, "MIN_TURN_TIME": true, "TELEGRAM_MODE": true, "WEB_ADDR": true, "WEBHOOK_URL": true}
 	cfg, err := LoadFromLookup(func(k string) (string, bool) {
 		if !allowed[k] {
 			t.Fatalf("unexpected configuration lookup: %s", k)

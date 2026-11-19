@@ -2,6 +2,7 @@ package game
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"time"
 
@@ -9,6 +10,56 @@ import (
 	"github.com/malbs/UnoGoBot/internal/ranking"
 	"github.com/malbs/UnoGoBot/internal/uno"
 )
+
+// TurnPolicy drives the skip-with-penalty timer. Initial is the full waiting
+// time of a turn, Min is the floor for the automatic timer and Penalty is the
+// amount removed from a player's waiting time on every skip.
+type TurnPolicy struct {
+	Initial time.Duration
+	Min     time.Duration
+	Penalty time.Duration
+}
+
+// DefaultTurnPolicy matches the documented product values: 120s per turn,
+// 20s lost per skip and a 15s floor for the automatic timer.
+var DefaultTurnPolicy = TurnPolicy{Initial: 2 * time.Minute, Min: 15 * time.Second, Penalty: 20 * time.Second}
+
+// effectiveTimeout derives the current deadline from the base timeout and the
+// number of skips charged to the player. The floor never exceeds the base, so
+// short timeouts used in tests keep working as before.
+func (p TurnPolicy) effectiveTimeout(base time.Duration, skips int) time.Duration {
+	if base <= 0 {
+		return 0
+	}
+	floor := p.Min
+	if floor > base {
+		floor = base
+	}
+	wait := base - time.Duration(skips)*p.Penalty
+	if wait < 0 {
+		wait = 0
+	}
+	if wait < floor {
+		wait = floor
+	}
+	return wait
+}
+
+// ErrSkipTooEarly is returned when a non-current player requests a skip before
+// the current player's deadline. Wait is rounded up to a whole second by the
+// adapter before being shown.
+type ErrSkipTooEarly struct{ Wait time.Duration }
+
+func (e *ErrSkipTooEarly) Error() string {
+	return fmt.Sprintf("game: skip too early; wait %s", e.Wait.Round(time.Second))
+}
+
+// SkipNotice is carried by Outcome so adapters can announce a penalty without
+// re-reading state under a second lock.
+type SkipNotice struct {
+	PlayerID  uno.PlayerID
+	Remaining time.Duration
+}
 
 // Actor must come from a trusted adapter, not from a player-controlled payload.
 // A role in a lobby does not grant participation or access to private hands.
@@ -32,6 +83,7 @@ type Outcome struct {
 	View           PublicGameView
 	Events         []uno.Event
 	ReplacedGameID uno.GameID
+	Skip           *SkipNotice // set only when a penalty skip was applied
 }
 
 type ResetResult struct {
@@ -40,19 +92,28 @@ type ResetResult struct {
 	RemovedHistory int
 }
 
-type config struct{ historyLimit int }
+type config struct {
+	historyLimit int
+	policy       TurnPolicy
+}
 type Option func(*config)
 
 // WithHistoryLimit bounds retained closed public summaries. Zero disables
 // retention; a negative limit is rejected by NewService. Default is 100.
 func WithHistoryLimit(limit int) Option { return func(c *config) { c.historyLimit = limit } }
 
+// WithTurnPolicy configures the skip timer. All fields must be positive.
+func WithTurnPolicy(policy TurnPolicy) Option { return func(c *config) { c.policy = policy } }
+
 // Service is safe for concurrent use. Construct it with NewService; do not copy.
 // Its manager is private so adapters cannot bypass authorization or obtain games.
-type Service struct{ manager *manager }
+type Service struct {
+	manager *manager
+	policy  TurnPolicy
+}
 
 func NewService(options ...Option) (*Service, error) {
-	cfg := config{historyLimit: 100}
+	cfg := config{historyLimit: 100, policy: DefaultTurnPolicy}
 	for _, option := range options {
 		if option != nil {
 			option(&cfg)
@@ -61,7 +122,10 @@ func NewService(options ...Option) (*Service, error) {
 	if cfg.historyLimit < 0 {
 		return nil, ErrInvalidArgument
 	}
-	return &Service{manager: newManager(cfg.historyLimit)}, nil
+	if cfg.policy.Initial <= 0 || cfg.policy.Min <= 0 || cfg.policy.Penalty <= 0 {
+		return nil, ErrInvalidArgument
+	}
+	return &Service{manager: newManager(cfg.historyLimit, cfg.policy), policy: cfg.policy}, nil
 }
 
 func checkContext(ctx context.Context) error {
@@ -134,6 +198,14 @@ func (s *Service) Apply(ctx context.Context, actor Actor, id uno.GameID, action 
 			return Outcome{}, uno.ErrUnknownPlayer
 		}
 	}
+	// A manual skip is only allowed after the current player's deadline, except
+	// for the current player themselves. The check lives under the game lock so
+	// the decision and the mutation cannot race with another action.
+	if action.Type == uno.PenaltySkip {
+		if err := s.checkSkipTiming(entry, before, actor); err != nil {
+			return Outcome{}, err
+		}
+	}
 	// Recheck after authorization/projection, immediately before the mutation.
 	if err := ctx.Err(); err != nil {
 		return Outcome{}, err
@@ -142,7 +214,30 @@ func (s *Service) Apply(ctx context.Context, actor Actor, id uno.GameID, action 
 	if err != nil {
 		return Outcome{}, err
 	}
+	if action.Type == uno.PenaltySkip {
+		s.manager.recordSkip(entry, before.CurrentPlayerID)
+		outcome := s.manager.publish(entry, before, entry.engine.Snapshot(), result)
+		outcome.Skip = &SkipNotice{PlayerID: before.CurrentPlayerID, Remaining: s.policy.effectiveTimeout(s.policy.Initial, entry.skipCount[before.CurrentPlayerID])}
+		return outcome, nil
+	}
+	// Any other accepted action clears the penalty accumulated by the requester.
+	s.manager.clearSkip(entry, action.PlayerID)
 	return s.manager.publish(entry, before, entry.engine.Snapshot(), result), nil
+}
+
+func (s *Service) checkSkipTiming(entry *managedGame, before uno.State, actor Actor) error {
+	if before.Phase != uno.TakingTurn || before.Pending != nil || before.CurrentPlayerID == 0 {
+		return uno.ErrInvalidAction
+	}
+	if actor.PlayerID == before.CurrentPlayerID {
+		return nil
+	}
+	effective := s.policy.effectiveTimeout(s.policy.Initial, entry.skipCount[before.CurrentPlayerID])
+	elapsed := time.Since(entry.turnStarted)
+	if elapsed < effective {
+		return &ErrSkipTooEarly{Wait: effective - elapsed}
+	}
+	return nil
 }
 
 // Pure application checks, executed while the entry is locked. No role lookup I/O.
@@ -165,6 +260,16 @@ func authorize(entry *managedGame, actor Actor, kind uno.ActionType) error {
 		// Administrative actions over the running game: the owner of the game
 		// or an administrator of the chat.
 		if actor.ChatID == 0 || (!actor.ChatAdmin && actor.PlayerID != entry.ownerID) {
+			return ErrForbidden
+		}
+	case uno.PenaltySkip:
+		// Any active participant may request a skip. Admins have no shortcut:
+		// the waiting-time rule is enforced by checkSkipTiming for everyone.
+		if actor.ChatID == 0 {
+			return ErrForbidden
+		}
+		player := entry.engine.Snapshot().Player(actor.PlayerID)
+		if player == nil || player.Status != uno.Playing {
 			return ErrForbidden
 		}
 	default:

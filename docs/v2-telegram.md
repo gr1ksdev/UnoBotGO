@@ -96,17 +96,20 @@ volta a escolher alvo/manter; nenhuma troca inválida ou automática é aplicada
 real; os demais nomes seguem a política de links ao bot.
 
 O sticker cinza
-`CAACAgEAAxkDAAMoarc5AnTTNQ_W6bTz1yaQVlhRR20AAtwHAAJGhrhFYMGxG-e10Xc9BA`
-representa a carta indisponível. Ela segue o mesmo fluxo visual das demais
-cartas cinza, com resultado `grey_` e sem token de jogada. O sticker colorido
-continua sendo usado quando a carta é jogável.
+`CAACAgEAAxUAAWr_KfQ0w-CSFseJhXHRmDZIzNXvAAIUDwACZyj4R5iyTb3iuP1LPQQ`
+representa a carta indisponível (sticker set `uno_grey_swap_by_unocwbot`, feito
+com o PNG em `assets/stickers/swap_hands_grey.png`; o ID herdado do baralho de
+referência era rejeitado pelo Telegram com `DOCUMENT_INVALID`). Ela segue o
+mesmo fluxo visual das demais cartas cinza, com resultado `grey_` e sem token de
+jogada. O sticker colorido continua sendo usado quando a carta é jogável.
 
-Homologação manual: abrir uma mão com Trocar cartas indisponível (ex: sob +2 ou
+Homologação: abrir uma mão com Trocar cartas indisponível (ex: sob +2 ou
 coringa no topo) e confirmar que o sticker cinza é renderizado normalmente sem erros.
-Depois de desbloquear a carta, conferir o sticker colorido. Homologação do novo
-fluxo pendente: testar trocar + verde, manter + azul, dois jogadores, e última
-carta (término imediato sem escolhas). Confirmar que mãos e turno só mudam na cor,
-menus antigos são recusados e somente o responsável pela decisão é mencionado.
+Depois de desbloquear a carta, conferir o sticker colorido. O fluxo de trocar + verde,
+manter + azul, dois jogadores e última carta (término imediato sem escolhas) foi
+homologado em 2026-11-19 com a troca do sticker cinza inválido: mãos e turno mudam
+apenas na cor, menus antigos são recusados e somente o responsável pela decisão é
+mencionado.
 
 
 > Atualização de 2026-09-23: as regras abaixo descrevem a milestone corretiva.
@@ -158,7 +161,10 @@ ou consultas concorrentes continuam sujeitas à validação definitiva do servi�
 
 O scheduler descobre candidatos sem mutação e executa AutoSkip + mensagem dentro
 da fila do chat. Isso impede a publicação tardia de um turno obsoleto após vitória.
-O mesmo código é usado por polling e webhook.
+O mesmo código é usado por polling e webhook. O aviso de pulo é curto — quem foi
+pulado, o tempo restante e `Vez de:` — sem `🃏 Topo:` nem a ordem com contagens,
+que pertencem exclusivamente a `/estado`. O tick de descoberta acompanha o piso
+`MIN_TURN_TIME`, não o timeout cheio, para não perder prazos já degradados.
 
 ### O contexto não é mais visível
 

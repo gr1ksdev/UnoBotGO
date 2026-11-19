@@ -44,7 +44,6 @@ removidos, e a imagem Docker deixou de ter runtime Node.
 | Docker V2 | IMPLEMENTED BUT NOT HOMOLOGATED | build no CI | operação não certificada | multi-arch sem Node |
 | GHCR | IMPLEMENTED + HOMOLOGATED | workflow aprovado | publicação confirmada | `latest` e `sha-<commit>` |
 | Recuperação / reset | IMPLEMENTED + HOMOLOGATED | autorização, isolamento, filas | Telegram real | fila dedicada |
-| Simulador | IMPLEMENTED + HOMOLOGATED | runner, estratégia, relatório | interno | direto sobre a engine |
 | Privacidade da mão | IMPLEMENTED + HOMOLOGATED | views, tokens | Telegram real | `PlayerView` só do solicitante |
 | Política de menções | IMPLEMENTED | renderer | aceitação visual pendente | BotID por padrão |
 
@@ -71,7 +70,7 @@ removidos, e a imagem Docker deixou de ter runtime Node.
 
 O Caseiro é o único modo. O grupo não guarda mais o modo padrão e `/novo`
 ignora seus argumentos. A engine continua genérica — `ClassicRules()` e
-`BotRules()` existem para os testes e para o simulador.
+`BotRules()` existem para os testes.
 
 ### Idioma dos comandos
 

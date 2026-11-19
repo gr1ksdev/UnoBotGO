@@ -69,7 +69,9 @@ var Stickers = map[string]string{
 }
 
 var StickersGrey = map[string]string{
-	"swap_hands":   "CAACAgEAAxkDAAMoarc5AnTTNQ_W6bTz1yaQVlhRR20AAtwHAAJGhrhFYMGxG-e10Xc9BA",
+	// Uploaded to this bot (sticker set uno_grey_swap_by_unocwbot) because the
+	// inherited id was rejected by Telegram with DOCUMENT_INVALID.
+	"swap_hands":   "CAACAgEAAxUAAWr_KfQ0w-CSFseJhXHRmDZIzNXvAAIUDwACZyj4R5iyTb3iuP1LPQQ",
 	"colorchooser": "CAADBAADpQ4AAlfDmFFHGkwyGFeCFQI",
 	"draw_four":    "CAADBAADMRMAAv7amFHvKGLoNyFbNQI",
 	"r_0":          "CAADBAADsBMAAuGdkFHTZ-jl4eNn-gI",

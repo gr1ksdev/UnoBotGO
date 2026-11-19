@@ -1,7 +1,6 @@
 UnoGoBot
 .env
 ranking_data.json
-.reports/simulations/
 bin/
 web/node_modules/
 web/dist/*

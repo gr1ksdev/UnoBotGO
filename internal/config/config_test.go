@@ -23,7 +23,7 @@ func TestMinimalConfigAndInternalPolicies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Token != env["TOKEN"] || cfg.DatabaseURL != env["DATABASE_URL"] || cfg.TelegramMode != "polling" || cfg.WebAddr != ":8080" || cfg.TurnTimeout != 2*time.Minute || len(cfg.SecretKey) != 0 || cfg.WebhookURL != "" {
+	if cfg.Token != env["TOKEN"] || cfg.DatabaseURL != env["DATABASE_URL"] || cfg.TelegramMode != "polling" || cfg.WebAddr != ":8080" || cfg.TurnTimeout != 2*time.Minute || cfg.SkipTimePenalty != 20*time.Second || cfg.MinTurnTime != 15*time.Second || len(cfg.SecretKey) != 0 || cfg.WebhookURL != "" {
 		t.Fatal("unexpected minimal configuration")
 	}
 	if LogLevel != slog.LevelInfo || HistoryLimit != 100 || InlineTokenTTL != 2*time.Minute || InlineTokenLimit != 20000 || InlineTokenUserLimit != 512 || MigrationTimeout != 2*time.Minute {
@@ -34,7 +34,7 @@ func TestRemovedEnvironmentIsNeverRead(t *testing.T) {
 	env := minimalEnv()
 	cfg, err := LoadFromLookup(func(k string) (string, bool) {
 		switch k {
-		case "TOKEN", "DATABASE_URL", "TELEGRAM_MODE", "TURN_TIMEOUT", "WEB_ADDR", "WEBHOOK_URL", "SECRET_KEY":
+		case "TOKEN", "DATABASE_URL", "TELEGRAM_MODE", "TURN_TIMEOUT", "SKIP_TIME_PENALTY", "MIN_TURN_TIME", "WEB_ADDR", "WEBHOOK_URL", "SECRET_KEY":
 			v, ok := env[k]
 			return v, ok
 		default:
@@ -69,6 +69,10 @@ func TestConfigValidation(t *testing.T) {
 		{"bad duration", "TURN_TIMEOUT", "nope", ErrInvalidTurnTimeout},
 		{"zero duration", "TURN_TIMEOUT", "0s", ErrInvalidTurnTimeout},
 		{"negative duration", "TURN_TIMEOUT", "-1s", ErrInvalidTurnTimeout},
+		{"bad penalty", "SKIP_TIME_PENALTY", "nope", ErrInvalidSkipPenalty},
+		{"zero penalty", "SKIP_TIME_PENALTY", "0s", ErrInvalidSkipPenalty},
+		{"bad floor", "MIN_TURN_TIME", "nope", ErrInvalidMinTurnTime},
+		{"negative floor", "MIN_TURN_TIME", "-2s", ErrInvalidMinTurnTime},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			env := minimalEnv()
@@ -162,10 +166,10 @@ func TestTelegramModesAndConditionalWebhookURL(t *testing.T) {
 }
 func TestConfigRepresentsOnlyExternalSettings(t *testing.T) {
 	typ := reflect.TypeFor[Config]()
-	if typ.NumField() != 7 {
+	if typ.NumField() != 9 {
 		t.Fatalf("unexpected fields: %v", typ)
 	}
-	for _, name := range []string{"Token", "TelegramMode", "DatabaseURL", "TurnTimeout", "WebAddr", "SecretKey", "WebhookURL"} {
+	for _, name := range []string{"Token", "TelegramMode", "DatabaseURL", "TurnTimeout", "SkipTimePenalty", "MinTurnTime", "WebAddr", "SecretKey", "WebhookURL"} {
 		if _, ok := typ.FieldByName(name); !ok {
 			t.Fatal("missing external field", name)
 		}

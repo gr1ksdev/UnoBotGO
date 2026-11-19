@@ -24,6 +24,7 @@ type manager struct {
 	byPlayer       map[uno.PlayerID]map[uno.GameID]struct{}
 	history        []uno.GameID
 	historyLimit   int
+	policy         TurnPolicy
 	newID          func() (uno.GameID, error)
 	newGame        func(uno.GameID, uno.Rules) (*uno.Game, error)
 }
@@ -46,17 +47,29 @@ type managedGame struct {
 	groupConfig  groups.Snapshot
 	locked       bool // session admission policy, guarded by mu
 	turnStarted  time.Time
-	final        *PublicGameView // public projection only, accessed under mu
+	skipCount    map[uno.PlayerID]int // skips charged to each player, guarded by mu
+	final        *PublicGameView      // public projection only, accessed under mu
 	reset        bool
 }
 
-func newManager(limit int) *manager {
+func newManager(limit int, policy TurnPolicy) *manager {
 	return &manager{
 		pendingResults: make(map[uno.GameID]ranking.Result), byID: make(map[uno.GameID]indexRecord), byChat: make(map[ChatID]uno.GameID),
-		byPlayer: make(map[uno.PlayerID]map[uno.GameID]struct{}), historyLimit: limit,
+		byPlayer: make(map[uno.PlayerID]map[uno.GameID]struct{}), historyLimit: limit, policy: policy,
 		newID:   randomID,
 		newGame: func(id uno.GameID, rules uno.Rules) (*uno.Game, error) { return uno.NewGame(id, rules) },
 	}
+}
+
+func (m *manager) recordSkip(entry *managedGame, id uno.PlayerID) {
+	if entry.skipCount == nil {
+		entry.skipCount = make(map[uno.PlayerID]int)
+	}
+	entry.skipCount[id]++
+}
+
+func (m *manager) clearSkip(entry *managedGame, id uno.PlayerID) {
+	delete(entry.skipCount, id)
 }
 
 func randomID() (uno.GameID, error) {
@@ -488,12 +501,17 @@ func (m *manager) expiredTurns(ctx context.Context, timeout time.Duration, now t
 			break
 		}
 		entry.mu.Lock()
-		if entry.final != nil || entry.engine == nil || entry.turnStarted.IsZero() || now.Sub(entry.turnStarted) < timeout {
+		if entry.final != nil || entry.engine == nil || entry.turnStarted.IsZero() {
 			entry.mu.Unlock()
 			continue
 		}
 		before := entry.engine.Snapshot()
 		if before.Phase != uno.TakingTurn || before.CurrentPlayerID == 0 {
+			entry.mu.Unlock()
+			continue
+		}
+		effective := m.policy.effectiveTimeout(timeout, entry.skipCount[before.CurrentPlayerID])
+		if now.Sub(entry.turnStarted) < effective {
 			entry.mu.Unlock()
 			continue
 		}
@@ -509,16 +527,23 @@ func (m *manager) skipTurn(ctx context.Context, candidate ExpiredTurn, timeout t
 		return Outcome{}, false
 	}
 	defer entry.mu.Unlock()
-	if entry.final != nil || entry.engine == nil || entry.chatID != candidate.ChatID || entry.turnStarted.IsZero() || now.Sub(entry.turnStarted) < timeout {
+	if entry.final != nil || entry.engine == nil || entry.chatID != candidate.ChatID || entry.turnStarted.IsZero() {
 		return Outcome{}, false
 	}
 	before := entry.engine.Snapshot()
 	if before.Phase != uno.TakingTurn || before.CurrentPlayerID == 0 || before.CurrentPlayerID != candidate.PlayerID || before.Revision != candidate.Revision || ctx.Err() != nil {
 		return Outcome{}, false
 	}
-	result, err := entry.engine.Apply(uno.Action{Type: uno.SkipTurn, PlayerID: candidate.PlayerID, Revision: candidate.Revision})
+	effective := m.policy.effectiveTimeout(timeout, entry.skipCount[candidate.PlayerID])
+	if now.Sub(entry.turnStarted) < effective {
+		return Outcome{}, false
+	}
+	result, err := entry.engine.Apply(uno.Action{Type: uno.PenaltySkip, PlayerID: candidate.PlayerID, Revision: candidate.Revision})
 	if err != nil {
 		return Outcome{}, false
 	}
-	return m.publish(entry, before, entry.engine.Snapshot(), result), true
+	m.recordSkip(entry, candidate.PlayerID)
+	outcome := m.publish(entry, before, entry.engine.Snapshot(), result)
+	outcome.Skip = &SkipNotice{PlayerID: candidate.PlayerID, Remaining: m.policy.effectiveTimeout(timeout, entry.skipCount[candidate.PlayerID])}
+	return outcome, true
 }

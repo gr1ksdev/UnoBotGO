@@ -35,6 +35,12 @@ os hooks normais de resultado/ranking da M7, sem mudanças de GroupConfig/storag
 recebe prazo novo após a resolução. Seleções antigas são recusadas por revisão;
 saída do alvo durante a escolha de cor reabre alvo/manter, sem transferência.
 
+`TurnPolicy` (`Initial`, `Min`, `Penalty`) governa o prazo por jogador: cada pulo
+cobra uma carta do pulado e reduz seu tempo em `Penalty` até o piso `Min`, sem
+remover ninguém da partida. `ErrSkipTooEarly` carrega o tempo restante quando um
+terceiro tenta pular antes do prazo; a checagem acontece sob o mutex da partida,
+na mesma operação do `PenaltySkip`.
+
 
 > Atualização de 2026-09-23: o contrato de timeout e encerramento vigente está
 > descrito abaixo. As seções da M2 preservam o contexto histórico.

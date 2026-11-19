@@ -18,6 +18,8 @@ var (
 	ErrMissingToken        = errors.New("config: TOKEN environment variable is required")
 	ErrInvalidToken        = errors.New("config: invalid Telegram bot token format")
 	ErrInvalidTurnTimeout  = errors.New("config: TURN_TIMEOUT must be a positive duration")
+	ErrInvalidSkipPenalty  = errors.New("config: SKIP_TIME_PENALTY must be a positive duration")
+	ErrInvalidMinTurnTime  = errors.New("config: MIN_TURN_TIME must be a positive duration")
 	ErrInvalidTelegramMode = errors.New("config: TELEGRAM_MODE must be polling or webhook")
 	ErrMissingWebhookURL   = errors.New("config: WEBHOOK_URL is required in webhook mode")
 	ErrInvalidWebhookURL   = errors.New("config: WEBHOOK_URL must be an HTTPS URL with a host and a dedicated path, e.g. /telegram")
@@ -27,13 +29,15 @@ var (
 )
 
 type Config struct {
-	Token        string
-	TelegramMode string
-	DatabaseURL  string
-	TurnTimeout  time.Duration
-	WebAddr      string
-	SecretKey    []byte // Required only when TelegramMode is webhook.
-	WebhookURL   string // Required only when TelegramMode is webhook.
+	Token           string
+	TelegramMode    string
+	DatabaseURL     string
+	TurnTimeout     time.Duration
+	SkipTimePenalty time.Duration
+	MinTurnTime     time.Duration
+	WebAddr         string
+	SecretKey       []byte // Required only when TelegramMode is webhook.
+	WebhookURL      string // Required only when TelegramMode is webhook.
 }
 
 // Load reads .env without overriding existing environment variables.
@@ -44,7 +48,7 @@ func Load() (*Config, error) {
 
 func LoadFromLookup(lookup func(string) (string, bool)) (*Config, error) {
 	value := func(name string) string { v, _ := lookup(name); return strings.TrimSpace(v) }
-	cfg := &Config{Token: value("TOKEN"), DatabaseURL: value("DATABASE_URL"), TelegramMode: "polling", TurnTimeout: 2 * time.Minute, WebAddr: ":8080"}
+	cfg := &Config{Token: value("TOKEN"), DatabaseURL: value("DATABASE_URL"), TelegramMode: "polling", TurnTimeout: 2 * time.Minute, SkipTimePenalty: 20 * time.Second, MinTurnTime: 15 * time.Second, WebAddr: ":8080"}
 	if cfg.Token == "" {
 		return nil, ErrMissingToken
 	}
@@ -66,6 +70,20 @@ func LoadFromLookup(lookup func(string) (string, bool)) (*Config, error) {
 			return nil, ErrInvalidTurnTimeout
 		}
 		cfg.TurnTimeout = d
+	}
+	if v := value("SKIP_TIME_PENALTY"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d <= 0 {
+			return nil, ErrInvalidSkipPenalty
+		}
+		cfg.SkipTimePenalty = d
+	}
+	if v := value("MIN_TURN_TIME"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d <= 0 {
+			return nil, ErrInvalidMinTurnTime
+		}
+		cfg.MinTurnTime = d
 	}
 	if v := value("WEB_ADDR"); v != "" {
 		cfg.WebAddr = v

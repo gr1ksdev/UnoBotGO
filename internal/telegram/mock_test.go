@@ -31,6 +31,7 @@ type mockBotAPI struct {
 	EditedMessages       []telego.EditMessageTextParams
 	EditedMarkups        []telego.EditMessageReplyMarkupParams
 	AnsweredInlines      []telego.AnswerInlineQueryParams
+	inlineQueryErr       error
 	AnsweredCallbacks    []telego.AnswerCallbackQueryParams
 	RegisteredCommands   []telego.BotCommand
 	CommandRegistrations []telego.SetMyCommandsParams
@@ -190,11 +191,17 @@ func (m *mockBotAPI) EditMessageReplyMarkup(ctx context.Context, params *telego.
 	return &telego.Message{MessageID: 1}, nil
 }
 
+// AnswerInlineQuery fails the first call when inlineQueryErr is set and the
+// error mentions DOCUMENT_INVALID, so the handler's article fallback can be
+// exercised in tests. Subsequent calls succeed.
 func (m *mockBotAPI) AnswerInlineQuery(ctx context.Context, params *telego.AnswerInlineQueryParams) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if params != nil {
 		m.AnsweredInlines = append(m.AnsweredInlines, *params)
+	}
+	if m.inlineQueryErr != nil && len(m.AnsweredInlines) == 1 {
+		return m.inlineQueryErr
 	}
 	return nil
 }

@@ -4,8 +4,7 @@
 
 O Caseiro é o único modo do produto. O grupo não guarda mais um modo padrão e
 `/novo` ignora seus argumentos. A engine continua expondo `ClassicRules()` e
-`BotRules()` para os testes e o simulador; apenas a superfície de produto
-colapsa.
+`BotRules()` para os testes; apenas a superfície de produto colapsa.
 
 `CaseiroRules()` continua sendo `BotRules()` com três ajustes:
 
@@ -58,6 +57,12 @@ registram o contrato inicial e não substituem as regras atuais dos modos do bot
   nem transferência. Encerramento por saída/cancelamento limpa escolhas normalmente.
 - `TURN_TIMEOUT` não intervém em `ChoosingPlayer` nem `ChoosingColor`: abandono
   mantém a política atual, sem escolha automática ou expiração nova.
+- Em `TakingTurn`, o tempo do jogador começa em `TURN_TIMEOUT` e perde
+  `SKIP_TIME_PENALTY` a cada pulo, com piso de `MIN_TURN_TIME`. O pulo obriga o
+  pulado a comprar uma carta (baralho vazio: apenas avança) e o jogador continua
+  na partida. Qualquer participante pode pedir `/pular`, mas terceiros só depois
+  do prazo; o jogador da vez pode se pular quando quiser. Administradores não
+  têm atalho. Uma ação válida do jogador zera a penalidade acumulada.
 - `HandsSwapped` só é emitido na transferência real; `HandKept` distingue a opção
   de manter. Eventos não revelam IDs de cartas das mãos.
 - Alternar modo no lobby reconstrói somente o inventário padrão, antes da

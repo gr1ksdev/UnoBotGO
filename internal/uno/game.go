@@ -83,7 +83,7 @@ func (g *Game) apply(a Action) (Result, error) {
 	if g.state.Revision == math.MaxUint64 {
 		return Result{}, ErrInvalidState
 	}
-	if a.PlayerID <= 0 || a.Type < JoinGame || a.Type > KickPlayer {
+	if a.PlayerID <= 0 || a.Type < JoinGame || a.Type > PenaltySkip {
 		return Result{}, ErrInvalidAction
 	}
 	if (a.Type != PlayCard && a.CardID != "") || (a.Type != ChooseColor && a.Color != NoColor) || (a.Type != StartGame && a.DealerID != 0) || (a.Type != ChoosePlayer && a.Type != KickPlayer && a.TargetID != 0) {
@@ -91,7 +91,7 @@ func (g *Game) apply(a Action) (Result, error) {
 	}
 	s := g.state.clone()
 	// Management actions may come from a requester who is not playing.
-	if a.Type != JoinGame && a.Type != StartGame && a.Type != CancelGame && a.Type != SetRules && a.Type != ForceSkipTurn && a.Type != KickPlayer {
+	if a.Type != JoinGame && a.Type != StartGame && a.Type != CancelGame && a.Type != SetRules && a.Type != ForceSkipTurn && a.Type != KickPlayer && a.Type != PenaltySkip {
 		p := s.player(a.PlayerID)
 		if p == nil || p.Status != Playing {
 			return Result{}, ErrUnknownPlayer
@@ -348,6 +348,25 @@ func (g *Game) takeAction(s *State, a Action, events *[]Event) error {
 		}
 		*events = append(*events, Event{Type: PlayerSkipped, PlayerID: s.CurrentPlayerID, Reason: "admin"})
 		changeTurn(s, s.next(s.CurrentPlayerID, 1), events)
+		return nil
+	}
+	if a.Type == PenaltySkip {
+		// Any participant may request a skip. The application layer enforces
+		// the waiting-time rule; the engine only applies the card penalty and
+		// advances the turn. An empty deck is not an error here.
+		if s.Pending != nil || s.Phase != TakingTurn || s.CurrentPlayerID == 0 {
+			return ErrInvalidAction
+		}
+		skipped := s.player(s.CurrentPlayerID)
+		if skipped == nil || skipped.Status != Playing {
+			return ErrInvalidAction
+		}
+		if cards, err := g.draw(s, 1); err == nil {
+			skipped.Hand = append(skipped.Hand, cards...)
+			*events = append(*events, Event{Type: CardsDrawn, PlayerID: skipped.ID, Count: 1})
+		}
+		*events = append(*events, Event{Type: PlayerSkipped, PlayerID: skipped.ID, Reason: "skip"})
+		changeTurn(s, s.next(skipped.ID, 1), events)
 		return nil
 	}
 	if a.Type == KickPlayer {

@@ -81,6 +81,13 @@ func (h *InlineHandler) HandleInlineQuery(ctx context.Context, query *telego.Inl
 		results, nextOffset = h.buildPlayerHandResults(ctx, actorID, targetGameID, query.Offset)
 	}
 
+	// A cached sticker with an empty file id is always rejected by Telegram,
+	// and one bad result rejects the whole batch. Drop such results up front.
+	results, dropped := dropInvalidStickers(results)
+	if dropped > 0 {
+		h.logger.WarnContext(ctx, "dropped inline results with an empty sticker file id", "query_id", query.ID, "user_id", actorID, "dropped", dropped)
+	}
+
 	params := &telego.AnswerInlineQueryParams{
 		InlineQueryID: query.ID,
 		Results:       results,
@@ -90,8 +97,100 @@ func (h *InlineHandler) HandleInlineQuery(ctx context.Context, query *telego.Inl
 	}
 
 	if err := h.bot.AnswerInlineQuery(ctx, params); err != nil {
-		h.logger.WarnContext(ctx, "failed to answer inline query", "query_id", query.ID, "user_id", actorID, "error", err.Error())
+		stickerIDs := stickerFileIDs(results)
+		h.logger.WarnContext(ctx, "failed to answer inline query", "query_id", query.ID, "user_id", actorID, "error", err.Error(), "sticker_file_ids", stickerIDs)
+		if isDocumentInvalid(err) {
+			// A single invalid sticker file id makes Telegram discard every
+			// result, leaving the player with no visible hand. Retry once with
+			// text articles so the cards are always readable.
+			fallback := stickerResultsToArticles(results)
+			if len(fallback) == 0 {
+				return
+			}
+			params.Results = fallback
+			if err := h.bot.AnswerInlineQuery(ctx, params); err != nil {
+				h.logger.WarnContext(ctx, "failed to answer inline query with article fallback", "query_id", query.ID, "user_id", actorID, "error", err.Error())
+			}
+		}
 	}
+}
+
+// dropInvalidStickers removes cached sticker results without a file id, which
+// would otherwise make Telegram reject the entire inline answer.
+func dropInvalidStickers(results []telego.InlineQueryResult) ([]telego.InlineQueryResult, int) {
+	kept := results[:0]
+	dropped := 0
+	for _, result := range results {
+		if sticker, ok := result.(*telego.InlineQueryResultCachedSticker); ok && sticker.StickerFileID == "" {
+			dropped++
+			continue
+		}
+		kept = append(kept, result)
+	}
+	return kept, dropped
+}
+
+// stickerFileIDs lists the file ids in a batch for diagnosing bad stickers.
+func stickerFileIDs(results []telego.InlineQueryResult) []string {
+	ids := make([]string, 0)
+	for _, result := range results {
+		if sticker, ok := result.(*telego.InlineQueryResultCachedSticker); ok {
+			ids = append(ids, sticker.StickerFileID)
+		}
+	}
+	return ids
+}
+
+func isDocumentInvalid(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "DOCUMENT_INVALID")
+}
+
+// stickerResultsToArticles converts sticker results into text articles. The
+// result ID is preserved so ChosenInlineResult still consumes the same action
+// token, and the card sticker is no longer needed to identify the play.
+func stickerResultsToArticles(results []telego.InlineQueryResult) []telego.InlineQueryResult {
+	fallback := make([]telego.InlineQueryResult, 0, len(results))
+	for _, result := range results {
+		sticker, ok := result.(*telego.InlineQueryResultCachedSticker)
+		if !ok {
+			fallback = append(fallback, result)
+			continue
+		}
+		var title, description string
+		if content, ok := sticker.InputMessageContent.(*telego.InputTextMessageContent); ok {
+			title = strings.SplitN(content.MessageText, "\n", 2)[0]
+		}
+		if title == "" {
+			title = cardLabelFromResultID(sticker.ID)
+		}
+		if description == "" {
+			description = "Toque para jogar"
+		}
+		content := sticker.InputMessageContent
+		if content == nil {
+			content = &telego.InputTextMessageContent{MessageText: title}
+		}
+		fallback = append(fallback, &telego.InlineQueryResultArticle{
+			Type:                "article",
+			ID:                  sticker.ID,
+			Title:               title,
+			Description:         description,
+			InputMessageContent: content,
+		})
+	}
+	return fallback
+}
+
+// cardLabelFromResultID derives a readable label from a sticker's result ID:
+// playable cards use the action token prefix, grey cards carry "grey_<card>_<i>".
+func cardLabelFromResultID(id string) string {
+	if strings.HasPrefix(id, "grey_") {
+		return "Carta indisponível"
+	}
+	if strings.HasPrefix(id, "info_") {
+		return "Estado do jogo"
+	}
+	return "Jogar carta"
 }
 
 func (h *InlineHandler) buildPlayerHandResults(

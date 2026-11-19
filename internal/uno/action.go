@@ -22,6 +22,10 @@ const (
 	// KickPlayer removes another active participant. TargetID names the
 	// participant to remove.
 	KickPlayer
+	// PenaltySkip advances the turn after drawing one card for the skipped
+	// player. Any active participant may request it; the application enforces
+	// the waiting-time rule before submitting the action.
+	PenaltySkip
 )
 
 // Action uses only domain IDs. The application authenticates PlayerID and

@@ -16,9 +16,13 @@ import (
 // administrationFixture prepares a running game with an owner, a stuck player
 // and a second participant.
 func administrationFixture(t *testing.T) (*CommandHandler, *game.Service, game.PublicGameView, *mockBotAPI) {
+	return administrationFixtureWithPolicy(t, game.DefaultTurnPolicy)
+}
+
+func administrationFixtureWithPolicy(t *testing.T, policy game.TurnPolicy) (*CommandHandler, *game.Service, game.PublicGameView, *mockBotAPI) {
 	t.Helper()
 	api := newMockBotAPI()
-	svc, _ := game.NewService()
+	svc, _ := game.NewService(game.WithTurnPolicy(policy))
 	h := NewCommandHandler(api, svc, NewRenderer(NewUserCache(100)), NewTokenStore(100, 10, time.Now, nil), "unobot", nil)
 
 	chat := telego.Chat{ID: -700, Type: "supergroup", Title: "Sala Admin"}
@@ -39,12 +43,12 @@ func administrationFixture(t *testing.T) (*CommandHandler, *game.Service, game.P
 	return h, svc, view, api
 }
 
-func TestPularAdvancesTheTurnForTheOwner(t *testing.T) {
+func TestPularAdvancesTheTurnForTheCurrentPlayer(t *testing.T) {
 	h, svc, view, api := administrationFixture(t)
 	before := view.CurrentTurn
 	h.HandleMessage(t.Context(), &telego.Message{
 		Chat: telego.Chat{ID: -700, Type: "supergroup"},
-		From: &telego.User{ID: 1, FirstName: "Owner"},
+		From: &telego.User{ID: int64(before), FirstName: "Da vez"},
 		Text: "/pular@unobot",
 	})
 	after, err := svc.PublicView(t.Context(), view.GameID)
@@ -54,13 +58,16 @@ func TestPularAdvancesTheTurnForTheOwner(t *testing.T) {
 	if after.CurrentTurn == before || after.Revision != view.Revision+1 {
 		t.Fatalf("turn not advanced: %+v", after)
 	}
-	last := api.SentMessages[len(api.SentMessages)-1]
-	if !strings.Contains(last.Text, "Vez de:") {
-		t.Fatalf("unexpected reply: %s", last.Text)
+	last := plainGameplay(api.LastSentMessage())
+	if !strings.Contains(last, "foi pulado") || !strings.Contains(last, "Vez de:") {
+		t.Fatalf("unexpected reply: %s", last)
+	}
+	if strings.Contains(last, "🃏 Topo:") || strings.Contains(last, "👥") {
+		t.Fatalf("skip message leaked the detailed state: %s", last)
 	}
 }
 
-func TestPularIsRefusedForOrdinaryMembers(t *testing.T) {
+func TestPularIsRefusedBeforeTheDeadline(t *testing.T) {
 	h, svc, view, api := administrationFixture(t)
 	h.HandleMessage(t.Context(), &telego.Message{
 		Chat: telego.Chat{ID: -700, Type: "supergroup"},
@@ -72,11 +79,32 @@ func TestPularIsRefusedForOrdinaryMembers(t *testing.T) {
 		t.Fatal(err)
 	}
 	if after.Revision != view.Revision {
-		t.Fatal("unauthorized skip changed the game")
+		t.Fatal("early skip changed the game")
 	}
-	last := api.SentMessages[len(api.SentMessages)-1]
-	if !strings.Contains(last.Text, "Apenas o responsável") {
-		t.Fatalf("unexpected reply: %s", last.Text)
+	last := api.LastSentMessage()
+	if !strings.Contains(last, "Aguarde") {
+		t.Fatalf("unexpected reply: %s", last)
+	}
+}
+
+func TestPularIsAllowedForAnyParticipantAfterTheDeadline(t *testing.T) {
+	fast := game.TurnPolicy{Initial: time.Nanosecond, Min: time.Nanosecond, Penalty: time.Nanosecond}
+	h, svc, view, api := administrationFixtureWithPolicy(t, fast)
+	h.HandleMessage(t.Context(), &telego.Message{
+		Chat: telego.Chat{ID: -700, Type: "supergroup"},
+		From: &telego.User{ID: 3, FirstName: "Comum"},
+		Text: "/pular@unobot",
+	})
+	after, err := svc.PublicView(t.Context(), view.GameID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.CurrentTurn == view.CurrentTurn || after.Revision != view.Revision+1 {
+		t.Fatalf("skip not applied: %+v", after)
+	}
+	last := plainGameplay(api.LastSentMessage())
+	if !strings.Contains(last, "foi pulado") || !strings.Contains(last, "Vez de:") {
+		t.Fatalf("unexpected reply: %s", last)
 	}
 }
 

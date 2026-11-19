@@ -369,6 +369,24 @@ func (r *Renderer) RenderTurn(view game.PublicGameView) string {
 // confirmation carries just whose decision is next. A bluff challenge has no
 // sticker of its own, so its result is announced here instead. A finished game
 // shows the final placements.
+// RenderSkipNotice announces a penalty skip: who was skipped, how much waiting
+// time they have left and whose turn it is. It never carries the top card or
+// the order with card counts, which belong exclusively to /estado.
+func (r *Renderer) RenderSkipNotice(actorID uno.PlayerID, action uno.Action, outcome game.Outcome) string {
+	if outcome.View.Closed || outcome.View.Phase == uno.Finished || outcome.Skip == nil {
+		return r.RenderActionConfirmation(actorID, action, outcome)
+	}
+	seconds := int(outcome.Skip.Remaining.Seconds())
+	if outcome.Skip.Remaining > 0 && seconds == 0 {
+		seconds = 1
+	}
+	text := fmt.Sprintf("⏰ %s foi pulado. Tempo restante: %ds.", r.PlayerLink(outcome.Skip.PlayerID, outcome.View), seconds)
+	if turn := r.RenderTurn(outcome.View); turn != "" {
+		text += "\n\n" + turn
+	}
+	return text
+}
+
 func (r *Renderer) RenderActionConfirmation(actorID uno.PlayerID, action uno.Action, outcome game.Outcome) string {
 	var prefix string
 	if action.Type == uno.CallBluff {

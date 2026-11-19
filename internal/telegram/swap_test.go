@@ -72,7 +72,7 @@ func TestSwapChoiceMenuFiltersTargetsAndProtectsTokens(t *testing.T) {
 	if GetCardStickerID(uno.Card{Rank: uno.SwapHands}) != "CAACAgEAAxkBAAER8VtqteJsR8-zG10NFeLTIZyxuZYsBQACBwkAAkkSsEU562tb90Ja3D0E" {
 		t.Fatal("wrong sticker")
 	}
-	if GetCardStickerGreyID(uno.Card{Rank: uno.SwapHands}) != "CAACAgEAAxkDAAMoarc5AnTTNQ_W6bTz1yaQVlhRR20AAtwHAAJGhrhFYMGxG-e10Xc9BA" {
+	if GetCardStickerGreyID(uno.Card{Rank: uno.SwapHands}) != "CAACAgEAAxUAAWr_KfQ0w-CSFseJhXHRmDZIzNXvAAIUDwACZyj4R5iyTb3iuP1LPQQ" {
 		t.Fatal("wrong unavailable sticker")
 	}
 }

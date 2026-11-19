@@ -18,6 +18,7 @@ import (
 	"github.com/malbs/UnoGoBot/internal/game"
 	"github.com/malbs/UnoGoBot/internal/groups"
 	"github.com/malbs/UnoGoBot/internal/ranking"
+	"github.com/malbs/UnoGoBot/internal/uno"
 	"github.com/mymmrac/telego"
 )
 
@@ -56,6 +57,7 @@ type Bot struct {
 	usernamePublic   atomic.Value
 	username         string
 	turnTimeout      time.Duration
+	turnMin          time.Duration
 	transport        TransportConfig
 	dedupe           *updateDeduper
 	ready            atomic.Bool
@@ -108,6 +110,7 @@ func (b *Bot) lookupMembership(ctx context.Context, chatID, userID int64) (group
 }
 
 func (b *Bot) SetTurnTimeout(timeout time.Duration) { b.turnTimeout = timeout }
+func (b *Bot) SetTurnMin(min time.Duration)         { b.turnMin = min }
 func (b *Bot) SetTransport(cfg TransportConfig)     { b.transport = cfg.normalized() }
 func New(api BotAPI, service *game.Service, tokens *TokenStore, renderer *Renderer, tokenTTL time.Duration, logger *slog.Logger) *Bot {
 	if logger == nil {
@@ -119,7 +122,7 @@ func New(api BotAPI, service *game.Service, tokens *TokenStore, renderer *Render
 	if renderer == nil {
 		renderer = NewRenderer(nil)
 	}
-	b := &Bot{api: api, service: service, tokens: tokens, renderer: renderer, logger: logger, transport: TransportConfig{Mode: TransportPolling, ListenAddr: defaultWebhookListenAddr}, dedupe: newUpdateDeduper(time.Now), retrySleep: waitContext, current: newCurrentGameTracker(), languages: newLanguageCache()}
+	b := &Bot{api: api, service: service, tokens: tokens, renderer: renderer, logger: logger, turnMin: 15 * time.Second, transport: TransportConfig{Mode: TransportPolling, ListenAddr: defaultWebhookListenAddr}, dedupe: newUpdateDeduper(time.Now), retrySleep: waitContext, current: newCurrentGameTracker(), languages: newLanguageCache()}
 	b.inlineHandler = NewInlineHandler(api, service, renderer, tokens, tokenTTL, nil, logger)
 	b.inlineHandler.current = b.current
 	b.dispatcher = NewDispatcher(logger, func(ctx context.Context, q *telego.InlineQuery) { b.inlineHandler.HandleInlineQuery(ctx, q) })
@@ -418,9 +421,15 @@ func (b *Bot) startScheduler(ctx context.Context) {
 	}
 }
 func (b *Bot) autoSkipLoop(ctx context.Context) {
-	interval := b.turnTimeout / 4
-	if interval < time.Second {
-		interval = time.Second
+	// The deadline degrades per player down to the configured floor, so the
+	// discovery tick must be tied to that floor rather than the full timeout.
+	min := b.turnMin
+	if min <= 0 {
+		min = 15 * time.Second
+	}
+	interval := min / 4
+	if interval < 250*time.Millisecond {
+		interval = 250 * time.Millisecond
 	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -450,7 +459,8 @@ func (b *Bot) enqueueAutoSkip(candidate game.ExpiredTurn) bool {
 			notify()
 			return
 		}
-		b.cmdHandler.reply(ctx, int64(candidate.ChatID), b.renderer.RenderTurn(outcome.View), makeGameButtons(outcome.View))
+		action := uno.Action{Type: uno.PenaltySkip, PlayerID: candidate.PlayerID}
+		b.cmdHandler.reply(ctx, int64(candidate.ChatID), b.renderer.RenderSkipNotice(candidate.PlayerID, action, outcome), makeGameButtons(outcome.View))
 	})
 }
 func (b *Bot) submitUpdate(ctx context.Context, update telego.Update) bool {

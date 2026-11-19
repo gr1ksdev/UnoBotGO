@@ -50,7 +50,9 @@ inicialização, com advisory lock transacional fail-closed.
 | `TOKEN` | Token obrigatório do bot Telegram |
 | `DATABASE_URL` | Conexão PostgreSQL obrigatória |
 | `TELEGRAM_MODE` | `polling` (padrão) ou `webhook` |
-| `TURN_TIMEOUT` | Duração positiva; padrão `2m` |
+| `TURN_TIMEOUT` | Tempo inicial de cada turno; padrão `2m` |
+| `SKIP_TIME_PENALTY` | Tempo perdido pelo jogador a cada pulo; padrão `20s` |
+| `MIN_TURN_TIME` | Piso do cronômetro (automático e `/pular`); padrão `15s` |
 | `WEB_ADDR` | Endereço HTTP das sondas e do webhook; padrão `:8080` |
 | `MINIAPP_SECRET` | Exatamente 32 bytes em Base64; gere com `openssl rand -base64 32` |
 | `WEBHOOK_URL` | Somente no modo webhook: URL pública HTTPS com caminho dedicado |
@@ -81,7 +83,7 @@ seguem o idioma configurado naquele grupo.
 | `/ranking` | `/ranking` | Ranking mensal do grupo; no privado, seus rankings |
 | `/stats` | `/stats` | Suas estatísticas: partidas, vitórias, pontos, colocação |
 | `/sair` | `/leave` | Sai da partida em andamento |
-| `/pular` | `/skip` | Pula o turno do jogador atual (responsável ou admin) |
+| `/pular` | `/skip` | Qualquer participante pode pedir; terceiros só após o prazo do jogador da vez |
 | `/expulsar` | `/kick` | Expulsa um jogador; responda à mensagem dele |
 | `/cancelar` | `/kill` | Cancela a partida (responsável, criador ou admin) |
 | `/config` | `/settings` | Configura ranking e idioma dos comandos |
@@ -179,15 +181,6 @@ Testes de integração com PostgreSQL real usam uma base e schemas isolados:
 TEST_DATABASE_URL='postgres://postgres:senha@localhost:5432/unobot_test?sslmode=disable' \
   go test -race -tags integration ./internal/storage/postgres/...
 ```
-
-O simulador executa bots diretamente sobre a engine, sem Telegram nem banco:
-
-```bash
-go run ./cmd/simulator --players 4 --mode caseiro --seed 20260924
-```
-
-Ele grava um relatório Markdown em `.reports/simulations/` com colocações,
-estatísticas e a linha do tempo completa.
 
 ### Comando de depuração `/dar`
 

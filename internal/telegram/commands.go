@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"time"
 
@@ -779,20 +780,26 @@ func (h *CommandHandler) handlePular(ctx context.Context, actorID uno.PlayerID, 
 		return
 	}
 	actor := game.Actor{PlayerID: actorID, ChatID: chatID}
-	if !h.isChatAdmin(ctx, actorID, chatID) && view.OwnerID != actorID {
-		h.reply(ctx, int64(chatID), "⚠️ Apenas o responsável pela partida ou um administrador pode pular o turno.", nil)
-		return
-	}
-	outcome, err := h.service.Apply(ctx, actor, summary.GameID, uno.Action{Type: uno.ForceSkipTurn, PlayerID: actorID, Revision: view.Revision})
+	action := uno.Action{Type: uno.PenaltySkip, PlayerID: actorID, Revision: view.Revision}
+	outcome, err := h.service.Apply(ctx, actor, summary.GameID, action)
 	if err != nil {
+		var early *game.ErrSkipTooEarly
+		if errors.As(err, &early) {
+			seconds := int(math.Ceil(early.Wait.Seconds()))
+			if seconds < 1 {
+				seconds = 1
+			}
+			h.reply(ctx, int64(chatID), fmt.Sprintf("⏰ Aguarde %ds antes de pular.", seconds), nil)
+			return
+		}
 		if errors.Is(err, game.ErrForbidden) {
-			h.reply(ctx, int64(chatID), "⚠️ Apenas o responsável pela partida ou um administrador pode pular o turno.", nil)
+			h.reply(ctx, int64(chatID), "⚠️ Apenas quem está participando da partida pode pular o turno.", nil)
 			return
 		}
 		h.reply(ctx, int64(chatID), "⚠️ Não foi possível pular o turno agora.", nil)
 		return
 	}
-	h.reply(ctx, int64(chatID), h.renderer.RenderActionConfirmation(actorID, uno.Action{Type: uno.ForceSkipTurn}, outcome), nil)
+	h.reply(ctx, int64(chatID), h.renderer.RenderSkipNotice(actorID, action, outcome), nil)
 }
 
 // handleExpulsar removes another participant from the game. The target is the
